@@ -31,7 +31,7 @@ local function tableCopy(t, _lookup_table)
 	debug.setmetatable(copy, debug.getmetatable(t))
 
 	for i, v in pairs(t) do
-		if !istable(v) then
+		if type(v) ~= "table" then
 			copy[i] = v
 		else
 			_lookup_table = _lookup_table or {}
@@ -40,7 +40,7 @@ local function tableCopy(t, _lookup_table)
 			if _lookup_table[v] then
 				copy[i] = _lookup_table[v] -- we already copied this table. reuse the copy.
 			else
-				copy[i] = table.Copy(v,_lookup_table) -- not yet copied. copy it.
+				copy[i] = tableCopy(v,_lookup_table) -- not yet copied. copy it.
 			end
 		end
 	end
@@ -77,7 +77,7 @@ local classMT = {
 	__call = function(self, ...)
 		-- When we call class instances, we actually call their constructors!
 		if self:member_valid(self.__name) then
-			if self:member_getaccess(self.__name) != _public_ then
+			if self:member_getaccess(self.__name) ~= _public_ then
 				error(string.format("Cannot create instance of class %s: constructor access level is not public!", self.__name))
 			else
 				self[self.__name](self, ...)
@@ -209,7 +209,7 @@ local function createClassInstance(className, ...)
 
 	-- Activate the metatables
 	local class = instance
-	while class != nil do
+	while class ~= nil do
 		-- Setup the metatable
 		setmetatable(class, classMT)
 
@@ -233,7 +233,7 @@ local function setupClass(creatorData, creatorMembers)
 	end
 
 	-- Check for parent
-	if superClassName != nil and !LUA_CLASSES[superClassName] then
+	if superClassName ~= nil and not LUA_CLASSES[superClassName] then
 		error(string.format("Parent for class %s does not exist! Failed to setup class", className))
 	end
 
@@ -275,7 +275,7 @@ local function setupClass(creatorData, creatorMembers)
 			end
 
 			local iter = self
-			while iter != nil do
+			while iter ~= nil do
 				if iter.__name == class then
 					self.__cache["instance_of_" .. class] = true
 
@@ -303,22 +303,24 @@ local function setupClass(creatorData, creatorMembers)
 		function newClass:member_getargs(memberName)
 			local reg =  self.__registry[memberName]
 
-			if !reg then
+			if not reg then
 				error(string.format("Class %s: attempted to call member_getargs on invalid member '%s'", self.__name, memberName))
 			end
 
 			local value = reg.__members[memberName].value
 
-			if type(value) != "function" then
+			if type(value) ~= "function" then
 				return {}
 			end
 
 			local arglist = {}
-			local dbg = debug.getinfo(value, "u")
-			if dbg then
+			local dbg = debug.getinfo(value)
+			if dbg and dbg.nparams then
 				for i = 1, dbg.nparams do
 					arglist[i] = debug.getlocal(value, i)
 				end
+			else
+				print("no dbg or dbg.nparams for " .. memberName .. "!")
 			end
 
 			return arglist
@@ -330,11 +332,11 @@ local function setupClass(creatorData, creatorMembers)
 		newClass.__functionality = {}
 
 		local iter = newClass
-		while iter != nil do
+		while iter ~= nil do
 			for k, v in pairs(iter.__members) do
 				-- This is important, we have to skip assignment if there is already a member found earlier
 				-- or else we priorise parents above children.
-				if !newClass.__registry[k] then
+				if not newClass.__registry[k] then
 					newClass.__registry[k] = iter
 				end
 
@@ -357,7 +359,7 @@ local function setupClass(creatorData, creatorMembers)
 			for memberName, interface_memberData in pairs(interface.members) do
 				if newClass:member_valid(memberName) then
 					-- Check if the access modifiers match up.
-					if newClass:member_getaccess(memberName) != interface:member_getaccess(memberName) then
+					if newClass:member_getaccess(memberName) ~= interface:member_getaccess(memberName) then
 						error(string.format("Class %s is supposed to implement member '%s' with %s access, but it's specified with %s access in the class",
 									className, memberName, interface_memberData.access,  newClass:member_getaccess(memberName)))
 					end
@@ -366,7 +368,7 @@ local function setupClass(creatorData, creatorMembers)
 					local interfaceType = interface:member_gettype(memberName)
 					local classType = newClass:member_gettype(memberName)
 					
-					if classType != interfaceType then
+					if classType ~= interfaceType then
 						error(string.format("Class %s is supposed to implement member '%s' as the '%s' lua_type, but it's specified as the '%s' lua_type in the class",
 									className, memberName, interfaceType, classType))
 					end
@@ -377,18 +379,18 @@ local function setupClass(creatorData, creatorMembers)
 
 					-- Check argument names.
 					for k, v in pairs(interfaceArgs) do
-						if !classArgs[k] then
+						if not classArgs[k] then
 							error(string.format("Class %s is supposed to implement member function '%s' argument #%d with the name '%s'",
 											className, memberName, k, v, k, classArgs[k]))
 						end
-						if classArgs[k] != v then
+						if classArgs[k] ~= v then
 							error(string.format("Class %s is supposed to implement member function '%s' argument #%d with the name '%s', but argument #%d is named '%s' instead",
 											className, memberName, k, v, k, classArgs[k]))
 						end
 					end
 
 					for k, v in pairs(classArgs) do
-						if interfaceArgs[k] != v then
+						if interfaceArgs[k] ~= v then
 							error(string.format("Class %s is not supposed to implement member function '%s' argument #%d named '%s': this argument isn't specified in the implemented interface '%s'",
 											className, memberName, k, v, interfaceName))
 						end
@@ -461,7 +463,7 @@ local function setupInterface(creatorData, creatorMembers)
 	end
 
 	-- Check for parent
-	if superInterfaceName != nil and !LUA_INTERFACES[superInterfaceName] then
+	if superInterfaceName ~= nil and not LUA_INTERFACES[superInterfaceName] then
 		error(string.format("Parent for interface %s does not exist! Failed to setup interface", interfaceName))
 	end
 
@@ -481,7 +483,7 @@ local function setupInterface(creatorData, creatorMembers)
 	if superInterface then
 		for mKey, mVal in pairs(superInterface.__members) do
 			if newInterface.__members[mKey] then
-				if newInterface.__members[mKey].access != superInterface.__members[mKey].access then
+				if newInterface.__members[mKey].access ~= superInterface.__members[mKey].access then
 					error(string.format("Interface %s has a member called '%s' specified as %s, but it's superinterface has this member specified as %s", interfaceName, mKey, superInterface.__access[mKey]))
 				end
 			else
@@ -506,22 +508,24 @@ local function setupInterface(creatorData, creatorMembers)
 		function newInterface:member_getargs(memberName)
 			local member =  self.__members[memberName]
 
-			if !member then
+			if not member then
 				error(string.format("Class %s: attempted to call member_getargs on invalid member '%s'", self.__name, memberName))
 			end
 
 			local value = member.value
 
-			if type(value) != "function" then
+			if type(value) ~= "function" then
 				return {}
 			end
 
 			local arglist = {}
-			local dbg = debug.getinfo(value, "u")
-			if dbg then
+			local dbg = debug.getinfo(value)
+			if dbg and dbg.nparams then
 				for i = 1, dbg.nparams do
 					arglist[i] = debug.getlocal(value, i)
 				end
+			else
+				print("no dbg or dbg.nparams for " .. memberName .. "!")
 			end
 
 			return arglist
@@ -606,7 +610,7 @@ do
 
 
 		function public(memberTable)
-			if !creatorMembers then
+			if not creatorMembers then
 				error("defining public members on nothing")
 			end
 
@@ -620,7 +624,7 @@ do
 		end
 
 		function private(memberTable)
-			if !creatorMembers then
+			if not creatorMembers then
 				error("defining private members on nothing")
 			end
 
@@ -634,7 +638,7 @@ do
 		end
 
 		function protected(memberTable)
-			if !creatorMembers then
+			if not creatorMembers then
 				error("defining protected members on nothing")
 			end
 

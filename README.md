@@ -40,7 +40,7 @@ This library takes advantage of Lua's flexibility to provide you with a very sim
 
 #### Requirements
 
-This library was build and tested on LuaJIT 2.0.0.
+This library was build and tested on LuaJIT 2.0.1.
 
 #### Installation
 
