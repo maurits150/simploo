@@ -1,7 +1,7 @@
 --[[
 	The MIT License (MIT)
 
-	Copyright (c) 2012 maurits.tv
+	Copyright (c) 2013 maurits.tv
 
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
@@ -196,10 +196,6 @@ local classMT = {
 }
 
 --[[
-	Setup a new class.
-]]
-
---[[
 	Create an instance of a class.
 ]]
 
@@ -221,6 +217,10 @@ local function createClassInstance(className, ...)
 
 	return instance
 end
+
+--[[
+	Setup a new class.
+]]
 
 local function setupClass(creatorData, creatorMembers)
 	local className = creatorData["name"]
