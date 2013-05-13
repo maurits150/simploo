@@ -96,17 +96,17 @@ local classMT = {
 
 		local locationClass = self.__registry[mKey]
 		if locationClass then
-			-- Look up in the stack whatever called this metafunction. Where 0 = debug.getinfo, 1 = __index and 2 = the caller which is what we need.
-			local name = debug.getinfo(2).name
-			local func = debug.getinfo(2).func
-
 			-- Check which access modifier this member has.
 			local access = locationClass.__members[mKey].access
 			local value = locationClass.__members[mKey].fvalue or locationClass.__members[mKey].value
-
+			
 			if access == _public_ then
 				return value
 			elseif access == _protected_ then
+				local info = debug.getinfo(2, "nf")
+				local name = info.name
+				local func = info.func
+
 				-- The below functions check used to be using the callInfo.name to look up the class members direct, but debug.getinfo(2).name
 				-- seems to return incorrect values, when used to lookup functions that directly return protected class member calls.
 				-- This seems to be a lua bug. So now we just make a table that uses the actual functions as keys, which is hopefully just as
@@ -120,8 +120,8 @@ local classMT = {
 				if locationClass == self  then
 					return value
 				else
-					error(string.format("Invalid get access attempt to private member '%s' located in <%s> by <%s> function '%s' (check nr. 3 in stack trace)",
-						mKey, tostring(locationClass), tostring(self), name))
+					error(string.format("Invalid get access attempt to private member '%s' located in <%s> by <%s> (check nr. 3 in stack trace)",
+						mKey, tostring(locationClass), tostring(self)))
 				end
 			else
 				error(string.format("Class <%s> has defined member '%s' but has no access level defined", tostring(locationClass), mKey))
@@ -144,10 +144,6 @@ local classMT = {
 
 		local locationClass = self.__registry[mKey]
 		if locationClass then
-			-- Look up in the stack whatever called this metafunction. Where 0 = debug.getinfo, 1 = __index and 2 = the caller which is what we need.
-			local name = debug.getinfo(2).name
-			local func = debug.getinfo(2).func
-
 			-- Check which access modifier this member has.
 			local access = locationClass.__members[mKey].access
 			if access == _public_ then
@@ -159,6 +155,10 @@ local classMT = {
 
 				return
 			elseif access == _protected_ then
+				local info = debug.getinfo(2, "nf")
+				local name = info.name
+				local func = info.func
+
 				-- The below functions check used to be using the callInfo.name to look up the class members direct, but debug.getinfo(2).name
 				-- seems to return incorrect values, when used to lookup functions that directly return protected class member calls.
 				-- This seems to be a lua bug. So now we just make a table that uses the actual functions as keys, which is hopefully just as
@@ -184,7 +184,7 @@ local classMT = {
 
 					return
 				else
-					error(string.format("Invalid set access attempt to private member '%s' located in <%s> via <%s> function '%s' (check nr. 3 in stack trace)", mKey, tostring(locationClass.locationClass), tostring(self), name))
+					error(string.format("Invalid set access attempt to private member '%s' located in <%s> via <%s> (check nr. 3 in stack trace)", mKey, tostring(locationClass.locationClass), tostring(self)))
 				end
 			else
 				error(string.format("Class <%s> has defined member '%s' but has no access level defined", tostring(locationClass), mKey))
@@ -199,7 +199,30 @@ local classMT = {
 	Setup a new class.
 ]]
 
-function setupClass(creatorData, creatorMembers)
+--[[
+	Create an instance of a class.
+]]
+
+local function createClassInstance(className, ...)
+	-- Create a new instance.
+	local instance = tableCopy(LUA_CLASSES[className])
+
+	-- Activate the metatables
+	local class = instance
+	while class != nil do
+		-- Setup the metatable
+		setmetatable(class, classMT)
+
+		class = class.super
+	end
+
+	-- Call the constructor
+	instance(...)
+
+	return instance
+end
+
+local function setupClass(creatorData, creatorMembers)
 	local className = creatorData["name"]
 	local superClassName = creatorData["super"]
 	local implementsList = creatorData["implements"]
@@ -395,29 +418,6 @@ function setupClass(creatorData, creatorMembers)
 	--print(string.format("Created new class: %s with superclass %s implementing %s", className, superClassName, implementsName))
 end
 
---[[
-	Create an instance of a class.
-]]
-
-function createClassInstance(className, ...)
-	-- Create a new instance.
-	local instance = tableCopy(LUA_CLASSES[className])
-
-	-- Activate the metatables
-	local class = instance
-	while class != nil do
-		-- Setup the metatable
-		setmetatable(class, classMT)
-
-		class = class.super
-	end
-
-	-- Call the constructor
-	instance(...)
-
-	return instance
-end
-
 
 local interfaceMT = {
 	__tostring = function(self)
@@ -451,7 +451,7 @@ local interfaceMT = {
 	Setup a new interface.
 ]]
 
-function setupInterface(creatorData, creatorMembers)
+local function setupInterface(creatorData, creatorMembers)
 	local interfaceName = creatorData["name"]
 	local superInterfaceName = creatorData["super"]
 	

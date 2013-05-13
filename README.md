@@ -6,6 +6,7 @@ SIMPLOO - The simple lua object-oriented programming library!
 SIMPLOO is a library designed to integrate object-oriented programming concepts into Lua.
 
 This library takes advantage of Lua's flexibility to provide you with a very simple and straightforward syntax.
+
 #### Features
 
 **Classes**
@@ -19,8 +20,7 @@ This library takes advantage of Lua's flexibility to provide you with a very sim
  * Each instance has an actual instance of it's super classes too.
  * Support for the 'super' keyword to reach the members of a super class.
  * Any requests to non-existant class members will traverse up the derivation tree.
- * The aforementioned operates at O(1) speed due to a build-in member registry. There's no iterating taking place!
-
+ * The aforementioned operates at O(1) speed due to a build-in member registry. There's no iterating taking place! (doesn't apply to protected members unfortunately, see additional notes)
 
 **Interfaces**
 
@@ -32,6 +32,22 @@ This library takes advantage of Lua's flexibility to provide you with a very sim
  * member lua type
  * in case that the member is a function: member arguments
 
+
+#### Additional Notes
+
+* This library uses the following globals: class, interface, extends, implements, public, private, protected. Make sure you don't already use these!
+* The protected access modifier uses the debug.getinfo function to figure out if member lookups came from outside the class hierarchy. This function isn't extremely fast, and thus lookups to protected members will be significantly slower. For reference: 1 million protected function calls took 850ms to process, compared to 2.3ms for 1 million public function calls. I'm open for suggestions on this one.
+
+#### Requirements
+
+This library was build and tested on LuaJIT 2.0.0.
+
 #### Installation
 
-Simple include the simploo.lua file in your code.
+Simply include the simploo.lua file in your code somewhere and you're ready to go!
+
+#### Examples
+
+Please refer to the wiki!
+
+https://github.com/maurits150/simploo/wiki
