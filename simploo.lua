@@ -213,9 +213,9 @@ local function createClassInstance(className, ...)
 	end
 
 	-- Call the constructor
-	instance(...)
+	local ret = instance(...)
 
-	return instance
+	return ret || instance
 end
 
 --[[
@@ -545,7 +545,7 @@ do
 	local creatorType, creatorData, creatorMembers
 	
 	local function execute(data)
-		for mKey, mValue in pairs(data) do
+		for mKey, mValue in pairs(data or {}) do
 			if creatorMembers["private"][mKey] then
 				error(string.format("Double definition of member '%s' in class '%s'", mKey, tmp_className))
 			else
