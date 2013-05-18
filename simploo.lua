@@ -245,14 +245,12 @@ local function setupClass(creatorData, creatorMembers)
 		newClass.__members = {}
 
 		-- Parse all variables in the public/protected/private tables.
-		for accessTable, mAccess in pairs({["public"] = _public_, ["protected"] = _protected_, ["private"] = _private_}) do
-			for mKey, mVal in pairs(creatorMembers[accessTable]) do
-				newClass.__members[mKey] = {value = mVal, access = mAccess, fvalue = type(mVal) == "function" and 
-					function(self, ...)
-						return mVal(self.__registry[mKey], ...)
-					end
-				}
-			end
+		for mKey, mData in pairs(creatorMembers) do
+			newClass.__members[mKey] = {value = mData.value, access = mData.access, fvalue = type(mVal) == "function" and 
+				function(self, ...)
+					return mVal(self.__registry[mKey], ...)
+				end
+			}
 		end
 
 		-- Define the class name.
@@ -472,10 +470,12 @@ local function setupInterface(creatorData, creatorMembers)
 	newInterface.__members = {}
 
 	-- Parse all variables in the public/protected/private tables.
-	for accessTable, mAccess in pairs({["public"] = _public_, ["protected"] = _protected_, ["private"] = _private_}) do
-		for mKey, mVal in pairs(creatorMembers[accessTable]) do
-			newInterface.__members[mKey] = {value = mVal, access = mAccess}
-		end
+	for mKey, m in pairs(creatorMembers) do
+		newInterface.__members[mKey] = {value = m.value, access = m.access, fvalue = type(mVal) == "function" and 
+			function(self, ...)
+				return mVal(self.__registry[mKey], ...)
+			end
+		}
 	end
 
 	-- Copy all members from the parent interface (if specified)
@@ -544,25 +544,61 @@ end
 do
 	local creatorType, creatorData, creatorMembers
 	
-	local function execute(data)
-		for mKey, mValue in pairs(data or {}) do
-			if creatorMembers["private"][mKey] then
-				error(string.format("Double definition of member '%s' in class '%s'", mKey, tmp_className))
+	local function addMembers(memberTable, access)
+		if not creatorMembers then
+			error("defining members without any class specification")
+		end
+
+		for mKey, mValue in pairs(memberTable) do
+			if creatorMembers[mKey] then
+				error(string.format("Double definition of member '%s' in class '%s'", mKey, creatorData["name"]))
 			else
-				creatorMembers["private"][mKey] = mValue
+				creatorMembers[mKey] = {value = mValue, access = access}
 			end
 		end
-
-		if creatorType == "class" then
-			setupClass(creatorData, creatorMembers)
-		elseif creatorType == "interface" then
-			setupInterface(creatorData, creatorMembers)
-		end
-
-		creatorType = nil
-		creatorData = nil
-		creatorMembers = nil
 	end
+
+	local executionTable = setmetatable({}, {
+		__call = function(data)
+			PrintTable(data)
+			for mKey, mValue in pairs(data or {}) do
+				if creatorMembers[mKey] then
+					error(string.format("Double definition of member '%s' in class '%s'", mKey, creatorData["name"]))
+				else
+					creatorMembers[mKey] = {value = mValue, access = _private_}
+				end
+			end
+
+			if creatorType == "class" then
+				setupClass(creatorData, creatorMembers)
+			elseif creatorType == "interface" then
+				setupInterface(creatorData, creatorMembers)
+			end
+
+			creatorType = nil
+			creatorData = nil
+			creatorMembers = nil
+		end,
+
+		__index = function(self, key)
+			if key == "public" or key == "protected" or key == "private" then
+				local mAccess = 
+							(key == "public" and _public_) or
+							(key == "protected" and _protected_ ) or
+							(key == "private" and _private_)
+
+				return setmetatable({}, {
+					__call = function(self, memberTable)
+						addMembers(memberTable, mAccess)
+					end,
+
+					__newindex = function(self, mKey, mValue)
+						addMembers({[mKey] = mValue}, mAccess)
+					end
+				})
+			end
+		end
+	})
 
 	do -- Shared
 		function extends(s)
@@ -574,7 +610,7 @@ do
 				error("extending on nothing")
 			end
 			
-			return execute
+			return executionTable
 		end
 	end
 
@@ -589,7 +625,7 @@ do
 			creatorData["name"] = className
 			creatorMembers = {["public"] = {}, ["protected"] = {}, ["private"] = {}}
 
-			return execute
+			return executionTable
 		end
 
 		function implements(...)
@@ -605,50 +641,32 @@ do
 				error("implementing on nothing")
 			end
 
-			return execute
+			return executionTable
 		end
 
 
 		function public(memberTable)
-			if not creatorMembers then
-				error("defining public members on nothing")
+			if !memberTable then
+				error("running public without any member table")
 			end
 
-			for mKey, mValue in pairs(memberTable) do
-				if creatorMembers["public"][mKey] then
-					error(string.format("Double definition of member '%s' in class '%s'", mKey, tmp_className))
-				else
-					creatorMembers["public"][mKey] = mValue
-				end
-			end
-		end
-
-		function private(memberTable)
-			if not creatorMembers then
-				error("defining private members on nothing")
-			end
-
-			for mKey, mValue in pairs(memberTable) do
-				if creatorMembers["private"][mKey] then
-					error(string.format("Double definition of member '%s' in class '%s'", mKey, tmp_className))
-				else
-					creatorMembers["private"][mKey] = mValue
-				end
-			end
+			addMembers(memberTable, _public_)
 		end
 
 		function protected(memberTable)
-			if not creatorMembers then
-				error("defining protected members on nothing")
+			if !memberTable then
+				error("running public without any member table")
 			end
 
-			for mKey, mValue in pairs(memberTable) do
-				if creatorMembers["protected"][mKey] then
-					error(string.format("Double definition of member '%s' in class '%s'", mKey, tmp_className))
-				else
-					creatorMembers["protected"][mKey] = mValue
-				end
+			addMembers(memberTable, _protected_)
+		end
+
+		function private(memberTable)
+			if !memberTable then
+				error("running public without any member table")
 			end
+
+			addMembers(memberTable, _private_)
 		end
 	end
 
@@ -657,9 +675,9 @@ do
 			creatorType = "interface"
 			creatorData = {}
 			creatorData["name"] = interfaceName
-			creatorMembers = {["public"] = {}, ["protected"] = {}, ["private"] = {}}
+			creatorMembers = {}
 
-			return execute
+			return executionTable
 		end
 	end
 end
