@@ -1,7 +1,7 @@
 SIMPLOO - The simple lua object-oriented programming library!
 =====
 
-### This library is still a work in progress. Features might not be working as expected!
+##### Warning: This library is still a work in progress. Do not expect it to be bug free.
 
 #### Introduction
 
@@ -15,9 +15,9 @@ This library takes advantage of Lua's flexibility to provide you with a very sim
 
 * Support for public/protected/private access modifiers.
 * Single inheritance from other classes (you can only inherit one parent class, but you can create an unlimited chain of classes)
-* Constructors that can be overridden on a per-instance basis. (or disabled entirely by setting it private)
+* Constructors that can be overridden on a per-class basis. (or disabled entirely by setting it private)
 * Common OOP functions such as is\_a() and instance\_of().
-* The ability to implement multiple interfaces, see below:
+* The ability to implement one or more interfaces.
 * Separation between classes and instances.
  * Each instance has an actual instance of it's super classes too.
  * Support for the 'super' keyword to reach the members of a super class.

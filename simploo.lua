@@ -22,40 +22,43 @@
 	THE SOFTWARE.
 ]]
 
-local function tableCopy(t, _lookup_table)
-	if t == nil then
-		return nil
-	end
-
-	local copy = {}
-	debug.setmetatable(copy, debug.getmetatable(t))
-
-	for i, v in pairs(t) do
-		if type(v) ~= "table" then
-			copy[i] = v
-		else
-			_lookup_table = _lookup_table or {}
-			_lookup_table[t] = copy
-
-			if _lookup_table[v] then
-				copy[i] = _lookup_table[v] -- we already copied this table. reuse the copy.
-			else
-				copy[i] = tableCopy(v,_lookup_table) -- not yet copied. copy it.
-			end
-		end
-	end
-
-	return copy
-end
-
 LUA_CLASSES = {}
 LUA_INTERFACES = {}
 
--- Locally we emphasize our access levels with underscores
--- so it's easier to read the code, it serves no other purpose.
+
 local _public_ = "PublicAccess"
 local _protected_ = "ProtectedAccess"
 local _private_ = "PrivateAccess"
+
+local _static_ = "StaticMemberType"
+local _instance_ = "InstanceMemberType"
+
+--[[
+	Creates an instance of a class.
+]]
+
+local function createClassInstance(className, ...)
+	-- Check if class exists
+	if !LUA_CLASSES[className] then
+		error(string.format("tried to create invalid class %s", className))
+	end
+
+	-- Create a new instance.
+	local instance = LUA_CLASSES[className]:duplicate()
+
+	-- Activate the instance
+	local class = instance
+	while class ~= nil do
+		class.__instance = true
+
+		class = class.super
+	end
+
+	-- Call the constructor
+	local ret = instance(...)
+
+	return ret || instance
+end
 
 local classMT = {
 	__tostring = function(self)
@@ -65,7 +68,7 @@ local classMT = {
 		setmetatable(self, {})
 
 		-- Grap the definition string.
-		local str = string.format("LuaClass: %s {%s}", self.__name, tostring(self):sub(8))
+		local str = string.format("LuaClass: %s <%s> {%s}", self:get_name(), self.__instance and "instance" or "class", tostring(self):sub(8))
 
 		-- Enable our metatable again.
 		setmetatable(self, mt)
@@ -76,12 +79,18 @@ local classMT = {
 
 	__call = function(self, ...)
 		-- When we call class instances, we actually call their constructors!
-		if self:member_valid(self.__name) then
-			if self:member_getaccess(self.__name) ~= _public_ then
-				error(string.format("Cannot create instance of class %s: constructor access level is not public!", self.__name))
-			else
-				self[self.__name](self, ...)
+		if self:is_instance() then
+			if self:valid_member(self:get_name()) then
+				if self:member_getaccess(self:get_name()) ~= _public_ then
+					error(string.format("Cannot create instance of class %s: constructor access level is not public!", self:get_name()))
+				else
+					return self[self:get_name()](self, ...)
+				end
+			elseif self.super then
+				self.super(self.super, ...)
 			end
+		else
+			return createClassInstance(self:get_name(), ...)
 		end
 	end;
 
@@ -96,22 +105,28 @@ local classMT = {
 
 		local locationClass = self.__registry[mKey]
 		if locationClass then
-			-- Check which access modifier this member has.
 			local access = locationClass.__members[mKey].access
+			local membertype = locationClass.__members[mKey].membertype
 			local value = locationClass.__members[mKey].fvalue or locationClass.__members[mKey].value
-			
+
+			if self.__instance  and membertype == _static_ then -- Redirect to global class.
+				return self:get_class()[mKey]
+			end
+
 			if access == _public_ then
 				return value
 			elseif access == _protected_ then
-				local info = debug.getinfo(2, "nf")
-				local name = info.name
-				local func = info.func
+				local stackLevel = membertype == _static_ and 3 or 2
+				local info = debug.getinfo(stackLevel, "nf")
+				local name = info and info.name or "unknown"
+				local func = info and info.func
 
 				-- The below functions check used to be using the callInfo.name to look up the class members direct, but debug.getinfo(2).name
 				-- seems to return incorrect values, when used to lookup functions that directly return protected class member calls.
 				-- This seems to be a lua bug. So now we just make a table that uses the actual functions as keys, which is hopefully just as
 				-- well performing as we don't want to iterate through all members to see if it matches the 2nd stack function.
-				if self.__functionality[func] then
+				if (!info and membertype == _static_) -- This means that this static call isn't a call redirected from within an instance (since frame nr.4 is nonexistent), so it should always be allowed.
+					or locationClass == self or self.__functionality[func] then
 					return value
 				else
 					error(string.format("Invalid get access attempt to protected member '%s' located in <%s> via <%s> function '%s' (check nr. 3 in stack trace)", mKey, tostring(locationClass), tostring(self), name))
@@ -143,9 +158,17 @@ local classMT = {
 		end
 
 		local locationClass = self.__registry[mKey]
+
 		if locationClass then
-			-- Check which access modifier this member has.
 			local access = locationClass.__members[mKey].access
+			local membertype = locationClass.__members[mKey].membertype
+			
+			if self.__instance and membertype == _static_ then  -- Redirect to global class.
+				self:get_class()[mKey] = mValue
+
+				return
+			end
+
 			if access == _public_ then
 				locationClass.__members[mKey].value = mValue
 				locationClass.__members[mKey].fvalue = type(mVal) == "function" and 
@@ -155,15 +178,17 @@ local classMT = {
 
 				return
 			elseif access == _protected_ then
-				local info = debug.getinfo(2, "nf")
-				local name = info.name
-				local func = info.func
+				local stackLevel = membertype == _static_ and 3 or 2
+				local info = debug.getinfo(stackLevel, "nf")
+				local name = info and info.name or "unknown"
+				local func = info and info.func
 
 				-- The below functions check used to be using the callInfo.name to look up the class members direct, but debug.getinfo(2).name
 				-- seems to return incorrect values, when used to lookup functions that directly return protected class member calls.
 				-- This seems to be a lua bug. So now we just make a table that uses the actual functions as keys, which is hopefully just as
 				-- well performing as we don't want to iterate through all members to see if it matches the 2nd stack function.
-				if self.__functionality[func] then
+				if (!info and membertype == _static_) -- This means that this static call isn't a call redirected from within an instance (since frame nr.4 is nonexistent), so it should always be allowed.
+					or locationClass == self or self.__functionality[func] then
 					locationClass.__members[mKey].value = mValue
 					locationClass.__members[mKey].fvalue = type(mVal) == "function" and 
 						function(self, ...)
@@ -196,29 +221,6 @@ local classMT = {
 }
 
 --[[
-	Create an instance of a class.
-]]
-
-local function createClassInstance(className, ...)
-	-- Create a new instance.
-	local instance = tableCopy(LUA_CLASSES[className])
-
-	-- Activate the metatables
-	local class = instance
-	while class ~= nil do
-		-- Setup the metatable
-		setmetatable(class, classMT)
-
-		class = class.super
-	end
-
-	-- Call the constructor
-	local ret = instance(...)
-
-	return ret || instance
-end
-
---[[
 	Setup a new class.
 ]]
 
@@ -226,6 +228,11 @@ local function setupClass(creatorData, creatorMembers)
 	local className = creatorData["name"]
 	local superClassName = creatorData["super"]
 	local implementsList = creatorData["implements"]
+
+	-- Check if there isn't a conflict with a global
+	if _G[className] and !_G[className].get_class then
+		error(string.format("cannot setup class %s, there's already a global with this name...", className))
+	end
 
 	-- Check for double
 	if LUA_CLASSES[className] then
@@ -238,33 +245,43 @@ local function setupClass(creatorData, creatorMembers)
 	end
 
 	local newClass = {}
-	
+	newClass.__name = className
 	
 	do -- Setup class data.
-		-- Define the members table.
+		-- Setup members
+		-- Setup the members metatable, that redirects all calls to static members to the class.
 		newClass.__members = {}
 
 		-- Parse all variables in the public/protected/private tables.
 		for mKey, mData in pairs(creatorMembers) do
-			newClass.__members[mKey] = {value = mData.value, access = mData.access, fvalue = type(mVal) == "function" and 
-				function(self, ...)
-					return mVal(self.__registry[mKey], ...)
-				end
+			newClass.__members[mKey] = {
+				value = mData.value,
+				access = mData.access,
+				membertype = mData.membertype,
+				fvalue = type(mVal) == "function" and 
+					function(self, ...)
+						return mVal(self.__registry[mKey], ...)
+					end,
 			}
 		end
 
-		-- Define the class name.
-		newClass.__name = className
-
 		-- Define the super class.
-		newClass.__super =  tableCopy(LUA_CLASSES[superClassName])
+		if LUA_CLASSES[superClassName] then
+			-- We do NOT DUPLICATE HERE!!
+			-- If we did, static variables wouldn't work because each class would have a different instance of the superclass.
+			-- The super class will still be duplicates when we initialize a new instance, because :duplicate() would traverse up and copy the __super table too!
+			newClass.__super =  LUA_CLASSES[superClassName]
+		end
+
+		-- Add a variable that will be set to true on instances.
+		newClass.__instance = false
 	end
 
 	do -- Setup utility functions
 		newClass.__cache = {}
 
 		function newClass:is_a(className)
-			return self.__name == className
+			return self:get_name() == className
 		end
 
 		function newClass:instance_of(className)
@@ -274,7 +291,7 @@ local function setupClass(creatorData, creatorMembers)
 
 			local iter = self
 			while iter ~= nil do
-				if iter.__name == class then
+				if iter:get_name() == class then
 					self.__cache["instance_of_" .. class] = true
 
 					return true
@@ -286,7 +303,15 @@ local function setupClass(creatorData, creatorMembers)
 			return false
 		end
 
-		function newClass:member_valid(memberName)
+		function newClass:get_class()
+			return LUA_CLASSES[self:get_name()]
+		end
+
+		function newClass:get_name()
+			return self.__name
+		end
+
+		function newClass:valid_member(memberName)
 			return self.__registry[memberName] and true or false
 		end
 
@@ -294,15 +319,19 @@ local function setupClass(creatorData, creatorMembers)
 			return self.__registry[memberName] and self.__registry[memberName].__members[memberName].access
 		end
 
-		function newClass:member_gettype(memberName)
+		function newClass:member_getluatype(memberName)
 			return type(self.__registry[memberName] and self.__registry[memberName].__members[memberName].value)
+		end
+
+		function newClass:member_getmembertype(memberName)
+			return self.__registry[memberName] and self.__registry[memberName].__members[memberName].membertype
 		end
 
 		function newClass:member_getargs(memberName)
 			local reg =  self.__registry[memberName]
 
 			if not reg then
-				error(string.format("Class %s: attempted to call member_getargs on invalid member '%s'", self.__name, memberName))
+				error(string.format("Class %s: attempted to call member_getargs on invalid member '%s'", self:get_name(), memberName))
 			end
 
 			local value = reg.__members[memberName].value
@@ -323,6 +352,37 @@ local function setupClass(creatorData, creatorMembers)
 
 			return arglist
 		end
+
+		function newClass:is_instance()
+			return self.__instance
+		end
+
+		function newClass:duplicate(_table, _lookup_table)
+			if _table == nil then
+				_table = self
+			end
+
+			local copy = {}
+
+			for i, v in pairs(_table) do
+				if type(v) ~= "table" then
+					copy[i] = rawget(_table, i)
+				else
+					_lookup_table = _lookup_table or {}
+					_lookup_table[_table] = copy
+
+					if _lookup_table[v] then
+						copy[i] = _lookup_table[v] -- we already copied this table. reuse the copy.
+					else
+						copy[i] = self:duplicate(v,_lookup_table) -- not yet copied. copy it.
+					end
+				end
+			end
+
+			debug.setmetatable(copy, debug.getmetatable(_table))
+
+			return copy
+		end
 	end
 
 	do -- Build the registry and the reverse-registry.
@@ -331,18 +391,17 @@ local function setupClass(creatorData, creatorMembers)
 
 		local iter = newClass
 		while iter ~= nil do
-			for k, v in pairs(iter.__members) do
+			for mName, mData in pairs(iter.__members) do
 				-- This is important, we have to skip assignment if there is already a member found earlier
 				-- or else we priorise parents above children.
-				if not newClass.__registry[k] then
-					newClass.__registry[k] = iter
+				if not newClass.__registry[mName] then
+					newClass.__registry[mName] = iter
 				end
 
 				-- Here we keep track of all functions this class or its parents contains, this can be used
 				-- to check whether calls to protected functions came from this class or its parents.
-				local value = iter.__members[k].value
-				if type(value) == "function" then
-					newClass.__functionality[value] = true
+				if type(mData.value) == "function" then
+					newClass.__functionality[mData.value] = true
 				end
 			end
 			
@@ -355,7 +414,7 @@ local function setupClass(creatorData, creatorMembers)
 		local interface = LUA_INTERFACES[interfaceName]
 		if interface then
 			for memberName, interface_memberData in pairs(interface.members) do
-				if newClass:member_valid(memberName) then
+				if newClass:valid_member(memberName) then
 					-- Check if the access modifiers match up.
 					if newClass:member_getaccess(memberName) ~= interface:member_getaccess(memberName) then
 						error(string.format("Class %s is supposed to implement member '%s' with %s access, but it's specified with %s access in the class",
@@ -363,12 +422,21 @@ local function setupClass(creatorData, creatorMembers)
 					end
 
 					-- Check if the lua types match up.
-					local interfaceType = interface:member_gettype(memberName)
-					local classType = newClass:member_gettype(memberName)
+					local interfaceLuaType = interface:member_getluatype(memberName)
+					local classLuaType = newClass:member_getluatype(memberName)
 					
-					if classType ~= interfaceType then
+					if classLuaType ~= interfaceLuaType then
 						error(string.format("Class %s is supposed to implement member '%s' as the '%s' lua_type, but it's specified as the '%s' lua_type in the class",
-									className, memberName, interfaceType, classType))
+									className, memberName, interfaceLuaType, classLuaType))
+					end
+
+					-- Check if the variable types match up.
+					local interfaceMemberType = interface:member_getmembertype(memberName)
+					local classMemberType = newClass:member_getmembertype(memberName)
+					
+					if classMemberType ~= interfaceMemberType then
+						error(string.format("Class %s is supposed to implement member '%s' as the '%s' variable_type, but it's specified as the '%s' variable_type in the class",
+									className, memberName, interfaceMemberType, classMemberType))
 					end
 
 					-- Check if the arguments match up.
@@ -403,17 +471,19 @@ local function setupClass(creatorData, creatorMembers)
 		end
 	end
 
-	-- Store prepared classdata in the registry.
+	-- Store reference to our classdata in the registry.
 	LUA_CLASSES[className] = newClass
+
+	-- Setup the metatables on the class + all children
+	local class = newClass
+	while class ~= nil do
+		setmetatable(class, classMT)
+
+		class = class.super
+	end
 	
 	-- Create a global that can be used to create a class instance, or to return the class data.
-	_G[className] = setmetatable({}, {
-		__call = function(self, ...) -- ... being parameters to be passed to the constructor.
-			return createClassInstance(self.__name, ...)
-		end;
-
-		__index = newClass;
-	})
+	_G[className] = newClass;
 
 	--print(string.format("Created new class: %s with superclass %s implementing %s", className, superClassName, implementsName))
 end
@@ -467,14 +537,19 @@ local function setupInterface(creatorData, creatorMembers)
 
 	-- Setup the interface
 	local newInterface = {}
+	newInterface.__name = interfaceName
 	newInterface.__members = {}
 
 	-- Parse all variables in the public/protected/private tables.
 	for mKey, m in pairs(creatorMembers) do
-		newInterface.__members[mKey] = {value = m.value, access = m.access, fvalue = type(mVal) == "function" and 
-			function(self, ...)
-				return mVal(self.__registry[mKey], ...)
-			end
+		newInterface.__members[mKey] = {
+			value = m.value,
+			access = m.access,
+			membertype = m.membertype,
+			fvalue = type(mVal) == "function" and 
+				function(self, ...)
+					return mVal(self.__registry[mKey], ...)
+				end,
 		}
 	end
 
@@ -493,23 +568,31 @@ local function setupInterface(creatorData, creatorMembers)
 	end
 
 	do -- Setup utility functions
-		function newInterface:member_valid(memberName)
+		function newInterface:valid_member(memberName)
 			return self.__members[memberName] and true or false
+		end
+
+		function newInterface:get_name()
+			return self.__name
 		end
 
 		function newInterface:member_getaccess(memberName)
 			return self.__members[memberName] and self.__members[memberName].access
 		end
 
-		function newInterface:member_gettype(memberName)
+		function newInterface:member_getluatype(memberName)
 			return type(self.__members[memberName] and self.__members[memberName].value)
+		end
+
+		function newInterface:member_getmembertype(memberName)
+			return self.__members[memberName] and self.__members[memberName].membertype
 		end
 
 		function newInterface:member_getargs(memberName)
 			local member =  self.__members[memberName]
 
 			if not member then
-				error(string.format("Class %s: attempted to call member_getargs on invalid member '%s'", self.__name, memberName))
+				error(string.format("Interface %s: attempted to call member_getargs on invalid member '%s'", self:get_name(), memberName))
 			end
 
 			local value = member.value
@@ -544,23 +627,30 @@ end
 do
 	local creatorType, creatorData, creatorMembers
 	
-	local function addMembers(memberTable, access)
+	local function addVariable(memberTable, memberType, varAccess)
 		if not creatorMembers then
 			error("defining members without any class specification")
+		end
+
+		if varAccess then -- If we have an ccess level defined, look through all statics which don't have one and set it.
+			for mKey, mValue in pairs(creatorMembers) do
+				if mValue.membertype == _static_ and !mValue.access then
+					mValue.access = varAccess
+				end
+			end
 		end
 
 		for mKey, mValue in pairs(memberTable) do
 			if creatorMembers[mKey] then
 				error(string.format("Double definition of member '%s' in class '%s'", mKey, creatorData["name"]))
 			else
-				creatorMembers[mKey] = {value = mValue, access = access}
+				creatorMembers[mKey] = {value = mValue, membertype = memberType, access = varAccess}
 			end
 		end
 	end
 
 	local executionTable = setmetatable({}, {
 		__call = function(data)
-			PrintTable(data)
 			for mKey, mValue in pairs(data or {}) do
 				if creatorMembers[mKey] then
 					error(string.format("Double definition of member '%s' in class '%s'", mKey, creatorData["name"]))
@@ -589,11 +679,21 @@ do
 
 				return setmetatable({}, {
 					__call = function(self, memberTable)
-						addMembers(memberTable, mAccess)
+						addVariable(memberTable, _instance_, mAccess)
+					end,
+
+					__index = function(self, key)
+						if key == "static" then
+							return setmetatable({}, {
+								__newindex = function(self, mKey, mValue)
+									addVariable({[mKey] = mValue}, _static_, mAccess)
+								end
+							})
+						end
 					end,
 
 					__newindex = function(self, mKey, mValue)
-						addMembers({[mKey] = mValue}, mAccess)
+						addVariable({[mKey] = mValue}, _instance_, mAccess)
 					end
 				})
 			end
@@ -623,7 +723,7 @@ do
 			creatorType = "class"
 			creatorData = {}
 			creatorData["name"] = className
-			creatorMembers = {["public"] = {}, ["protected"] = {}, ["private"] = {}}
+			creatorMembers = {}
 
 			return executionTable
 		end
@@ -644,13 +744,12 @@ do
 			return executionTable
 		end
 
-
 		function public(memberTable)
 			if !memberTable then
 				error("running public without any member table")
 			end
 
-			addMembers(memberTable, _public_)
+			addVariable(memberTable, _instance_, _public_)
 		end
 
 		function protected(memberTable)
@@ -658,7 +757,7 @@ do
 				error("running public without any member table")
 			end
 
-			addMembers(memberTable, _protected_)
+			addVariable(memberTable, _instance_, _protected_)
 		end
 
 		function private(memberTable)
@@ -666,7 +765,15 @@ do
 				error("running public without any member table")
 			end
 
-			addMembers(memberTable, _private_)
+			addVariable(memberTable, _instance_, _private_)
+		end
+
+		function static(memberTable)
+			if !memberTable then
+				error("running static without any member table")
+			end
+
+			addVariable(memberTable, _static_)
 		end
 	end
 
