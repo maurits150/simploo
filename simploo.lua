@@ -39,7 +39,7 @@ local _instance_ = "InstanceMemberType"
 
 local function createClassInstance(className, ...)
 	-- Check if class exists
-	if !LUA_CLASSES[className] then
+	if not LUA_CLASSES[className] then
 		error(string.format("tried to create invalid class %s", className))
 	end
 
@@ -57,7 +57,7 @@ local function createClassInstance(className, ...)
 	-- Call the constructor
 	local ret = instance(...)
 
-	return ret || instance
+	return ret or instance
 end
 
 local classMT = {
@@ -125,7 +125,7 @@ local classMT = {
 				-- seems to return incorrect values, when used to lookup functions that directly return protected class member calls.
 				-- This seems to be a lua bug. So now we just make a table that uses the actual functions as keys, which is hopefully just as
 				-- well performing as we don't want to iterate through all members to see if it matches the 2nd stack function.
-				if (!info and membertype == _static_) -- This means that this static call isn't a call redirected from within an instance (since frame nr.4 is nonexistent), so it should always be allowed.
+				if (not info and membertype == _static_) -- This means that this static call isn't a call redirected from within an instance (since frame nr.4 is nonexistent), so it should always be allowed.
 					or locationClass == self or self.__functionality[func] then
 					return value
 				else
@@ -187,7 +187,7 @@ local classMT = {
 				-- seems to return incorrect values, when used to lookup functions that directly return protected class member calls.
 				-- This seems to be a lua bug. So now we just make a table that uses the actual functions as keys, which is hopefully just as
 				-- well performing as we don't want to iterate through all members to see if it matches the 2nd stack function.
-				if (!info and membertype == _static_) -- This means that this static call isn't a call redirected from within an instance (since frame nr.4 is nonexistent), so it should always be allowed.
+				if (not info and membertype == _static_) -- This means that this static call isn't a call redirected from within an instance (since frame nr.4 is nonexistent), so it should always be allowed.
 					or locationClass == self or self.__functionality[func] then
 					locationClass.__members[mKey].value = mValue
 					locationClass.__members[mKey].fvalue = type(mVal) == "function" and 
@@ -230,7 +230,7 @@ local function setupClass(creatorData, creatorMembers)
 	local implementsList = creatorData["implements"]
 
 	-- Check if there isn't a conflict with a global
-	if _G[className] and !_G[className].get_class then
+	if _G[className] and not _G[className].get_class then
 		error(string.format("cannot setup class %s, there's already a global with this name...", className))
 	end
 
@@ -634,7 +634,7 @@ do
 
 		if varAccess then -- If we have an ccess level defined, look through all statics which don't have one and set it.
 			for mKey, mValue in pairs(creatorMembers) do
-				if mValue.membertype == _static_ and !mValue.access then
+				if mValue.membertype == _static_ and not mValue.access then
 					mValue.access = varAccess
 				end
 			end
@@ -745,7 +745,7 @@ do
 		end
 
 		function public(memberTable)
-			if !memberTable then
+			if not memberTable then
 				error("running public without any member table")
 			end
 
@@ -753,7 +753,7 @@ do
 		end
 
 		function protected(memberTable)
-			if !memberTable then
+			if not memberTable then
 				error("running public without any member table")
 			end
 
@@ -761,7 +761,7 @@ do
 		end
 
 		function private(memberTable)
-			if !memberTable then
+			if not memberTable then
 				error("running public without any member table")
 			end
 
@@ -769,7 +769,7 @@ do
 		end
 
 		function static(memberTable)
-			if !memberTable then
+			if not memberTable then
 				error("running static without any member table")
 			end
 
