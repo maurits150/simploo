@@ -715,15 +715,33 @@ do
 	end
 
 	do -- Class
-		function class(className)
+		function class(className, options)
 			if creatorType or creatorData then
 				error("unfinished class creation")
 			end
 
+			-- Intialize class creation
 			creatorType = "class"
 			creatorData = {}
 			creatorData["name"] = className
 			creatorMembers = {}
+
+			-- Parse options for alternative syntax
+			if options then
+				if options["extends"] then
+					extends(options["extends"])
+				end
+
+				if options["implements"] then
+					if type(options["implements"]) == "table" then
+						for k, v in pairs(options["implements"]) do
+							implements(v)
+						end
+					else
+						implements(options["implements"])
+					end
+				end
+			end
 
 			return executionTable
 		end
