@@ -78,11 +78,11 @@ local classMT = {
 	end,
 
 	__call = function(self, ...)
-		-- When we call class instances, we actually call their constructors!
+		-- When we call class instances, we actually call their constructors
 		if self:is_instance() then
 			if self:valid_member(self:get_name()) then
 				if self:member_getaccess(self:get_name()) ~= _public_ then
-					error(string.format("Cannot create instance of class %s: constructor access level is not public!", self:get_name()))
+					error(string.format("cannot create instance of class %s: constructor access level is not public", self:get_name()))
 				else
 					return self[self:get_name()](self, ...)
 				end
@@ -98,9 +98,9 @@ local classMT = {
 		if mKey == "super" then
 			return rawget(self, "__super")
 		elseif mKey == "__super" or mKey == "__name" then
-			error(string.format("Invalid read access to hidden class member '%s'", mKey))
+			error(string.format("invalid read access to hidden class member '%s'", mKey))
 		elseif mKey == "__members" or mKey == "__registry" or mKey == "__cache" or mKey == "__functionality" then
-			error(string.format("Invalid read access to hidden class member '%s'", mKey))
+			error(string.format("invalid read access to hidden class member '%s'", mKey))
 		end
 
 		local locationClass = self.__registry[mKey]
@@ -129,32 +129,32 @@ local classMT = {
 					or locationClass == self or self.__functionality[func] then
 					return value
 				else
-					error(string.format("Invalid get access attempt to protected member '%s' located in <%s> via <%s> function '%s' (check nr. 3 in stack trace)", mKey, tostring(locationClass), tostring(self), name))
+					error(string.format("invalid get access attempt to protected member '%s' located in <%s> via <%s> function '%s' (check nr. 3 in stack trace)", mKey, tostring(locationClass), tostring(self), name))
 				end
 			elseif access == _private_ then
 				if locationClass == self  then
 					return value
 				else
-					error(string.format("Invalid get access attempt to private member '%s' located in <%s> by <%s> (check nr. 3 in stack trace)",
+					error(string.format("invalid get access attempt to private member '%s' located in <%s> by <%s> (check nr. 3 in stack trace)",
 						mKey, tostring(locationClass), tostring(self)))
 				end
 			else
-				error(string.format("Class <%s> has defined member '%s' but has no access level defined", tostring(locationClass), mKey))
+				error(string.format("class <%s> has defined member '%s' but has no access level defined", tostring(locationClass), mKey))
 			end	
 		end
 		
-		--error(string.format("Class <%s> was unable to lookup mKey '%s'", self, mKey))
+		--error(string.format("class <%s> was unable to lookup mKey '%s'", self, mKey))
 
 		return nil
 	end,
 	
 	__newindex = function(self, mKey, mValue)
 		if mKey == "super" then
-			error(string.format("Invalid write access to class member '%s'", mKey))
+			error(string.format("invalid write access to class member '%s'", mKey))
 		elseif mKey == "__name" or mKey == "__super" then
-			error(string.format("Invalid write access to hidden class member '%s'", mKey))
+			error(string.format("invalid write access to hidden class member '%s'", mKey))
 		elseif mKey == "__members" or mKey == "__registry" or mKey == "__cache" or mKey == "__functionality" then
-			error(string.format("Invalid write access to hidden class member '%s'", mKey))
+			error(string.format("invalid write access to hidden class member '%s'", mKey))
 		end
 
 		local locationClass = self.__registry[mKey]
@@ -197,7 +197,7 @@ local classMT = {
 
 					return
 				else
-					error(string.format("Invalid set access attempt to protected member '%s' located in <%s> via <%s> function '%s' (check nr. 3 in stack trace)", mKey, tostring(locationClass.locationClass), tostring(self), name))
+					error(string.format("invalid set access attempt to protected member '%s' located in <%s> via <%s> function '%s' (check nr. 3 in stack trace)", mKey, tostring(locationClass.locationClass), tostring(self), name))
 				end
 			elseif access == _private_ then
 				if locationClass == self then
@@ -209,13 +209,13 @@ local classMT = {
 
 					return
 				else
-					error(string.format("Invalid set access attempt to private member '%s' located in <%s> via <%s> (check nr. 3 in stack trace)", mKey, tostring(locationClass.locationClass), tostring(self)))
+					error(string.format("invalid set access attempt to private member '%s' located in <%s> via <%s> (check nr. 3 in stack trace)", mKey, tostring(locationClass.locationClass), tostring(self)))
 				end
 			else
-				error(string.format("Class <%s> has defined member '%s' but has no access level defined", tostring(locationClass), mKey))
+				error(string.format("class <%s> has defined member '%s' but has no access level defined", tostring(locationClass), mKey))
 			end	
 		else
-			error(string.format("Unable to set member '%s' inside class <%s>: member was never defined during class definition", mKey, self))
+			error(string.format("unable to set member '%s' inside class <%s>: member was never defined during class definition", mKey, self))
 		end
 	end
 }
@@ -230,18 +230,20 @@ local function setupClass(creatorData, creatorMembers)
 	local implementsList = creatorData["implements"]
 
 	-- Check if there isn't a conflict with a global
-	if _G[className] and not _G[className].get_class then
-		error(string.format("cannot setup class %s, there's already a global with this name...", className))
+	if _G[className] then
+		if type(_G[className]) == "table" and not _G[className].get_name or type(_G[className]) ~= "table" then
+			error(string.format("cannot setup class %s, there's already a global with this name", className))
+		end
 	end
 
 	-- Check for double
 	if LUA_CLASSES[className] then
-		error(string.format("Double setup of class %s, failed to setup new class!", className))
+		error(string.format("double setup of class %s", className))
 	end
 
 	-- Check for parent
 	if superClassName ~= nil and not LUA_CLASSES[superClassName] then
-		error(string.format("Parent for class %s does not exist! Failed to setup class", className))
+		error(string.format("parent for class %s does not exist. failed to setup class", className))
 	end
 
 	local newClass = {}
@@ -267,9 +269,9 @@ local function setupClass(creatorData, creatorMembers)
 
 		-- Define the super class.
 		if LUA_CLASSES[superClassName] then
-			-- We do NOT DUPLICATE HERE!!
+			-- We do NOT DUPLICATE HERE
 			-- If we did, static variables wouldn't work because each class would have a different instance of the superclass.
-			-- The super class will still be duplicates when we initialize a new instance, because :duplicate() would traverse up and copy the __super table too!
+			-- The super class will still be duplicates when we initialize a new instance, because :duplicate() would traverse up and copy the __super table too
 			newClass.__super =  LUA_CLASSES[superClassName]
 		end
 
@@ -331,7 +333,7 @@ local function setupClass(creatorData, creatorMembers)
 			local reg =  self.__registry[memberName]
 
 			if not reg then
-				error(string.format("Class %s: attempted to call member_getargs on invalid member '%s'", self:get_name(), memberName))
+				error(string.format("class %s: attempted to call member_getargs on invalid member '%s'", self:get_name(), memberName))
 			end
 
 			local value = reg.__members[memberName].value
@@ -347,7 +349,7 @@ local function setupClass(creatorData, creatorMembers)
 					arglist[i] = debug.getlocal(value, i)
 				end
 			else
-				print("no dbg or dbg.nparams for " .. memberName .. "!")
+				print("no dbg or dbg.nparams for " .. memberName)
 			end
 
 			return arglist
@@ -417,7 +419,7 @@ local function setupClass(creatorData, creatorMembers)
 				if newClass:valid_member(memberName) then
 					-- Check if the access modifiers match up.
 					if newClass:member_getaccess(memberName) ~= interface:member_getaccess(memberName) then
-						error(string.format("Class %s is supposed to implement member '%s' with %s access, but it's specified with %s access in the class",
+						error(string.format("class %s is supposed to implement member '%s' with %s access, but it's specified with %s access in the class",
 									className, memberName, interface_memberData.access,  newClass:member_getaccess(memberName)))
 					end
 
@@ -426,7 +428,7 @@ local function setupClass(creatorData, creatorMembers)
 					local classLuaType = newClass:member_getluatype(memberName)
 					
 					if classLuaType ~= interfaceLuaType then
-						error(string.format("Class %s is supposed to implement member '%s' as the '%s' lua_type, but it's specified as the '%s' lua_type in the class",
+						error(string.format("class %s is supposed to implement member '%s' as the '%s' lua_type, but it's specified as the '%s' lua_type in the class",
 									className, memberName, interfaceLuaType, classLuaType))
 					end
 
@@ -435,7 +437,7 @@ local function setupClass(creatorData, creatorMembers)
 					local classMemberType = newClass:member_getmembertype(memberName)
 					
 					if classMemberType ~= interfaceMemberType then
-						error(string.format("Class %s is supposed to implement member '%s' as the '%s' variable_type, but it's specified as the '%s' variable_type in the class",
+						error(string.format("class %s is supposed to implement member '%s' as the '%s' variable_type, but it's specified as the '%s' variable_type in the class",
 									className, memberName, interfaceMemberType, classMemberType))
 					end
 
@@ -446,28 +448,28 @@ local function setupClass(creatorData, creatorMembers)
 					-- Check argument names.
 					for k, v in pairs(interfaceArgs) do
 						if not classArgs[k] then
-							error(string.format("Class %s is supposed to implement member function '%s' argument #%d with the name '%s'",
+							error(string.format("class %s is supposed to implement member function '%s' argument #%d with the name '%s'",
 											className, memberName, k, v, k, classArgs[k]))
 						end
 						if classArgs[k] ~= v then
-							error(string.format("Class %s is supposed to implement member function '%s' argument #%d with the name '%s', but argument #%d is named '%s' instead",
+							error(string.format("class %s is supposed to implement member function '%s' argument #%d with the name '%s', but argument #%d is named '%s' instead",
 											className, memberName, k, v, k, classArgs[k]))
 						end
 					end
 
 					for k, v in pairs(classArgs) do
 						if interfaceArgs[k] ~= v then
-							error(string.format("Class %s is not supposed to implement member function '%s' argument #%d named '%s': this argument isn't specified in the implemented interface '%s'",
+							error(string.format("class %s is not supposed to implement member function '%s' argument #%d named '%s': this argument isn't specified in the implemented interface '%s'",
 											className, memberName, k, v, interfaceName))
 						end
 					end
 				else
-					error(string.format("Class %s is missing interface definition: %s '%s' specified in interface isn't implemented",
+					error(string.format("class %s is missing interface definition: %s '%s' specified in interface isn't implemented",
 							className, interface_memberData.access, memberName))
 				end
 			end
 		else
-			error(string.format("Class %s attempted to implement non-existant interface '%s'", className, interfaceName))
+			error(string.format("class %s attempted to implement non-existant interface '%s'", className, interfaceName))
 		end
 	end
 
@@ -485,7 +487,7 @@ local function setupClass(creatorData, creatorMembers)
 	-- Create a global that can be used to create a class instance, or to return the class data.
 	_G[className] = newClass;
 
-	--print(string.format("Created new class: %s with superclass %s implementing %s", className, superClassName, implementsName))
+	--print(string.format("created new class: %s with superclass %s implementing %s", className, superClassName, implementsName))
 end
 
 
@@ -527,12 +529,12 @@ local function setupInterface(creatorData, creatorMembers)
 	
 	-- Check for double
 	if LUA_INTERFACES[interfaceName] then
-		error(string.format("Double setup of interface %s, failed to setup new interface!", interfaceName))
+		error(string.format("double setup of interface %s, failed to setup new interface", interfaceName))
 	end
 
 	-- Check for parent
 	if superInterfaceName ~= nil and not LUA_INTERFACES[superInterfaceName] then
-		error(string.format("Parent for interface %s does not exist! Failed to setup interface", interfaceName))
+		error(string.format("parent for interface %s does not exist. failed to setup interface", interfaceName))
 	end
 
 	-- Setup the interface
@@ -559,7 +561,7 @@ local function setupInterface(creatorData, creatorMembers)
 		for mKey, mVal in pairs(superInterface.__members) do
 			if newInterface.__members[mKey] then
 				if newInterface.__members[mKey].access ~= superInterface.__members[mKey].access then
-					error(string.format("Interface %s has a member called '%s' specified as %s, but it's superinterface has this member specified as %s", interfaceName, mKey, superInterface.__access[mKey]))
+					error(string.format("interface %s has a member called '%s' specified as %s, but it's superinterface has this member specified as %s", interfaceName, mKey, superInterface.__access[mKey]))
 				end
 			else
 				newInterface.__members[mKey] = superInterface.__members[mKey]
@@ -592,7 +594,7 @@ local function setupInterface(creatorData, creatorMembers)
 			local member =  self.__members[memberName]
 
 			if not member then
-				error(string.format("Interface %s: attempted to call member_getargs on invalid member '%s'", self:get_name(), memberName))
+				error(string.format("interface %s: attempted to call member_getargs on invalid member '%s'", self:get_name(), memberName))
 			end
 
 			local value = member.value
@@ -608,7 +610,7 @@ local function setupInterface(creatorData, creatorMembers)
 					arglist[i] = debug.getlocal(value, i)
 				end
 			else
-				print("no dbg or dbg.nparams for " .. memberName .. "!")
+				print("no dbg or dbg.nparams for " .. memberName)
 			end
 
 			return arglist
@@ -621,7 +623,7 @@ local function setupInterface(creatorData, creatorMembers)
 	-- Store prepared classdata in the registry.
 	LUA_INTERFACES[interfaceName] = newInterface
 
-	--print(string.format("Created new interface: %s with superclass %s", interfaceName, superInterfaceName))
+	--print(string.format("created new interface: %s with superclass %s", interfaceName, superInterfaceName))
 end
 
 do
@@ -642,7 +644,7 @@ do
 
 		for mKey, mValue in pairs(memberTable) do
 			if creatorMembers[mKey] then
-				error(string.format("Double definition of member '%s' in class '%s'", mKey, creatorData["name"]))
+				error(string.format("double definition of member '%s' in class '%s'", mKey, creatorData["name"]))
 			else
 				creatorMembers[mKey] = {value = mValue, membertype = memberType, access = varAccess}
 			end
@@ -653,7 +655,7 @@ do
 		__call = function(data)
 			for mKey, mValue in pairs(data or {}) do
 				if creatorMembers[mKey] then
-					error(string.format("Double definition of member '%s' in class '%s'", mKey, creatorData["name"]))
+					error(string.format("double definition of member '%s' in class '%s'", mKey, creatorData["name"]))
 				else
 					creatorMembers[mKey] = {value = mValue, access = _private_}
 				end
@@ -671,6 +673,10 @@ do
 		end,
 
 		__index = function(self, key)
+			if key == "register" then
+				return self
+			end
+
 			if key == "public" or key == "protected" or key == "private" then
 				local mAccess = 
 							(key == "public" and _public_) or
@@ -697,7 +703,11 @@ do
 					end
 				})
 			end
-		end
+		end,
+
+		__newindex = function(self, key, value)
+			error(string.format("attempting to add new member variable %s without an access specifier", key))
+		end,
 	})
 
 	do -- Shared
@@ -717,7 +727,7 @@ do
 	do -- Class
 		function class(className, options)
 			if creatorType or creatorData then
-				error("unfinished class creation")
+				error(string.format("unfinished class creation (didn't register previous class %s?)", creatorData["name"]))
 			end
 
 			-- Intialize class creation
