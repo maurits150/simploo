@@ -690,8 +690,10 @@ local function setupInterface(creatorData, creatorMembers)
 end
 
 do
-	local creatorType, creatorData, creatorMembers
-	
+	local creatorType = nil
+	local creatorData = {}
+	local creatorMembers = {}
+
 	local function defineVariable(dataTable, modifierTable)
 		if not creatorMembers then
 			error("defining members without any class specification")
@@ -805,8 +807,8 @@ do
 			end
 
 			creatorType = nil
-			creatorData = nil
-			creatorMembers = nil
+			creatorData = {}
+			creatorMembers = {}
 		end,
 
 		__index = function(self, key)
@@ -832,15 +834,16 @@ do
 	
 	do -- Class/interface creation functions
 		function class(className, opt)
-			if creatorType or creatorData then
-				error(string.format("unfinished class creation (didn't register previous class %s?)", creatorData["name"]))
+			if not className then
+				error("invalid class setup: missing class name")
+			elseif creatorType then
+				error(string.format("invalid class setup: class %s: you still haven't finished setting up %s %s",
+					className, creatorType, creatorData["name"]))
 			end
 
-			-- Intialize class creation
+			-- Set data
 			creatorType = "class"
-			creatorData = {}
 			creatorData["name"] = className
-			creatorMembers = {}
 
 			-- Parse options for alternative syntax
 			if opt then
@@ -850,11 +853,23 @@ do
 			return classSetupMembersCall
 		end
 
-		function interface(interfaceName)
+		function interface(interfaceName, opt)
+			if not interfaceName then
+				error("invalid interface setup: missing interface name")
+			elseif creatorType then
+				error(string.format("invalid interface setup: interface %s: you still haven't finished setting up %s %s",
+					interfaceName, creatorType, creatorData["name"]))
+			end
+
+
+			-- Set data
 			creatorType = "interface"
-			creatorData = {}
 			creatorData["name"] = interfaceName
-			creatorMembers = {}
+
+			-- Parse options for alternative syntax
+			if opt then
+				options(opt)
+			end
 
 			return classSetupMembersCall
 		end
@@ -949,8 +964,8 @@ do
 			if rawMemberTable then -- We're making class members final
 				return defineVariable(rawMemberTable, {_final_})
 			else -- We're making a class final
-				if not creatorType then
-					error("setting final on nothing - make sure you called class() first")
+				if not creatorData then
+					error("setting final on nothing")
 				end
 
 				creatorData["final"] = true
