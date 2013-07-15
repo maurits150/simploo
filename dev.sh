@@ -6,6 +6,7 @@ trap "rm $tmpf; exit 1" 2
 while : ; do  
     if [ "$f" -nt "$tmpf" ]; then  
         cp "$f" "$tmpf"  
+	echo "Reloading simploo.lua..."
 	cat simploo.lua | luajit
     fi  
     sleep 0.2

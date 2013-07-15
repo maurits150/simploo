@@ -112,7 +112,7 @@ local classMT = {
 		-- When not an instance, we create a new instance.
 		if self:is_instance() then
 			for _, constructorName in pairs({self:get_name(), "__construct"}) do
-				if self:valid_member(constructorName) then
+				if self:member_isvalid(constructorName) then
 					if self:member_getaccess(constructorName) ~= _public_ then
 						error(string.format("cannot create instance of class %s: constructor function '%s': access level is not public", constructorName, self:get_name()))
 					else
@@ -372,7 +372,16 @@ local function setupClass(creatorData, creatorMembers)
 			return self.___final
 		end
 
-		function newClass:valid_member(memberName)
+		function newClass:is_instance()
+			return self.___instance
+		end
+
+		function newClass:duplicate(_table, _lookup_table)
+			return duplicateTable(self)
+		end
+
+
+		function newClass:member_isvalid(memberName)
 			return self.___registry[memberName] and true or false
 		end
 
@@ -380,11 +389,15 @@ local function setupClass(creatorData, creatorMembers)
 			return self.___registry[memberName] and self.___registry[memberName].___members[memberName].access
 		end
 
+		function newClass:member_getfinal(memberName)
+			return self.___registry[memberName] and self.___registry[memberName].___members[memberName].final
+		end
+
 		function newClass:member_getluatype(memberName)
 			return type(self.___registry[memberName] and self.___registry[memberName].___members[memberName].value)
 		end
 
-		function newClass:is_static(memberName)
+		function newClass:member_getstatic(memberName)
 			return self.___registry[memberName] and self.___registry[memberName].___members[memberName].static
 		end
 
@@ -412,14 +425,6 @@ local function setupClass(creatorData, creatorMembers)
 			end
 
 			return arglist
-		end
-
-		function newClass:is_instance()
-			return self.___instance
-		end
-
-		function newClass:duplicate(_table, _lookup_table)
-			return duplicateTable(self)
 		end
 	end
 
@@ -452,7 +457,7 @@ local function setupClass(creatorData, creatorMembers)
 		local interface = LUA_INTERFACES[interfaceName]
 		if interface then
 			for memberName, interface_memberData in pairs(interface.members) do
-				if newClass:valid_member(memberName) then
+				if newClass:member_isvalid(memberName) then
 					-- Check if the access modifiers match up.
 					if newClass:member_getaccess(memberName) ~= interface:member_getaccess(memberName) then
 						error(string.format("class %s is supposed to implement member '%s' with %s access, but it's specified with %s access in the class",
@@ -469,11 +474,11 @@ local function setupClass(creatorData, creatorMembers)
 					end
 
 					-- Check if the variable types match up.
-					local interfaceMemberStatic = interface:is_static(memberName)
-					local classMemberStatic = newClass:is_static(memberName)
+					local interfaceMemberStatic = interface:member_getstatic(memberName)
+					local classMemberStatic = newClass:member_getstatic(memberName)
 					
 					if classMemberStatic ~= interfaceMemberStatic then
-						error(string.format("class %s is supposed to implement member '%s' as a '%s' member, but it's specified as the '%s' variable_type in the class",
+						error(string.format("class %s is supposed to implement member '%s' as a '%s' member, but it's specified as a '%s' member in the class",
 									className, memberName, interfaceMemberStatic and "static" or "instance", classMemberStatic and "static" or "instance"))
 					end
 
@@ -498,6 +503,15 @@ local function setupClass(creatorData, creatorMembers)
 							error(string.format("class %s is not supposed to implement member function '%s' argument #%d named '%s': this argument isn't specified in the implemented interface '%s'",
 											className, memberName, k, v, interfaceName))
 						end
+					end
+
+					-- Check if the finals match up.
+					local interfaceFinal =  interface:member_getfinal(memberName)
+					local classFinal = newClass:member_getfinal(memberName)
+
+					if interfaceFinal ~= classFinal then
+						error(string.format("class %s is supposed to implement member '%s' as a '%s' member, but it's specified as '%s' in the class",
+									className, memberName, interfaceFinal and "final" or "non-final", classFinal and "final" or "non-final"))
 					end
 				else
 					error(string.format("class %s is missing interface definition: %s '%s' specified in interface isn't implemented",
@@ -600,7 +614,7 @@ local function setupInterface(creatorData, creatorMembers)
 				(mData.modifiers[_private_] and _private_) or
 				_private_
 		local mStatic = mData.modifiers[_static_] and true or false;
-		local mFinal = mData.modifiers[_final] and true or false;
+		local mFinal = mData.modifiers[_final_] and true or false;
 
 		newInterface.___members[mKey] = {
 			value = mValue,
@@ -629,7 +643,7 @@ local function setupInterface(creatorData, creatorMembers)
 	end
 
 	do -- Setup utility functions
-		function newInterface:valid_member(memberName)
+		function newInterface:member_isvalid(memberName)
 			return self.___members[memberName] and true or false
 		end
 
@@ -637,20 +651,25 @@ local function setupInterface(creatorData, creatorMembers)
 			return self.___name
 		end
 
+		function newInterface:is_final()
+			return self.___final
+		end
+
+
 		function newInterface:member_getaccess(memberName)
 			return self.___members[memberName] and self.___members[memberName].access
+		end
+
+		function newInterface:member_getfinal(memberName)
+			return self.___members[memberName] and self.___members[memberName].final
 		end
 
 		function newInterface:member_getluatype(memberName)
 			return type(self.___members[memberName] and self.___members[memberName].value)
 		end
 
-		function newInterface:is_static(memberName)
+		function newInterface:member_getstatic(memberName)
 			return self.___members[memberName] and self.___members[memberName].static
-		end
-
-		function newInterface:is_final()
-			return self.___final
 		end
 
 		function newInterface:member_getargs(memberName)
