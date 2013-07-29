@@ -9,5 +9,5 @@ while : ; do
 	echo "Reloading simploo.lua..."
 	cat simploo.lua | luajit
     fi  
-    sleep 0.2
+    sleep 1
 done  

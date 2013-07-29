@@ -43,6 +43,7 @@ This library takes advantage of Lua's flexibility to provide you with a very sim
 
 * This library uses the following globals: class, interface, extends, implements, options, public, private, protected, static, final. Make sure these globals aren't already used in your code.
 * The protected access modifier uses the debug.getinfo function to figure out if member lookups came from outside the class hierarchy. This function isn't extremely fast, and thus lookups to protected members will significantly slower. Use with caution!
+* The behavior of this library does not always match other object-oriented languages. For example; static in this library means nothing more than that a variable will be shared between every instance. There's no limitation on the context from which the static variable can be accessed or modified.
 
 #### Requirements
 
