@@ -1060,12 +1060,3 @@ do
 		end
 	end
 end
-
-class "Test" {
-	
-}
-
-local i = Test()
-local j = Test.new()
-
-print(i, j)
