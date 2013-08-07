@@ -77,16 +77,31 @@ local function _duplicateTable(tbl, _lookup)
 	return copy
 end
 
-local function _isValidClass(v)
-	return type(v) == "table" and v.___name ~= nil and LUA_CLASSES[v:____get_class_name()] ~= nil and true or false
+function isclass(v)
+	return getmetatable(v) and getmetatable(v).__class or false
 end
 
-local function _isValidInterface(v)
-	return type(v) == "table" and v.___name ~= nil and LUA_INTERFACES[v.___name] ~= nil and true or false
+function isinterface(v)
+	return getmetatable(v) and getmetatable(v).__interface or false
 end
 
 local function _realPath(p)
 	return string.gsub(string.gsub(string.gsub(string.gsub(p,"[^/]+/%.%./","/"),"/[^/]+/%.%./","/"),"/%./","/"),"//","/")
+end
+
+local function _doValue(key, value)
+	-- We no longer allow changes of functions during runtime, this will cut out this type() function and speed up things a lot.
+	if type(value) == "function" then
+		return function(self, a, b, c, d, e, f, g, h, i, j) -- faster then using '...', lets hope no-one in their right mind uses more than 10 args
+			if not isclass(self) then
+				error(string.format("class %s function %s: use ':'' to call class functions", self:get_name(), mKey))
+			end
+
+			return value(self.___registry[key], a, b, c, d, e, f, g, h, i, j)
+		end
+	else
+		return value
+	end
 end
 
 --[[
@@ -105,7 +120,7 @@ local function _setupClass(creatorData, creatorMembers)
 
 	-- Check if there isn't a conflict with a global
 	if _G[className] then
-		if type(_G[className]) == "table" and not _G[className].____get_class_name or type(_G[className]) ~= "table" then
+		if type(_G[className]) == "table" and not _G[className].get_name or type(_G[className]) ~= "table" then
 			error(string.format("cannot setup class %s, there's already a global with this name", className))
 		end
 	end
@@ -139,6 +154,10 @@ local function _setupClass(creatorData, creatorMembers)
 		newClass.___members = {}
 
 		for mKey, mData in pairs(creatorMembers) do
+			if newClass[mKey] then -- Check for double
+				error(string.format("failed to setup class %s: member %s already exists", mKey))
+			end
+
 			local mValue = mData.value;
 			local mAccess = (mData.modifiers[_public_] and _public_) or
 					(mData.modifiers[_protected_] and _protected_) or
@@ -146,20 +165,14 @@ local function _setupClass(creatorData, creatorMembers)
 					_private_ -- default value without keywords
 			local mStatic = mData.modifiers[_static_] and true or false;
 			local mFinal = mData.modifiers[_final_] and true or false;
+			local isFunc = type(mValue) == "function"
 
 			newClass.___members[mKey] = {
-				value = mValue,
+				value = _doValue(mKey, mValue),
+				isfunc = isFunc,
 				access = mAccess,
 				static = mStatic,
-				final = mFinal,
-				fvalue = type(mValue) == "function" and
-					function(self, ...)
-						if not _isValidClass(self) then
-							error(string.format("class %s function %s: use ':'' to call class functions", self:____get_class_name(), mKey))
-						end
-
-						return mValue(self.___registry[mKey], ...)
-					end,
+				final = mFinal
 			}
 		end
 
@@ -177,7 +190,7 @@ local function _setupClass(creatorData, creatorMembers)
 
 	do -- Free to use class utility functions.
 		function newClass:is_a(className)
-			return self:____get_class_name() == className
+			return self:get_name() == className
 		end
 
 		function newClass:instance_of(className)
@@ -187,8 +200,8 @@ local function _setupClass(creatorData, creatorMembers)
 
 			local iter = self
 			while iter ~= nil do
-				if iter:____get_class_name() == class then
-					self.___cache["instance_of_" .. class] = true
+				if iter:get_name() == className then
+					self.___cache["instance_of_" .. className] = true
 
 					return true
 				end
@@ -198,40 +211,26 @@ local function _setupClass(creatorData, creatorMembers)
 
 			return false
 		end
-	end
 
-	do -- Hidden class utility functions.
-		newClass.___cache = {}
-
-		function newClass:____get_class_definition()
-			return LUA_CLASSES[self:____get_class_name()]
-		end
-
-		function newClass:____get_class_name()
+		function newClass:get_name()
 			return self.___name
 		end
 
-		function newClass:____is_final_class()
-			return self.___final
+		function newClass:get_class()
+			return LUA_CLASSES[self:get_name()]
 		end
 
-		function newClass:____is_instance()
+		function newClass:is_instance()
 			return self.___instance
 		end
 
-
-		function newClass:____get_setup_location()
-			return self.___setupLocation
-		end
-
-
-		function newClass:____instantiate(...)
-			if self:____is_instance() then
+		function newClass.new(...)
+			if newClass:is_instance() then
 				error('you cannot instantiate an instance! use duplicate')
 			end
 
 			-- Duplicate
-			local instance = self:____duplicate()
+			local instance = newClass:____duplicate()
 
 			-- Set instance bool to true
 			local class = instance
@@ -245,13 +244,25 @@ local function _setupClass(creatorData, creatorMembers)
 			-- The garbage collector should take care of the unused instance if the constructor returns something else.
 			return instance:____construct(...) or instance
 		end
+	end
+
+	do -- Hidden class utility functions.
+		newClass.___cache = {}
+
+		function newClass:____is_final_class()
+			return self.___final
+		end
+
+		function newClass:____get_setup_location()
+			return self.___setupLocation
+		end
 
 		function newClass:____construct(...)
-			if self:____is_instance() then
-				for _, constructorName in pairs({self:____get_class_name(), "__construct"}) do
+			if self:is_instance() then
+				for _, constructorName in pairs({self:get_name(), "__construct"}) do
 					if self:____member_isvalid(constructorName) then
 						if self:____member_getaccess(constructorName) ~= _public_ then
-							error(string.format("cannot create instance of class %s: constructor function '%s': access level is not public", constructorName, self:____get_class_name()))
+							error(string.format("cannot create instance of class %s: constructor function '%s': access level is not public", constructorName, self:get_name()))
 						else
 							return self[constructorName] and self[constructorName](self, ...)
 						end
@@ -294,7 +305,7 @@ local function _setupClass(creatorData, creatorMembers)
 			local reg =  self.___registry[memberName]
 
 			if not reg then
-				error(string.format("class %s: attempted to call ____member_getargs on invalid member '%s'", self:____get_class_name(), memberName))
+				error(string.format("class %s: attempted to call ____member_getargs on invalid member '%s'", self:get_name(), memberName))
 			end
 
 			local value = reg.___members[memberName].value
@@ -419,6 +430,7 @@ local function _setupClass(creatorData, creatorMembers)
 	local class = newClass
 	while class ~= nil do
 		setmetatable(class, {
+			__class = true,
 			__tostring = function(self)
 				-- We disable the metatable on ourselfs, so we can tostring ourselves without getting into an infinite loop.
 				-- And no, rawget doesn't work because we want to call a metamethod on ourself: __tostring
@@ -426,7 +438,7 @@ local function _setupClass(creatorData, creatorMembers)
 				setmetatable(self, {})
 
 				-- Grap the definition string.
-				local str = string.format("LuaClass: %s <%s> {%s}", self:____get_class_name(), self.___instance and "instance" or "class", tostring(self):sub(8))
+				local str = string.format("LuaClass: %s <%s> {%s}", self:get_name(), self.___instance and "instance" or "class", tostring(self):sub(8))
 
 				-- Enable our metatable again.
 				setmetatable(self, mt)
@@ -437,36 +449,36 @@ local function _setupClass(creatorData, creatorMembers)
 
 			__call = function(self, ...)
 				-- When we call class instances, we actually call their constructors
-				-- When not an instance, we create a new instance.
-				if self:____is_instance() then
+				if self:is_instance() then
 					return self:____construct(...)
 				else
 					--return self:____instantiate(...) -- We use .new now
-					error("Please use " .. self:____get_class_name() .. ".new() to instantiate this class.")
+					error("Please use " .. self:get_name() .. ".new() to instantiate this class.")
 				end
+			end;
+
+			__concat = function(a, b)
+				return tostring(a) .. tostring(b)
 			end;
 
 			__index = function(self, mKey)
 				if mKey == "super" then
-					return rawget(self, "___super")
-				elseif mKey == "new" then
-					return function(...)
-						return self:____instantiate(...)
-					end
-				elseif mKey == "___super" or mKey == "___name" then
-					error(string.format("invalid read access to hidden class member '%s'", mKey))
-				elseif mKey == "___members" or mKey == "___registry" or mKey == "___cache" or mKey == "___functionality" then
-					error(string.format("invalid read access to hidden class member '%s'", mKey))
+					return self.___super
 				end
 
 				local locationClass = self.___registry[mKey]
+
 				if locationClass then
 					local access = locationClass.___members[mKey].access
 					local static = locationClass.___members[mKey].static
-					local value = locationClass.___members[mKey].fvalue or locationClass.___members[mKey].value
+					local value = locationClass.___members[mKey].value
+
+					if not static and not self:is_instance() then
+						error(string.format("access to class member %s: you cannot read this member variable unless it's static", mKey))
+					end
 					
 					if self.___instance  and static then -- Redirect to global class.
-						return self:____get_class_definition()[mKey]
+						return self:get_class()[mKey]
 					end
 
 					if access == _public_ then
@@ -505,9 +517,6 @@ local function _setupClass(creatorData, creatorMembers)
 			__newindex = function(self, mKey, mValue)
 				if mKey == "super" then
 					error(string.format("inside class <%s>: invalid write access to class member '%s': super is a reserved keyword", tostring(self), mKey))
-				elseif mKey == "___name" or mKey == "___super" or
-						mKey == "___members" or mKey == "___registry" or mKey == "___cache" or mKey == "___functionality" then
-					error(string.format("inside class <%s>: invalid write access to hidden class member '%s': these variables are used internally", tostring(self), mKey))
 				end
 
 				local locationClass = self.___registry[mKey]
@@ -516,25 +525,28 @@ local function _setupClass(creatorData, creatorMembers)
 					local access = locationClass.___members[mKey].access
 					local static = locationClass.___members[mKey].static
 					local final = locationClass.___members[mKey].final
+					local isfunc = locationClass.___members[mKey].isfunc
+
+					if not static and not self:is_instance() then
+						error(string.format("access to class member %s: you cannot modify this member variable unless it's static", mKey))
+					end
 
 					if final then
 						error(string.format("inside class <%s>: invalid write access to class member '%s': member is final", tostring(self), mKey))
 					end
 
+					if isfunc then -- convert given function
+						mValue = _doValue(mKey, mValue)
+					end
+
 					if self.___instance and static then  -- Redirect to global class.
-						self:____get_class_definition()[mKey] = mValue
+						self:get_class()[mKey] = mValue
 
 						return
 					end
 
 					if access == _public_ then
-						locationClass.___members[mKey].value = mValue
-						locationClass.___members[mKey].fvalue = type(mValue) == "function" and 
-							function(self, ...)
-								return mValue(self.___registry[mKey], ...)
-							end
-
-						return
+						locationClass.___members[mKey].value = mValue -- _doValue(mKey, mValue)
 					elseif access == _protected_ then
 						local stackLevel = static and 3 or 2
 						local info = debug.getinfo(stackLevel, "nf")
@@ -547,25 +559,13 @@ local function _setupClass(creatorData, creatorMembers)
 						-- well performing as we don't want to iterate through all members to see if it matches the 2nd stack function.
 						if (not info and static) -- This means that this static call isn't a call redirected from within an instance (since frame nr.4 is nonexistent), so it should always be allowed.
 							or locationClass == self or self.___functionality[func] then
-							locationClass.___members[mKey].value = mValue
-							locationClass.___members[mKey].fvalue = type(mValue) == "function" and 
-								function(self, ...)
-									return mValue(self.___registry[mKey], ...)
-								end
-
-							return
+							locationClass.___members[mKey].value = mValue -- _doValue(mKey, mValue)
 						else
 							error(string.format("invalid set access attempt to protected member '%s' located in <%s> via <%s> function '%s' (check nr. 3 in stack trace)", mKey, tostring(locationClass.locationClass), tostring(self), name))
 						end
 					elseif access == _private_ then
 						if locationClass == self then
-							locationClass.___members[mKey].value = mValue
-							locationClass.___members[mKey].fvalue = type(mValue) == "function" and 
-								function(self, ...)
-									return mValue(self.___registry[mKey], ...)
-								end
-
-							return
+							locationClass.___members[mKey].value = mValue -- _doValue(mKey, mValue)
 						else
 							error(string.format("invalid set access attempt to private member '%s' located in <%s> via <%s> (check nr. 3 in stack trace)", mKey, tostring(locationClass.locationClass), tostring(self)))
 						end
@@ -575,6 +575,8 @@ local function _setupClass(creatorData, creatorMembers)
 				else
 					error(string.format("unable to set member '%s' inside class <%s>: member was never defined during class definition", mKey, self))
 				end
+
+				return nil
 			end
 		})
 
@@ -589,6 +591,7 @@ end
 
 
 local interfaceMT = {
+	__interface = true,
 	__tostring = function(self)
 		-- We disable the metatable on ourselfs, so we can tostring ourselves without getting into an infinite loop.
 		-- And no, rawget doesn't work because we want to call a metamethod on ourself: __tostring
@@ -677,11 +680,7 @@ local function _setupInterface(creatorData, creatorMembers)
 			value = mValue,
 			access = mAccess,
 			static = mStatic,
-			final = mFinal,
-			fvalue = type(mValue) == "function" and 
-				function(self, ...)
-					return mValue(self.___registry[mKey], ...)
-				end,
+			final = mFinal
 		}
 	end
 
@@ -704,7 +703,7 @@ local function _setupInterface(creatorData, creatorMembers)
 			return self.___members[memberName] and true or false
 		end
 
-		function newInterface:____get_class_name()
+		function newInterface:get_name()
 			return self.___name
 		end
 
@@ -737,7 +736,7 @@ local function _setupInterface(creatorData, creatorMembers)
 			local member =  self.___members[memberName]
 
 			if not member then
-				error(string.format("interface %s: attempted to call ____member_getargs on invalid member '%s'", self:____get_class_name(), memberName))
+				error(string.format("interface %s: attempted to call ____member_getargs on invalid member '%s'", self:get_name(), memberName))
 			end
 
 			local value = member.value
