@@ -51,15 +51,13 @@ local _final_ = "FinalMember"
 ]]
 
 local function _duplicateTable(tbl, _lookup)
-	if tbl == nil then
-		tbl = self
-	end
-
 	local copy = {}
 
 	for i, v in pairs(tbl) do
 		if type(v) ~= "table" then
 			copy[i] = rawget(tbl, i)
+		elseif tbl.static and i == "value" then -- don't bother copying static values, we will redirect them anyways
+			copy[i] = false
 		else
 			_lookup = _lookup or {}
 			_lookup[tbl] = copy
@@ -72,7 +70,10 @@ local function _duplicateTable(tbl, _lookup)
 		end
 	end
 
-	debug.setmetatable(copy, debug.getmetatable(tbl))
+	local mt = debug.getmetatable(tbl)
+	if mt then
+		debug.setmetatable(copy, mt)
+	end
 
 	return copy
 end
@@ -86,27 +87,66 @@ function isinterface(v)
 end
 
 local function _realPath(p)
-	return string.gsub(string.gsub(string.gsub(string.gsub(p,"[^/]+/%.%./","/"),"/[^/]+/%.%./","/"),"/%./","/"),"//","/")
+	return 
+		p:gsub("[^/]+/%.%./","/")
+		 :gsub("/[^/]+/%.%./","/")
+		 :gsub("/%./", "/")
+		 :gsub("/%./","/")
+		 :gsub("//","/")
 end
 
-local function _doValue(key, value)
-	-- We no longer allow changes of functions during runtime, this will cut out this type() function and speed up things a lot.
+
+--[[
+	Setup a new class.
+]]
+callScope = false
+
+local function doValue(key, value, scope)
+	local func = function(self, a, b, c, d, e, f, g, h, i, j) -- much faster than using '...', lets hope no-one uses more than 10 args
+		local oldScope = callScope
+		
+		callScope = scope.___name or false
+
+		local l, m, n, o, p, q, r, s, t, u = value(self, a, b, c, d, e, f, g, h, i, j)
+
+		callScope = oldScope
+
+		-- this is ugly, but it avoids returning multiple nils which will then mess up prints.
+		if u then
+			return l, m, n, o, p, q, r, s, t, u
+		elseif t then
+			return l, m, n, o, p, q, r, s, t
+		elseif s then
+			return l, m, n, o, p, q, r, s
+		elseif r then
+			return l, m, n, o, p, q, r
+		elseif q then
+			return l, m, n, o, p, q
+		elseif p then
+			return l, m, n, o, p
+		elseif o then
+			return l, m, n, o
+		elseif n then
+			return l, m, n
+		elseif m then
+			return l, m
+		elseif l then
+			return l
+		end
+	end
+
 	if type(value) == "function" then
-		return function(self, a, b, c, d, e, f, g, h, i, j) -- faster then using '...', lets hope no-one in their right mind uses more than 10 args
+		return function(self, a, b, c, d, e, f, g, h, i, j)
 			if not isclass(self) then
 				error(string.format("class %s function %s: use ':'' to call class functions", self:get_name(), mKey))
 			end
 
-			return value(self.___registry[key], a, b, c, d, e, f, g, h, i, j)
+			return func(self, a, b, c, d, e, f, g, h, i, j)
 		end
 	else
 		return value
 	end
 end
-
---[[
-	Setup a new class.
-]]
 
 local function _setupClass(creatorData, creatorMembers)
 	local className = creatorData["name"]
@@ -116,7 +156,7 @@ local function _setupClass(creatorData, creatorMembers)
 
 	-- Store the setup location of this class.
 	local setupLocationStack = debug.getinfo(4)
-	local setupLocation = setupLocationStack.short_src .. ":" .. setupLocationStack.lastlinedefined
+	local setupLocation = _realPath(setupLocationStack.short_src .. ":" .. setupLocationStack.currentline)
 
 	-- Check if there isn't a conflict with a global
 	if _G[className] then
@@ -145,6 +185,7 @@ local function _setupClass(creatorData, creatorMembers)
 	end
 
 	local newClass = {}
+
 	newClass.___name = className
 	newClass.___final = finalClass
 	newClass.___setupLocation = setupLocation
@@ -164,15 +205,15 @@ local function _setupClass(creatorData, creatorMembers)
 					(mData.modifiers[_private_] and _private_) or
 					_private_ -- default value without keywords
 			local mStatic = mData.modifiers[_static_] and true or false;
-			local mFinal = mData.modifiers[_final_] and true or false;
-			local isFunc = type(mValue) == "function"
-
+			local mFinal = (mData.modifiers[_final_] and true) or
+				(type(mValue) == "function" and mAccess == _private and true) or
+				false;
 			newClass.___members[mKey] = {
-				value = _doValue(mKey, mValue),
-				isfunc = isFunc,
+				value = doValue(mKey, mValue, newClass),
 				access = mAccess,
 				static = mStatic,
-				final = mFinal
+				final = mFinal,
+				isfunc = type(mValue) == "function",
 			}
 		end
 
@@ -181,7 +222,7 @@ local function _setupClass(creatorData, creatorMembers)
 			-- We do NOT DUPLICATE HERE
 			-- If we did, static variables wouldn't work because each class would have a different instance of the superclass.
 			-- The super class will still be duplicates when we initialize a new instance.
-			newClass.___super =  LUA_CLASSES[superClassName]
+			newClass.___super = LUA_CLASSES[superClassName]
 		end
 
 		-- Add a variable that will be set to true on instances.
@@ -202,6 +243,26 @@ local function _setupClass(creatorData, creatorMembers)
 			while iter ~= nil do
 				if iter:get_name() == className then
 					self.___cache["instance_of_" .. className] = true
+
+					return true
+				end
+
+				iter = iter.super
+			end
+
+			return false
+		end
+
+
+		function newClass:child_of(obj)
+			if self.___cache["child_of_" .. tostring(obj)] then
+				return true
+			end
+
+			local iter = self
+			while iter ~= nil do
+				if iter == obj then
+					self.___cache["child_of_" .. tostring(obj)] = true
 
 					return true
 				end
@@ -237,6 +298,27 @@ local function _setupClass(creatorData, creatorMembers)
 			while class ~= nil do
 				class.___instance = true
 
+				-- Setup the finalizer proxy for lua 5.1
+				if _VERSION == "Lua 5.1" then
+					class.___gc = debug.setmetatable(newproxy(), {
+						__tbl = class,
+						__gc = function(self)
+							local tbl = debug.getmetatable(self).__tbl
+							
+							-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
+							-- So we catch them by hand and print them!
+
+							local s, e = pcall(function()
+								tbl:___finalize()
+							end)
+
+							if not s then
+								print(string.format("ERROR: class %s: error __gc function: %s", tbl:get_name(), e))
+							end
+						end
+					})
+				end
+
 				class = class.super
 			end
 
@@ -259,13 +341,14 @@ local function _setupClass(creatorData, creatorMembers)
 
 		function newClass:____construct(...)
 			if self:is_instance() then
-				for _, constructorName in pairs({self:get_name(), "__construct"}) do
-					if self:____member_isvalid(constructorName) then
-						if self:____member_getaccess(constructorName) ~= _public_ then
-							error(string.format("cannot create instance of class %s: constructor function '%s': access level is not public", constructorName, self:get_name()))
-						else
-							return self[constructorName] and self[constructorName](self, ...)
+				for _, name in pairs({self:get_name(), "__construct"}) do
+					if self:____member_isvalid(name) then
+						if self:____member_getaccess(name) == _private_ then
+							error(string.format("cannot create instance of class %s: constructor function '%s': access level is private", self, name))
 						end
+
+						-- Bypass metatable restrictions
+						return self:____member_get(name).value(self, ...)
 					end
 				end
 
@@ -277,8 +360,44 @@ local function _setupClass(creatorData, creatorMembers)
 			end
 		end
 
+		function newClass:___finalize()
+			if self:is_instance() then
+				for _, name in pairs({"__finalize"}) do
+					if self:____member_isvalid(name) then
+						-- Bypass metatable restrictions
+						return self:____member_get(name).value(self)
+					end
+				end
+
+				if self.super then
+					return self.super:___finalize()
+				else
+					-- Nothing...
+				end
+			end
+		end
+
+		function newClass:____declare()
+			if not self:is_instance() then
+				for _, name in pairs({"__declare"}) do
+					if self:____member_isvalid(name) then
+						-- Bypass metatable restrictions
+						return self:____member_get(name).value(self)
+					end
+				end
+
+				if self.super then
+					return self.super:____declare()
+				else
+					-- Nothing...
+				end
+			end
+		end
+
 		function newClass:____duplicate()
-			return _duplicateTable(self)
+			local d = _duplicateTable(self)
+
+			return d
 		end
 
 		function newClass:____member_isvalid(memberName)
@@ -299,6 +418,10 @@ local function _setupClass(creatorData, creatorMembers)
 
 		function newClass:____member_getstatic(memberName)
 			return self.___registry[memberName] and self.___registry[memberName].___members[memberName].static
+		end
+		
+		function newClass:____member_get(memberName)
+			return self.___registry[memberName].___members[memberName]
 		end
 
 		function newClass:____member_getargs(memberName)
@@ -326,9 +449,10 @@ local function _setupClass(creatorData, creatorMembers)
 
 			return arglist
 		end
-	end
+	end		
 
-	do -- Build the registry and the reverse-registry.
+	-- Build the registry and the reverse-registry.
+	do
 		newClass.___registry = {}
 		newClass.___functionality = {}
 
@@ -346,6 +470,31 @@ local function _setupClass(creatorData, creatorMembers)
 				if type(mData.value) == "function" then
 					newClass.___functionality[mData.value] = true
 				end
+
+
+			end
+			
+			iter = rawget(iter, "___super")
+		end
+	end
+
+	-- Here we check if the access of children aren't less than those of parents
+	do
+		local level = {}
+		level[_public_] = 1
+		level[_private_] = 2
+		level[_protected_] = 3
+
+		local iter = newClass
+		while iter ~= nil do
+			for mName, mData in pairs(iter.___members) do
+				local childAccess = newClass.___registry[mName]:____member_getaccess(mName)
+				local parentAccess = iter:____member_getaccess(mName)
+
+				if level[childAccess] > level[parentAccess] then
+					error(string.format("class %s: access level of member '%s' is stricter than parent: was %s in parent but is %s in child", newClass.___name, mName, parentAccess, childAccess))
+				end
+
 			end
 			
 			iter = rawget(iter, "___super")
@@ -457,126 +606,157 @@ local function _setupClass(creatorData, creatorMembers)
 				end
 			end;
 
+			__gc = function(self)
+				-- 5.1 has no working __gc so this if statement is just for informative purposes. When in 5.1 we handle this using newproxy below.
+				if not _VERSION == "Lua 5.1" then
+					-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
+					-- So we catch them by hand and print them!
+
+					local s, e = pcall(function()
+						self:___finalize()
+					end)
+
+					if not s then
+						print(string.format("ERROR: class %s: error __gc function: %s", self:get_name(), e))
+					end
+				end
+			end;
+
 			__concat = function(a, b)
 				return tostring(a) .. tostring(b)
 			end;
 
-			__index = function(self, mKey)
+			__index = function(invokedOn, mKey)
 				if mKey == "super" then
-					return self.___super
+					return invokedOn.___super
 				end
 
-				local locationClass = self.___registry[mKey]
+				local locationOf = invokedOn.___registry[mKey]
+				if locationOf then
+					local access = locationOf.___members[mKey].access
+					local static = locationOf.___members[mKey].static
+					local value = locationOf.___members[mKey].value
+					local isfunc = locationOf.___members[mKey].isfunc
 
-				if locationClass then
-					local access = locationClass.___members[mKey].access
-					local static = locationClass.___members[mKey].static
-					local value = locationClass.___members[mKey].value
+					-- ...
+					if not static and not invokedOn:is_instance() then
+						print("---------------------" ..
+							"\n\tStatic: " .. tostring(static) .. "\n\tmKey = " .. mKey .. "\n\tAccess = " .. access .. "\n\tinvokedOn = " .. invokedOn ..
+							"\n\tlocationOf = " .. locationOf .. "\n\tcallScope = " .. tostring(callScope))
 
-					if not static and not self:is_instance() then
-						error(string.format("access to class member %s: you cannot read this member variable unless it's static", mKey))
+						error(string.format("access to class member %s: you cannot access this member variable unless it's static", mKey))
 					end
 					
-					if self.___instance  and static then -- Redirect to global class.
-						return self:get_class()[mKey]
+					-- Redirect statics
+					if invokedOn.___instance and static then -- Redirect to global class.
+						return invokedOn:get_class()[mKey]
 					end
 
 					if access == _public_ then
-						return value
+						-- continue...
 					elseif access == _protected_ then
-						local stackLevel = static and 3 or 2
-						local info = debug.getinfo(stackLevel, "nf")
-						local name = info and info.name or "unknown"
-						local func = info and info.func
+						if (
+								not callScope
+								or
+								not locationOf:instance_of(callScope)
+							) then
 
-						-- The below functions check used to be using the callInfo.name to look up the class members direct, but debug.getinfo(2).name
-						-- seems to return incorrect values, when used to lookup functions that directly return protected class member calls.
-						-- This seems to be a lua bug. So now we just make a table that uses the actual functions as keys, which is hopefully just as
-						-- well performing as we don't want to iterate through all members to see if it matches the 2nd stack function.
-						if (not info and static) -- This means that this static call isn't a call redirected from within an instance (since frame nr.4 is nonexistent), so it should always be allowed.
-							or locationClass == self or self.___functionality[func] then
-							return value
-						else
-							error(string.format("invalid get access attempt to protected member '%s' located in <%s> via <%s> function '%s' (check nr. 3 in stack trace)", mKey, tostring(locationClass), tostring(self), name))
+							print("---------------------" ..
+							"\n\tStatic: " .. tostring(static) .. "\n\tmKey = " .. mKey .. "\n\tAccess = " .. access .. "\n\tinvokedOn = " .. invokedOn ..
+							"\n\tlocationOf = " .. locationOf .. "\n\tcallScope = " .. tostring(callScope))
+						
+							error(string.format("class %s: invalid read access attempt to protected member '%s': accessed by %s",
+								locationOf, mKey, callScope or "- code outside class boundaries -"))
 						end
 					elseif access == _private_ then
-						if locationClass == self then
-							return value
-						else
-							error(string.format("invalid get access attempt to private member '%s' located in <%s> via <%s> (check nr. 3 in stack trace)",
-								mKey, tostring(locationClass), tostring(self)))
+						if (
+								not callScope
+								or
+								callScope ~= locationOf.___name
+							) then
+
+							print("---------------------" ..
+							"\n\tStatic: " .. tostring(static) .. "\n\tmKey = " .. mKey .. "\n\tAccess = " .. access .. "\n\tinvokedOn = " .. invokedOn ..
+							"\n\tlocationOf = " .. locationOf .. "\n\tcallScope = " .. tostring(callScope))
+
+							error(string.format("class %s: invalid read access attempt to private member '%s': accessed by %s",
+								locationOf, mKey, callScope or "- code outside class boundaries -"))
 						end
-					else
-						error(string.format("class <%s> has defined member '%s' but has no access level defined", tostring(locationClass), mKey))
-					end	
+					end
+
+					return value
 				end
 
 				return nil-- Member not found, returning nil
-			end,
+			end;
 			
-			__newindex = function(self, mKey, mValue)
+			__newindex = function(invokedOn, mKey, mValue)
 				if mKey == "super" then
-					error(string.format("inside class <%s>: invalid write access to class member '%s': super is a reserved keyword", tostring(self), mKey))
+					error(string.format("inside class <%s>: invalid write access to class member '%s': super is a reserved keyword", invokedOn, mKey))
 				end
 
-				local locationClass = self.___registry[mKey]
+				local locationOf = invokedOn.___registry[mKey]
+				if locationOf then
+					local access = locationOf.___members[mKey].access
+					local static = locationOf.___members[mKey].static
+					local value = locationOf.___members[mKey].value
+					local final = locationOf.___members[mKey].final
+					local isfunc = locationOf.___members[mKey].isfunc
 
-				if locationClass then
-					local access = locationClass.___members[mKey].access
-					local static = locationClass.___members[mKey].static
-					local final = locationClass.___members[mKey].final
-					local isfunc = locationClass.___members[mKey].isfunc
+					-- ...
+					if not static and not invokedOn:is_instance() then
+							print("---------------------" ..
+							"\n\tStatic: " .. tostring(static) .. "\n\tmKey = " .. mKey .. "\n\tAccess = " .. access .. "\n\tinvokedOn = " .. invokedOn ..
+							"\n\tlocationOf = " .. locationOf .. "\n\tcallScope = " .. tostring(callScope))
 
-					if not static and not self:is_instance() then
-						error(string.format("access to class member %s: you cannot modify this member variable unless it's static", mKey))
+						error(string.format("access to class member %s: you cannot access this member variable unless it's static", mKey))
+					elseif final then
+						error(string.format("inside class <%s>: invalid write access to class member '%s': member is final", invokedOn, mKey))
+					elseif isfunc then
+						error(string.format("access to class member %s: you cannot modify class methods during runtime.", mKey))
 					end
+					
+					-- Redirect statics
+					if invokedOn.___instance and static then -- Redirect to global class.
+						invokedOn:get_class()[mKey] = mValue
 
-					if final then
-						error(string.format("inside class <%s>: invalid write access to class member '%s': member is final", tostring(self), mKey))
-					end
-
-					if isfunc then -- convert given function
-						mValue = _doValue(mKey, mValue)
-					end
-
-					if self.___instance and static then  -- Redirect to global class.
-						self:get_class()[mKey] = mValue
-
-						return
+						return -- DO NOT REMOVE! because the callscope is false so things will bug out!
 					end
 
 					if access == _public_ then
-						locationClass.___members[mKey].value = mValue -- _doValue(mKey, mValue)
+						-- continue...
 					elseif access == _protected_ then
-						local stackLevel = static and 3 or 2
-						local info = debug.getinfo(stackLevel, "nf")
-						local name = info and info.name or "unknown"
-						local func = info and info.func
+						if (
+								not callScope
+								or
+								not locationOf:instance_of(callScope)
+							) then
 
-						-- The below functions check used to be using the callInfo.name to look up the class members direct, but debug.getinfo(2).name
-						-- seems to return incorrect values, when used to lookup functions that directly return protected class member calls.
-						-- This seems to be a lua bug. So now we just make a table that uses the actual functions as keys, which is hopefully just as
-						-- well performing as we don't want to iterate through all members to see if it matches the 2nd stack function.
-						if (not info and static) -- This means that this static call isn't a call redirected from within an instance (since frame nr.4 is nonexistent), so it should always be allowed.
-							or locationClass == self or self.___functionality[func] then
-							locationClass.___members[mKey].value = mValue -- _doValue(mKey, mValue)
-						else
-							error(string.format("invalid set access attempt to protected member '%s' located in <%s> via <%s> function '%s' (check nr. 3 in stack trace)", mKey, tostring(locationClass.locationClass), tostring(self), name))
+							print("---------------------" ..
+							"\n\tStatic: " .. tostring(static) .. "\n\tmKey = " .. mKey .. "\n\tAccess = " .. access .. "\n\tinvokedOn = " .. invokedOn ..
+							"\n\tlocationOf = " .. locationOf .. "\n\tcallScope = " .. tostring(callScope))
+						
+							error(string.format("class %s: invalid write access attempt to protected member '%s': accessed by %s",
+								locationOf, mKey, callScope or "- code outside class boundaries -"))
 						end
 					elseif access == _private_ then
-						if locationClass == self then
-							locationClass.___members[mKey].value = mValue -- _doValue(mKey, mValue)
-						else
-							error(string.format("invalid set access attempt to private member '%s' located in <%s> via <%s> (check nr. 3 in stack trace)", mKey, tostring(locationClass.locationClass), tostring(self)))
-						end
-					else
-						error(string.format("class <%s> has defined member '%s' but has no access level defined", tostring(locationClass), mKey))
-					end	
-				else
-					error(string.format("unable to set member '%s' inside class <%s>: member was never defined during class definition", mKey, self))
-				end
+						if (
+								not callScope
+								or
+								callScope ~= locationOf.___name
+							) then
 
-				return nil
+							print("---------------------" ..
+							"\n\tStatic: " .. tostring(static) .. "\n\tmKey = " .. mKey .. "\n\tAccess = " .. access .. "\n\tinvokedOn = " .. invokedOn ..
+							"\n\tlocationOf = " .. locationOf .. "\n\tcallScope = " .. tostring(callScope))
+
+							error(string.format("class %s: invalid write access attempt to private member '%s': accessed by %s",
+								locationOf, mKey, callScope or "- code outside class boundaries -"))
+						end
+					end
+
+					locationOf.___members[mKey].value = mValue
+				end
 			end
 		})
 
@@ -585,6 +765,9 @@ local function _setupClass(creatorData, creatorMembers)
 	
 	-- Create a global that can be used to create a class instance, or to return the class data.
 	_G[className] = newClass
+
+	-- Call declare function, do this before the metatable or it will bug out.
+	newClass:____declare()
 
 	--print(string.format("created new class: %s with superclass %s implementing %s", className, superClassName, implementsName))
 end
@@ -631,7 +814,7 @@ local function _setupInterface(creatorData, creatorMembers)
 
 	-- Store the setup location of this interface.
 	local setupLocationStack = debug.getinfo(4)
-	local setupLocation = _realPath(setupLocationStack.short_src) .. ":" .. setupLocationStack.lastlinedefined
+	local setupLocation = _realPath(setupLocationStack.short_src) .. ":" .. setupLocationStack.currentline
 	
 	-- Check for double
 	if LUA_INTERFACES[interfaceName] then
@@ -650,7 +833,7 @@ local function _setupInterface(creatorData, creatorMembers)
 
 	-- Check if superinterface isn't final
 	if superInterfaceName ~= nil and LUA_INTERFACES[superInterfaceName]:____is_final_class() then
-		error(string.format("interface %s cannot extend from class %s: class is final", interfaceName, superInterfaceName))
+		error(string.format("interface %s cannot extend from class %s: class is fifnal", interfaceName, superInterfaceName))
 	end
 
 	-- Check if an interface isn't trying to implement an interface....
@@ -680,7 +863,7 @@ local function _setupInterface(creatorData, creatorMembers)
 			value = mValue,
 			access = mAccess,
 			static = mStatic,
-			final = mFinal
+			final = mFinal,
 		}
 	end
 
@@ -730,6 +913,10 @@ local function _setupInterface(creatorData, creatorMembers)
 
 		function newInterface:____member_getstatic(memberName)
 			return self.___members[memberName] and self.___members[memberName].static
+		end
+
+		function newInterface:____member_get(memberName)
+			return self.___members[memberName]
 		end
 
 		function newInterface:____member_getargs(memberName)
@@ -784,27 +971,19 @@ do
 			__index = function(self, key)
 				if key == "public" then
 					_modifiers[_public_] = true
-
-					return _recursiveModifiers(key, onfinished, onKeywordNotFound, _modifiers)
 				elseif key == "protected" then
 					_modifiers[_protected_] = true
-
-					return _recursiveModifiers(key, onfinished, onKeywordNotFound, _modifiers)
 				elseif key == "private" then
 					_modifiers[_private_] = true
-
-					return _recursiveModifiers(key, onfinished, onKeywordNotFound, _modifiers)
 				elseif key == "static" then
 					_modifiers[_static_] = true
-
-					return _recursiveModifiers(key, onfinished, onKeywordNotFound, _modifiers)
 				elseif key == "final" then
 					_modifiers[_final_] = true
-
-					return _recursiveModifiers(key, onfinished, onKeywordNotFound, _modifiers)
 				else
 					return onKeywordNotFound(key)
 				end
+
+				return _recursiveModifiers(key, onfinished, onKeywordNotFound, _modifiers)
 			end,
 
 			__newindex = function(self, key, value)
@@ -875,17 +1054,28 @@ do
 		end
 	end
 
+	local function resetSetup()
+		creatorType = nil
+		creatorData = {}
+		creatorMembers = {}
+	end
+
 	local classSetupObject = setmetatable({
 			register = function()
-				if creatorType == "class" then
-					_setupClass(creatorData, creatorMembers)
-				elseif creatorType == "interface" then
-					_setupInterface(creatorData, creatorMembers)
-				end
+				-- We copy our tables
+				local _creatorType = creatorType
+				local _creatorData = _duplicateTable(creatorData)
+				local _creatorMembers = _duplicateTable(creatorMembers)
 
-				creatorType = nil
-				creatorData = {}
-				creatorMembers = {}
+				-- Reset the setup variables
+				resetSetup()
+
+				-- Setup our class and hope it doesn't fail!
+				if _creatorType == "class" then
+					_setupClass(_creatorData, _creatorMembers)
+				elseif _creatorType == "interface" then
+					_setupInterface(_creatorData, _creatorMembers)
+				end
 			end
 		}, {
 			__call = function(self, data)
@@ -921,8 +1111,10 @@ do
 			if not className then
 				error("invalid class setup: missing class name")
 			elseif creatorType then
-				error(string.format("invalid class setup: class %s: you still haven't finished setting up %s %s",
-					className, creatorType, creatorData["name"]))
+				local err = string.format("invalid interface setup: interface %s: you still haven't finished setting up %s %s",
+					interfaceName, creatorType, creatorData["name"])
+				resetSetup()
+				error(err)
 			end
 
 			-- Set data
@@ -941,8 +1133,10 @@ do
 			if not interfaceName then
 				error("invalid interface setup: missing interface name")
 			elseif creatorType then
-				error(string.format("invalid interface setup: interface %s: you still haven't finished setting up %s %s",
-					interfaceName, creatorType, creatorData["name"]))
+				local err = string.format("invalid interface setup: interface %s: you still haven't finished setting up %s %s",
+					interfaceName, creatorType, creatorData["name"])
+				resetSetup()
+				error(err)
 			end
 
 
@@ -1059,3 +1253,21 @@ do
 		end
 	end
 end
+
+class "Test" {
+	protected {
+		__construct = function(self)
+			print("HAHA HI")
+		end;
+	}
+}
+
+class "Hello" extends "Test" {
+	public {
+		__construct = function(self)
+			print("NEW TEST", self.super.new())
+		end;
+	};
+}
+
+Hello.new();

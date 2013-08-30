@@ -17,6 +17,7 @@ This library takes advantage of Lua's flexibility to provide you with a very sim
 * Supports static member variables.
 * Supports final member variables and classes.
 * Single inheritance from other classes (you can only inherit one class)
+* Supports constructors that are called on instantiation, and finalizers that are called on garbage collection (in both Lua 5.1 and 5.2).
 * Constructors that can be overridden on a per-class basis. (or disabled entirely by setting it private)
 * Common OOP functions such as is\_a() and instance\_of().
 * The ability to implement one or more interfaces.
