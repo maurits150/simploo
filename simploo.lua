@@ -1253,21 +1253,3 @@ do
 		end
 	end
 end
-
-class "Test" {
-	protected {
-		__construct = function(self)
-			print("HAHA HI")
-		end;
-	}
-}
-
-class "Hello" extends "Test" {
-	public {
-		__construct = function(self)
-			print("NEW TEST", self.super.new())
-		end;
-	};
-}
-
-Hello.new();
