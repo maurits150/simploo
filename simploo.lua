@@ -23,17 +23,52 @@
 	THE SOFTWARE.
 ]]
 
+local function setGlobalTableVar(name, value)
+	-- Create the corresponding globals
+	local chainNamespaces = {}
+	for k, v in string.gmatch(name, "%a+") do
+		table.insert(chainNamespaces, k)
+	end
+	
+	_G[name] = value
+	
+	if #chainNamespaces > 1 then
+		local tbl
+		local lastTable
+		local startTable
+		for i=1, #chainNamespaces do
+			local namespace = chainNamespaces[i]
+			
+			if i == 1 then
+				if not _G[namespace] then
+					_G[namespace] = {}
+				end
+				
+				lastTable = _G[namespace]
+			elseif i == #chainNamespaces then
+				--print(name, namespace, value)
+				lastTable[namespace] = value
+			else
+				if not lastTable[namespace] then
+					lastTable[namespace] = {}
+				end
+			
+				lastTable = lastTable[namespace]
+			end
+		end
+	end
+end
+
 -- Remove any remaining/old classes from the global table.
 for k, v in pairs(LUA_CLASSES or {}) do
-	_G[k] = nil
+	setGlobalTableVar(k, nil)
 end
 
 for k, v in pairs(LUA_INTERFACES or {}) do
-	_G[k] = nil
+	setGlobalTableVar(k, nil)
 end
 
 -- Hello world!
-
 LUA_CLASSES = {}
 LUA_INTERFACES = {}
 
@@ -47,7 +82,7 @@ local _static_ = "StaticMemberType"
 local _final_ = "FinalMember"
 
 --[[
-	Copies a table and it's metatable
+	Copies a table
 ]]
 
 local function _duplicateTable(tbl, _lookup)
@@ -94,7 +129,6 @@ local function _realPath(p)
 		 :gsub("/%./","/")
 		 :gsub("//","/")
 end
-
 
 --[[
 	Setup a new class.
@@ -159,8 +193,8 @@ local function _setupClass(creatorData, creatorMembers)
 	local setupLocation = _realPath(setupLocationStack.short_src .. ":" .. setupLocationStack.currentline)
 
 	-- Check if there isn't a conflict with a global
-	if _G[className] then
-		if type(_G[className]) == "table" and not _G[className].get_name or type(_G[className]) ~= "table" then
+	if LUA_CLASSES[className] then
+		if type(LUA_CLASSES[className]) == "table" and not LUA_CLASSES[className].get_name or type(LUA_CLASSES[className]) ~= "table" then
 			error(string.format("cannot setup class %s, there's already a global with this name", className))
 		end
 	end
@@ -227,6 +261,9 @@ local function _setupClass(creatorData, creatorMembers)
 
 		-- Add a variable that will be set to true on instances.
 		newClass.___instance = false
+		
+		-- Add the gc variable, but it is false right now
+		newClass.___gc = false
 	end
 
 	do -- Free to use class utility functions.
@@ -300,31 +337,41 @@ local function _setupClass(creatorData, creatorMembers)
 
 				-- Setup the finalizer proxy for lua 5.1
 				if _VERSION == "Lua 5.1" then
-					class.___gc = debug.setmetatable(newproxy(), {
-						__tbl = class,
-						__gc = function(self)
-							local tbl = debug.getmetatable(self).__tbl
+					local proxy = newproxy(true)
+					local mt = getmetatable(proxy)
+					mt.MetaName = "SimplooGC"
+					mt.__class = class
+					mt.__gc = function(self)
+						local tbl = getmetatable(self).__class
+						
+						if tbl then
+							--print("FINALIZE: ", self, tbl)
 							
 							-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
 							-- So we catch them by hand and print them!
-
 							local s, e = pcall(function()
 								tbl:___finalize()
 							end)
 
 							if not s then
-								print(string.format("ERROR: class %s: error __gc function: %s", tbl:get_name(), e))
+								print(string.format("ERROR: class %s: error __gc function: %s",
+									tbl:get_name(), e))
 							end
+						else
+							--print("no tbl found in __gc of class.. what!!?")
 						end
-					})
+					end
+					
+					class.___gc = proxy
 				end
 
 				class = class.super
 			end
 
-			-- Call constructor and return any custom values!
-			-- The garbage collector should take care of the unused instance if the constructor returns something else.
-			return instance:____construct(...) or instance
+			-- Call constructor
+			instance:____construct(...)
+			
+			return instance
 		end
 	end
 
@@ -341,28 +388,25 @@ local function _setupClass(creatorData, creatorMembers)
 
 		function newClass:____construct(...)
 			if self:is_instance() then
-				for _, name in pairs({self:get_name(), "__construct"}) do
-					if self:____member_isvalid(name) then
-						if self:____member_getaccess(name) == _private_ then
-							error(string.format("cannot create instance of class %s: constructor function '%s': access level is private", self, name))
-						end
-
-						-- Bypass metatable restrictions
-						return self:____member_get(name).value(self, ...)
-					end
-				end
-
 				if self.super then
-					return self.super:____construct(...)
-				else
-					-- No parent constructor and no local constructor, so there's nothing to return.
+					self.super:____construct(...)
+				end
+				
+				for _, name in pairs({self:get_name(), self:get_name() .. "__construct", "__construct"}) do
+					if self:____member_isvalid(name) then
+						--if self:____member_getaccess(name) == _private_ then
+						--	error(string.format("cannot create instance of class %s: constructor function '%s': access level is private", self, name))
+						--end
+						
+						self[name](self, ...)
+					end
 				end
 			end
 		end
 
 		function newClass:___finalize()
 			if self:is_instance() then
-				for _, name in pairs({"__finalize"}) do
+				for _, name in pairs({self:get_name() .. "__finalize", "__finalize"}) do
 					if self:____member_isvalid(name) then
 						-- Bypass metatable restrictions
 						return self:____member_get(name).value(self)
@@ -379,7 +423,7 @@ local function _setupClass(creatorData, creatorMembers)
 
 		function newClass:____declare()
 			if not self:is_instance() then
-				for _, name in pairs({"__declare"}) do
+				for _, name in pairs({self:get_name() .. "__declare", "__declare"}) do
 					if self:____member_isvalid(name) then
 						-- Bypass metatable restrictions
 						return self:____member_get(name).value(self)
@@ -395,9 +439,7 @@ local function _setupClass(creatorData, creatorMembers)
 		end
 
 		function newClass:____duplicate()
-			local d = _duplicateTable(self)
-
-			return d
+			return _duplicateTable(self)
 		end
 
 		function newClass:____member_isvalid(memberName)
@@ -611,7 +653,7 @@ local function _setupClass(creatorData, creatorMembers)
 				if not _VERSION == "Lua 5.1" then
 					-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
 					-- So we catch them by hand and print them!
-
+					
 					local s, e = pcall(function()
 						self:___finalize()
 					end)
@@ -649,9 +691,13 @@ local function _setupClass(creatorData, creatorMembers)
 					
 					-- Redirect statics
 					if invokedOn.___instance and static then -- Redirect to global class.
+						if not invokedOn:get_class() then
+							error(string.format("cannot find class of instance %s", invokedOn))
+						end
+						
 						return invokedOn:get_class()[mKey]
 					end
-
+					
 					if access == _public_ then
 						-- continue...
 					elseif access == _protected_ then
@@ -718,6 +764,10 @@ local function _setupClass(creatorData, creatorMembers)
 					
 					-- Redirect statics
 					if invokedOn.___instance and static then -- Redirect to global class.
+						if not invokedOn:get_class() then
+							error(string.format("cannot find class of instance %s", invokedOn))
+						end
+						
 						invokedOn:get_class()[mKey] = mValue
 
 						return -- DO NOT REMOVE! because the callscope is false so things will bug out!
@@ -756,22 +806,24 @@ local function _setupClass(creatorData, creatorMembers)
 					end
 
 					locationOf.___members[mKey].value = mValue
+					
+					return
 				end
+				
+				error(string.format("class %s: invalid write attempt to undefined variable '%s", invokedOn, mKey))
 			end
 		})
 
 		class = class.super
 	end
 	
-	-- Create a global that can be used to create a class instance, or to return the class data.
-	_G[className] = newClass
-
+	setGlobalTableVar(className, newClass)
+	
 	-- Call declare function, do this before the metatable or it will bug out.
 	newClass:____declare()
 
 	--print(string.format("created new class: %s with superclass %s implementing %s", className, superClassName, implementsName))
 end
-
 
 local interfaceMT = {
 	__interface = true,
