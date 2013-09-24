@@ -259,25 +259,26 @@ end
 SIMPLOO.CLASS_MT = {
 	__class = true,
 	__tostring = function(self)
-		-- We disable the metatable on ourselfs, so we can tostring ourselves without getting into an infinite loop.
+		
+		-- We disable the metamethod on ourselfs, so we can tostring ourselves without getting into an infinite loop.
 		-- And no, rawget doesn't work because we want to call a metamethod on ourself: __tostring
-		local mt = getmetatable(self)
-		setmetatable(self, {})
+		local __tostring = getmetatable(self).__tostring
+		getmetatable(self).__tostring = nil
 
 		-- Grap the definition string.
 		local origstr = string.format("LuaClass: %s <%s> {%s}", self:get_name(), self.___instance and "instance" or "class", tostring(self):sub(8))
-
-		-- Enable our metatable again.
-		setmetatable(self, mt)
 		
 		-- see if we have a custom tostring, this is below the actual tostring because we wanna be able to use the original tostring inside the error
 		if self:____member_isvalid("___meta__tostring") then
-			local custstr = self:____member_get("___meta__tostring").rawvalue(self, origstr)
+			local custstr = self:___meta__tostring(self, origstr)
 			if custstr then
 				return custstr
 			end
 		end
-
+		
+		-- Enable our metamethod again.
+		getmetatable(self).__tostring = __tostring
+		
 		-- Return string.
 		return origstr
 	end,
@@ -303,9 +304,14 @@ SIMPLOO.CLASS_MT = {
 		end
 	end;
 	
-	__concat = function(a, b)
-		if a:____member_isvalid("___meta__concat") then
-			local str = a:____member_get("___meta__concat").rawvalue(a, b)
+	__concat = function(self, other)
+		-- We disable the metamethod on ourselfs, so we can tostring ourselves without getting into an infinite loop.
+		-- And no, rawget doesn't work because we want to call a metamethod on ourself: __tostring
+		local __tostring = getmetatable(self).__tostring
+		getmetatable(self).__tostring = nil
+		
+		if self:____member_isvalid("___meta__concat") then
+			local str = self:___meta__concat(self, other)
 			if not str then
 				error(string.format("class %s, metamethod %s: must return string", self, "__concat"))
 			end
@@ -313,7 +319,12 @@ SIMPLOO.CLASS_MT = {
 			return str
 		end
 		
-		return tostring(a) .. tostring(b)
+		local str = tostring(self) .. other
+		
+		-- Enable our metamethod again.
+		getmetatable(self).__tostring = __tostring
+		
+		return str
 	end;
 
 	__index = function(invokedOn, mKey)
@@ -387,7 +398,7 @@ SIMPLOO.CLASS_MT = {
 					mKey))
 		else		
 			if invokedOn:____member_isvalid("___meta__index") then
-				local custval = invokedOn:____member_get("___meta__index").rawvalue(invokedOn, mKey)
+				local custval = invokedOn:___meta__index(invokedOn, mKey)
 				
 				if custval then
 					return custval
@@ -478,7 +489,7 @@ SIMPLOO.CLASS_MT = {
 					mKey))
 		else
 			if invokedOn:____member_isvalid("___meta__newindex") then
-				invokedOn:____member_get("___meta__newindex").rawvalue(invokedOn, mKey, mValue)
+				invokedOn:___meta__newindex(invokedOn, mKey, mValue)
 			
 				return
 			end
@@ -488,64 +499,125 @@ SIMPLOO.CLASS_MT = {
 	end;
 	
 	__unm = function(self)
+		-- infinite recursion protection
+		local __unm = getmetatable(self).__unm
+		getmetatable(self).__unm = nil
+		
 		if self:____member_isvalid("___meta__unm") then
-			return self:____member_get("___meta__unm").rawvalue(self)
+			return self:___meta__unm(self)
 		end
+		
+		getmetatable(self).__unm = __unm
 	end;
 	
 	__add = function(self, class2)
+		-- infinite recursion protection
+		local __add = getmetatable(self).__add
+		getmetatable(self).__add = nil
+		
 		if self:____member_isvalid("___meta__add") then
-			return self:____member_get("___meta__add").rawvalue(self, class2)
+			return self:___meta__add(self, class2)
 		end
+		
+		getmetatable(self).__add = __add
 	end;
 	
 	__sub = function(self, class2)
+		-- infinite recursion protection
+		local __sub = getmetatable(self).__sub
+		getmetatable(self).__sub = nil
+		
+		
 		if self:____member_isvalid("___meta__sub") then
-			return self:____member_get("___meta__sub").rawvalue(self, class2)
+			return self:___meta__sub(self, class2)
 		end
+		
+		getmetatable(self).__sub = __sub
 	end;
 	
 	__mul = function(self, class2)
+		-- infinite recursion protection
+		local __mul = getmetatable(self).__mul
+		getmetatable(self).__mul = nil
+		
 		if self:____member_isvalid("___meta__mul") then
-			return self:____member_get("___meta__mul").rawvalue(self, class2)
+			return self:___meta__mul(self, class2)
 		end
+		
+		getmetatable(self).__mul = __mul
 	end;
 	
 	__div = function(self, class2)
+		-- infinite recursion protection
+		local __div = getmetatable(self).__div
+		getmetatable(self).__div = nil
+		
 		if self:____member_isvalid("___meta__div") then
-			return self:____member_get("___meta__div").rawvalue(self, class2)
+			return self:___meta__div(self, class2)
 		end
+		
+		getmetatable(self).__div = __div
 	end;
 	
 	__mod = function(self, class2)
+		-- infinite recursion protection
+		local __mod = getmetatable(self).__mod
+		getmetatable(self).__mod = nil
+		
 		if self:____member_isvalid("___meta__mod") then
-			return self:____member_get("___meta__mod").rawvalue(self, class2)
+			return self:___meta__mod(self, class2)
 		end
+		
+		getmetatable(self).__mod = __mod
 	end;
 	
 	__pow = function(self, class2)
+		-- infinite recursion protection
+		local __pow = getmetatable(self).__pow
+		getmetatable(self).__pow = nil
+		
 		if self:____member_isvalid("___meta__pow") then
-			return self:____member_get("___meta__pow").rawvalue(self, class2)
+			return self:___meta__pow(self, class2)
 		end
+		
+		getmetatable(self).__pow = __pow
 	end;
 	
 	__eq = function(self, class2)
+		-- infinite recursion protection
+		local __eq = getmetatable(self).__eq
+		getmetatable(self).__eq = nil
+		
 		if self:____member_isvalid("___meta__eq") then
 			
-			return self:____member_get("___meta__eq").rawvalue(self, class2)
+			return self:___meta__eq(self, class2)
 		end
+		
+		getmetatable(self).__eq = __eq
 	end;
 	
 	__lt = function(self, class2)
+		-- infinite recursion protection
+		local __lt = getmetatable(self).__lt
+		getmetatable(self).__lt = nil
+		
 		if self:____member_isvalid("___meta__lt") then
-			return self:____member_get("___meta__lt").rawvalue(self, class2)
+			return self:___meta__lt(self, class2)
 		end
+		
+		getmetatable(self).__lt = __lt
 	end;
 	
 	__le = function(self, class2)
+		-- infinite recursion protection
+		local __le = getmetatable(self).__le
+		getmetatable(self).__le = nil
+		
 		if self:____member_isvalid("___meta__add") then
-			return self:____member_get("___meta__add").rawvalue(self, class2)
+			return self:___meta__add(self, class2)
 		end
+		
+		getmetatable(self).__le = __le
 	end;
 }
 
@@ -1269,7 +1341,7 @@ do
 				t["___meta" .. k] = v
 			end
 			
-			return _pushMembersModifier(t, {_meta_})
+			return _pushMembersModifier(t, {_meta_, _public_})
 		end
 	end
 
@@ -1283,7 +1355,7 @@ do
 				end
 
 				creatorData["final"] = true
-
+				
 				return classSetupObject
 			end
 		end
