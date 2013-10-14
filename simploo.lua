@@ -190,7 +190,7 @@ local function _getFunctionArgs(func)
 end
 
 function isclass(v)
-	return (getmetatable(v) and getmetatable(v).__class and true) or false
+	return (getmetatable(v) and getmetatable(v).__class and v.___class and true) or false
 end
 
 local function _realPath(p)
@@ -220,25 +220,25 @@ local function _doValue(key, value, scope, child)
 			__scope = prev_scope
 			
 			
-			if t then
+			if t == nil then
 				return k, l, m, n, o, p, q, r, s, t
-			elseif s then
+			elseif s == nil then
 				return k, l, m, n, o, p, q, r, s
-			elseif r then
+			elseif r == nil then
 				return k, l, m, n, o, p, q, r
-			elseif q then
+			elseif q == nil then
 				return k, l, m, n, o, p, q
-			elseif p then
+			elseif p == nil then
 				return k, l, m, n, o, p
-			elseif o then
+			elseif o == nil then
 				return k, l, m, n, o
-			elseif n then
+			elseif n == nil then
 				return k, l, m, n
-			elseif m then
+			elseif m == nil then
 				return k, l, m
-			elseif l then
+			elseif l == nil then
 				return k, l
-			elseif k then
+			elseif k == nil then
 				return k
 			end 
 		end
@@ -286,9 +286,10 @@ SIMPLOO.CLASS_MT = {
 	__call = function(self, ...)
 		-- When we call class instances, we actually call their constructors
 		if self.___instance then
-			return self:____construct(...)
+			-- Passing in either the scope or self, scope when one class constructor calls another.
+			return self:____do_construct(__scope or self, ...) -- Note to self: don't forget to pass in the caller!
 		else
-			error("Please use " .. self:get_name() .. ".new() to instantiate this class.")
+			error("Please use %s.new() instead of %s() to instantiate this class.", self:get_name(), self:get_name())
 		end
 	end;
 	
@@ -304,14 +305,25 @@ SIMPLOO.CLASS_MT = {
 		end
 	end;
 	
-	__concat = function(self, other)
+	__concat = function(self_or_string_1, self_or_string_2)
+		local self, string, forwards
+		if isclass(self_or_string_1) then
+			self = self_or_string_1
+			string = self_or_string_2
+			forwards = true
+		else
+			self = self_or_string_2
+			string = self_or_string_1
+			forwards = false
+		end
+		
 		-- We disable the metamethod on ourselfs, so we can tostring ourselves without getting into an infinite loop.
 		-- And no, rawget doesn't work because we want to call a metamethod on ourself: __tostring
 		local __tostring = getmetatable(self).__tostring
 		getmetatable(self).__tostring = nil
 		
 		if self:____member_isvalid("___meta__concat") then
-			local str = self:___meta__concat(self, other)
+			local str = self:___meta__concat(self, string)
 			if not str then
 				error(string.format("class %s, metamethod %s: must return string", self, "__concat"))
 			end
@@ -319,7 +331,7 @@ SIMPLOO.CLASS_MT = {
 			return str
 		end
 		
-		local str = tostring(self) .. other
+		local str = (forwards and tostring(self) .. string) or string .. tostring(self)
 		
 		-- Enable our metamethod again.
 		getmetatable(self).__tostring = __tostring
@@ -328,6 +340,10 @@ SIMPLOO.CLASS_MT = {
 	end;
 
 	__index = function(invokedOn, mKey)
+		if not rawget(invokedOn, "___class") then
+			error("__index invoked on non-class.. something went really wrong here..")
+		end
+		
 		if invokedOn.___parents[mKey] then
 			return invokedOn.___parents[mKey]
 		end
@@ -410,6 +426,10 @@ SIMPLOO.CLASS_MT = {
 	end;
 	
 	__newindex = function(invokedOn, mKey, mValue)
+		if not rawget(invokedOn, "___class") then
+			error("__index invoked on non-class.. something went really wrong here..")
+		end
+		
 		if invokedOn.___parents[mKey] then
 			error("error: setting parent variable: this variable is used to access your class parent")
 		end
@@ -684,28 +704,28 @@ do
 				error(string.format("cannot instantiate class %s: class is abstract", self:get_name()))
 			end
 			
-			self:___check_unimplemented_abstract()
+			self:____do_check_unimplemented_abstract()
 			
 			local instance = self:___instantiate(...)
 			
 			-- Update member functions
-			instance:___updatefunctions()
+			instance:____do_update_functions()
 			
 			-- Activate the instance
-			instance:____add_finalizer()
+			instance:____do_add_finalizer()
 			
 			-- Rebuild registry, because we duplicated everything and the references are still old.
-			instance:___build_registry()
+			instance:____do_build_registry()
 			
 			-- Calls constructor
-			instance:____construct(instance, ...)
+			instance:____do_construct(instance, ...) -- Note to self: don't forget to pass in the caller!
 			
 			return instance
 		end
 	end
 
 	do -- Hidden class utility functions.
-		function SIMPLOO.CLASS_FUNCTIONS:____construct(_caller, ...)
+		function SIMPLOO.CLASS_FUNCTIONS:____do_construct(_caller, ...)
 			if self.___instance then
 				--[[
 				-- While I would love to auto call constructors, it's probably
@@ -713,22 +733,19 @@ do
 				-- of arguments is unpredictable.
 				
 				for parentName, parentObject in pairs(self.___parents) do
-					parentObject:____construct(_caller, ...)
+					parentObject:____do_construct(_caller, ...)
 				end
 				]]
 				
 				for _, name in pairs({"__construct"}) do
 					if self:____member_isvalid(name)
-						
-						-- limit to local class only, otherwise it would
-						-- start calling parent constructors if our own is missing
-						-- and this would be inconsistent behavior
+						-- limit to local class only
 						and self:____member_getlocation(name) == self then
-						self[name](_caller, ...)
+						self[name](_caller or self, ...)
 					end
 				end
 			else
-				error("calling ____construct on non-instance")
+				error("calling ____do_construct on non-instance")
 			end
 		end
 
@@ -739,7 +756,9 @@ do
 				end
 			
 				for _, name in pairs({"__finalize"}) do
-					if self:____member_isvalid(name) then
+					if self:____member_isvalid(name)
+						-- limit to local class only
+						and self:____member_getlocation(name) == self then
 						-- Bypass metatable restrictions
 						return self:____member_get(name).value(self)
 					end
@@ -753,20 +772,23 @@ do
 			end
 		end
 
-		function SIMPLOO.CLASS_FUNCTIONS:____declare()
+		function SIMPLOO.CLASS_FUNCTIONS:____do_declare()
 			if not self.___instance then
-				for parentName, parentObject in pairs(self.___parents) do
-					parentObject:____declare()
-				end
+				-- We don't have to declare our parents again!
+				--for parentName, parentObject in pairs(self.___parents) do
+				--	parentObject:____do_declare()
+				--end
 			
 				for _, name in pairs({"__declare"}) do
-					if self:____member_isvalid(name) then
+					if self:____member_isvalid(name)
+						-- limit to local class only
+						and self:____member_getlocation(name) == self then
 						-- Bypass metatable restrictions
 						return self:____member_get(name).value(self)
 					end
 				end
 			else
-				error("calling ____declare on instance")
+				error("calling ____do_declare on instance")
 			end
 		end
 
@@ -788,7 +810,7 @@ do
 			return instance
 		end
 		
-		function SIMPLOO.CLASS_FUNCTIONS:___updatefunctions(_child)
+		function SIMPLOO.CLASS_FUNCTIONS:____do_update_functions(_child)
 			for mKey, mData in pairs(self.___members) do
 				if mData.isfunc then
 					mData.value = _doValue(mKey, mData.rawvalue, self, _child or self)
@@ -796,15 +818,15 @@ do
 			end
 			
 			for parentName, parentObject in pairs(self.___parents) do
-				parentObject:___updatefunctions(self)
+				parentObject:____do_update_functions(self)
 			end
 		end
 		
-		function SIMPLOO.CLASS_FUNCTIONS:____add_finalizer()
+		function SIMPLOO.CLASS_FUNCTIONS:____do_add_finalizer()
 			--[[
 			-- We don't loop through all parents here, only the lowest child needs this hook.
 			for parentName, parentObject in pairs(self.___parents) do
-				parentObject:____add_finalizer()
+				parentObject:____do_add_finalizer()
 			end]]
 
 			-- Setup the finalizer proxy for lua 5.1
@@ -865,11 +887,11 @@ do
 
 	-- Build the registry and the reverse-registry.
 	do
-		function SIMPLOO.CLASS_FUNCTIONS:___build_registry()
+		function SIMPLOO.CLASS_FUNCTIONS:____do_build_registry()
 			local registryVars = {}
 			
 			for parentName, parentObject in pairs(self.___parents) do
-				local parentVars = parentObject:___build_registry()
+				local parentVars = parentObject:____do_build_registry()
 				
 				for mName, mObject in pairs(parentVars) do
 					if registryVars[mName] then
@@ -901,7 +923,7 @@ do
 	end
 	
 	do
-		function SIMPLOO.CLASS_FUNCTIONS:___check_unimplemented_abstract()
+		function SIMPLOO.CLASS_FUNCTIONS:____do_check_unimplemented_abstract()
 			for memberName, locationClass in pairs(self.___registry) do
 				if isclass(locationClass) then
 					local member = locationClass.___members[memberName]
@@ -927,7 +949,7 @@ do
 
 	-- Here we check if the access of children aren't less than those of parents
 	do
-		function SIMPLOO.CLASS_FUNCTIONS:___check_parent_access(_child)
+		function SIMPLOO.CLASS_FUNCTIONS:____do_check_parent_access(_child)
 			local level = {} -- we just need this very shortly so can compare them
 			level[_public_] = 1
 			level[_private_] = 2
@@ -935,7 +957,7 @@ do
 			
 			if not self.___instance then
 				for parentName, parentObject in pairs(self.___parents) do
-					parentObject:___check_parent_access()
+					parentObject:____do_check_parent_access()
 				end
 			end
 			
@@ -952,7 +974,7 @@ do
 
 	-- Setup the metatables on the class + all children
 	do
-		function SIMPLOO.CLASS_FUNCTIONS:___init_metatable()
+		function SIMPLOO.CLASS_FUNCTIONS:____do_init_metatable()
 			setmetatable(self, SIMPLOO.CLASS_MT)
 		end
 	end
@@ -962,7 +984,7 @@ local function _setupClass(creatorData, creatorMembers)
 	local className = creatorData["name"]
 	local extendingClasses = creatorData["extends"] or {}
 	local finalClass = creatorData["final"] or false
-
+	
 	-- Store the setup location of this class.
 	local setupLocationStack = debug and debug.getinfo(4)
 	local setupLocation = debug and
@@ -995,6 +1017,7 @@ local function _setupClass(creatorData, creatorMembers)
 	newClass.___final = finalClass
 	newClass.___cache = {}
 	newClass.___registry = {}
+	newClass.___class = false -- not a valid class yet
 	newClass.___setupLocation = setupLocation
 	
 	do -- Setup class data.
@@ -1020,7 +1043,7 @@ local function _setupClass(creatorData, creatorMembers)
 			local mMeta = mData.modifiers[_meta_] and true or false;
 			
 			newClass.___members[mKey] = {
-				value = mValue, -- will be handled by :___updatefunctions
+				value = mValue, -- will be handled by :____do_update_functions
 				access = mAccess,
 				static = mStatic,
 				final = mFinal,
@@ -1059,27 +1082,36 @@ local function _setupClass(creatorData, creatorMembers)
 	end
 	
 	newClass.new = function(arg1, ...)
+		local arguments = {...}
+		
 		if arg1 == newClass then
-			error("calling new() with ':'' instead of '.'?? or are you passsing yourself as the first argument (you can use 'self' for that in your code)")
+			-- Strip out the first argument
+			arguments = {select(2, ...)}
+			
+			-- Allowing this now!
+			-- error("calling new() with ':'' instead of '.'?? or are you passsing yourself as the first argument (you can use 'self' for that in your code)")
 		end
 		
 		return SIMPLOO.CLASS_FUNCTIONS.new(newClass, arg1, ...)
 	end
-			
+	
 	-- Update member functions
-	newClass:___updatefunctions()
+	newClass:____do_update_functions()
 	
 	-- Initialize metatable
-	newClass:___init_metatable()
+	newClass:____do_init_metatable()
 	
 	-- Check parent access
-	newClass:___check_parent_access()
+	newClass:____do_check_parent_access()
 	
 	-- Build registry
-	newClass:___build_registry()
+	newClass:____do_build_registry()
+	
+	-- Set this variable so we know we have a valid class.
+	newClass.___class = true
 	
 	-- Call declare class function
-	newClass:____declare()
+	newClass:____do_declare()
 	
 	-- Create global
 	_setGlobal(className, newClass)
