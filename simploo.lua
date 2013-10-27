@@ -254,7 +254,6 @@ local function classfunction(key, value, static, scope, child)
 end
 
 SIMPLOO.CLASS_MT = {
-	__class = true,
 	__tostring = function(self)
 		
 		-- We disable the metamethod on ourselfs, so we can tostring ourselves without getting into an infinite loop.
@@ -733,7 +732,6 @@ do
 			
 			-- Add parents
 			for parentName, parentObject in pairs(instance.___parents) do
-			print("parentObject>>>>", parentObject)
 				instance.___parents[parentName] = SIMPLOO.FUNCTIONS.___instantiate(parentObject)
 			end
 			
@@ -1063,7 +1061,6 @@ local function _setupClass(creatorInfo, creatorMembers)
 	
 	do
 		for _, parentClassName in pairs(extendingClasses) do
-			print("PARENT = ", SIMPLOO.CLASSES[parentClassName])
 			if SIMPLOO.CLASSES[parentClassName] then
 				-- We do NOT DUPLICATE HERE
 				-- If we did, static variables wouldn't work because each class would have a different instance of the parent.
