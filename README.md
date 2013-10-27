@@ -3,29 +3,29 @@ SIMPLOO - The simple lua object-oriented programming library!
 
 #### Introduction
 
-SIMPLOO is a library designed to integrate the object-oriented programming concept into Lua.
+SIMPLOO is a library designed to simplify object-oriented programming in lua.
 
 #### Features
 
 ** Quick Feature Overview **
 
 * public/protected/private access modifiers
-* abstract/final classes and class members
+* abstract/static/constant class members
+* constructors/finalizers
 * multiple inheritance
-* constructors/finalizers that are called on garbage collection (in both Lua 5.1 and 5.2)
-* common OOP functions such as is\_a() and instance\_of()
-* iteration-less member access due to build in registry system.
+* common OOP functions such as get\_name(), is\_a(), instance\_of() and child\_of()
+* build in registry that ensures iteration free member access.
 * metamethod support
 
 #### Additional Notes
 
-* This library uses the following globals: SIMPLOO, null, class, extends, options, public, protected, private, static, abstract, meta, final
-* There are no guarantees that this library behaves exactly like other object oriented programming languages, albeit it comes pretty close.
+* This library uses the following globals: SIMPLOO, null, class, extends, options, public, protected, private, static, abstract, meta, const
+* There are no guarantees that this library behaves exactly like other object oriented programming languages.
 
 #### Requirements
 
 This library is being developed and tested on LuaJIT 2.1.0 (Lua 5.1) and Lua 5.2.
-For the best performance I absolutely recommend using a LuaJIT environment.
+For the best performance I recommend using a LuaJIT environment.
 
 #### Installation
 
@@ -39,4 +39,4 @@ https://github.com/maurits150/simploo/wiki
 
 #### Feedback
 
-Any feedback is appreciated.
+Any feedback will be appreciated.

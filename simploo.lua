@@ -24,9 +24,10 @@
 ]]
 
 SIMPLOO = SIMPLOO or {}
-SIMPLOO.CLASSES = {}
-SIMPLOO.CLASS_MT = {}
-SIMPLOO.CLASS_FUNCTIONS = {}
+SIMPLOO.CLASSES = SIMPLOO and SIMPLOO.CLASSES or {}
+SIMPLOO.CLASS_MT = SIMPLOO and SIMPLOO.CLASS_MT or {}
+SIMPLOO.CLASS_FUNCTIONS = SIMPLOO and SIMPLOO.CLASS_FUNCTIONS or {}
+SIMPLOO.FUNCTIONS = SIMPLOO and SIMPLOO.FUNCTIONS or {}
 
 null = "NullVariable"
 
@@ -35,9 +36,13 @@ local _protected_ = "ProtectedAccess"
 local _private_ = "PrivateAccess"
 
 local _static_ = "StaticMemberType"
-local _final_ = "FinalMember/FinalClass"
+local _const_ = "ConstantMember"
 local _abstract_ = "AbstractMember"
 local _meta_ = "MetaMethodMember"
+
+local _finalizers_ = {"__finalize"}
+local _constructors_ = {"__construct"}
+local _declarers_ = {"__declare"}
 
 local function _duplicateTable(tbl, _lookup)
 	local copy = {}
@@ -72,44 +77,44 @@ local function _duplicateTable(tbl, _lookup)
 	return copy
 end
 
-local function _duplicateClass(tbl, _lookup)
+local function _createClassInstance(tbl, _lookup)
 	local copy = {}
-	
-	for i, v in pairs(tbl) do
-		if i == "___members" or i == "___parents" then
+	for strKey, tblValue in pairs(tbl) do
+		if strKey == "___members" or strKey == "___parents" then
 			_lookup = _lookup or {}
 			_lookup[tbl] = copy
 
-			if _lookup[v] then
-				copy[i] = _lookup[v] -- we already copied this table. reuse the copy.
+			if _lookup[tblValue] then
+				copy[strKey] = _lookup[tblValue] -- we already copied this table. reuse the copy.
 			else
-				if i == "___members" then -- deepcopy members
-					copy[i] = {}
+				if strKey == "___members" then -- deepcopy members
+					copy[strKey] = {}
 					
-					for memberName, memberData in pairs(v) do
-						copy[i][memberName] = {}
+					for memberName, memberData in pairs(tblValue) do
+						copy[strKey][memberName] = {}
 						
 						for memberKey, memberValue in pairs(memberData) do
-							if memberKey == "value" and type(memberValue) == "table" then
-								if memberData.static then -- dont bother copying over static members
-									copy[i][memberName][memberKey] = false
-								else
-									copy[i][memberName][memberKey] = _duplicateTable(memberValue, _lookup)
+							if memberKey == "value" then
+								if not memberData.static then
+									if type(memberValue) == "table" then
+										copy[strKey][memberName][memberKey] = _duplicateTable(memberValue, _lookup)
+									else
+										copy[strKey][memberName][memberKey] = rawget(memberData, memberKey)
+									end
 								end
 							else
-								copy[i][memberName][memberKey] = rawget(memberData, memberKey)
+								copy[strKey][memberName][memberKey] = rawget(memberData, memberKey)
 							end
 						end
 					end
-					
-				elseif i == "___parents" then
-					copy[i] = _duplicateClass(v, _lookup) -- not yet copied. copy it.
+				elseif strKey == "___parents" then
+					copy[strKey] = _createClassInstance(tblValue, _lookup) -- not yet copied. copy it.
 				end
 			end
-		elseif i == "___registry" or i == "___cache" then
-			copy[i] = {}
+		elseif strKey == "___registry" or strKey == "___cache" then
+			copy[strKey] = {}
 		else
-			copy[i] = rawget(tbl, i)
+			copy[strKey] = rawget(tbl, strKey)
 		end
 	end
 
@@ -190,10 +195,10 @@ local function _getFunctionArgs(func)
 end
 
 function isclass(v)
-	return (getmetatable(v) and getmetatable(v).__class and v.___class and true) or false
+	return getmetatable(v) == SIMPLOO.CLASS_MT
 end
 
-local function _realPath(p)
+local function realpath(p)
 	return 
 		p:gsub("[^/]+/%.%./","/")
 		 :gsub("/[^/]+/%.%./","/")
@@ -202,58 +207,50 @@ local function _realPath(p)
 		 :gsub("//","/")
 end
 
-local function _doValue(key, value, scope, child)
-	if type(value) == "function" then
-		local function f(a, b, c, d, e, f, g, h, i, j)
-			local k, l, m, n, o, p, q, r, s, t
-			
-			local prev_self = self
-			local prev_scope = __scope
-			
-			self = child
-			__scope = scope
-			
-			k, l, m, n, o, p, q, r, s, t =
-				value(a, b, c, d, e, f, g, h, i, j)
-			
-			self = prev_self
-			__scope = prev_scope
-			
-			
-			if t == nil then
-				return k, l, m, n, o, p, q, r, s, t
-			elseif s == nil then
-				return k, l, m, n, o, p, q, r, s
-			elseif r == nil then
-				return k, l, m, n, o, p, q, r
-			elseif q == nil then
-				return k, l, m, n, o, p, q
-			elseif p == nil then
-				return k, l, m, n, o, p
-			elseif o == nil then
-				return k, l, m, n, o
-			elseif n == nil then
-				return k, l, m, n
-			elseif m == nil then
-				return k, l, m
-			elseif l == nil then
-				return k, l
-			elseif k == nil then
-				return k
-			end 
-		end
+local function classfunction(key, value, static, scope, child)
+	local function f(a, b, c, d, e, f, g, h, i, j)
+		local k, l, m, n, o, p, q, r, s, t
 		
-		return f
-	else
-		return value
+		local prev_self = self
+		local prev_scope = __scope
+		local prev_static_context = __static_context
+		
+		self = child
+		__scope = scope
+		__static_context = static
+		
+		k, l, m, n, o, p, q, r, s, t =
+			value(a, b, c, d, e, f, g, h, i, j)
+		
+		self = prev_self
+		__scope = prev_scope
+		__static_context = prev_static_context
+		
+		-- I can't find a faster way to trim trailing nils.. so enjoy this hacky code!
+		if t ~= nil then
+			return k, l, m, n, o, p, q, r, s, t
+		elseif s ~= nil then
+			return k, l, m, n, o, p, q, r, s
+		elseif r ~= nil then
+			return k, l, m, n, o, p, q, r
+		elseif q ~= nil then
+			return k, l, m, n, o, p, q
+		elseif p ~= nil then
+			return k, l, m, n, o, p
+		elseif o ~= nil then
+			return k, l, m, n, o
+		elseif n ~= nil then
+			return k, l, m, n
+		elseif m ~= nil then
+			return k, l, m
+		elseif l ~= nil then
+			return k, l
+		elseif k ~= nil then
+			return k
+		end 
 	end
-end
-
-do
-	-- Remove any remaining/old classes from the global table.
-	for k, v in pairs(SIMPLOO.CLASSES or {}) do
-		_setGlobal(k, nil)
-	end
+	
+	return f
 end
 
 SIMPLOO.CLASS_MT = {
@@ -270,7 +267,7 @@ SIMPLOO.CLASS_MT = {
 		
 		-- see if we have a custom tostring, this is below the actual tostring because we wanna be able to use the original tostring inside the error
 		if self:____member_isvalid("___meta__tostring") then
-			local custstr = self:___meta__tostring(self, origstr)
+			local custstr = self:___meta__tostring(origstr)
 			if custstr then
 				return custstr
 			end
@@ -287,21 +284,9 @@ SIMPLOO.CLASS_MT = {
 		-- When we call class instances, we actually call their constructors
 		if self.___instance then
 			-- Passing in either the scope or self, scope when one class constructor calls another.
-			return self:____do_construct(__scope or self, ...) -- Note to self: don't forget to pass in the caller!
+			return SIMPLOO.FUNCTIONS.____do_construct(self, __scope or self, ...) -- Note to self: don't forget to pass in the caller!
 		else
-			error("Please use %s.new() instead of %s() to instantiate this class.", self:get_name(), self:get_name())
-		end
-	end;
-	
-	__gc = function(self)
-		-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
-		-- So we catch them by hand and print them!
-		local s, e = pcall(function()
-			self:___finalize()
-		end)
-
-		if not s then
-			print(string.format("ERROR: class %s: error __gc function: %s", self:get_name(), e))
+			error(string.format("Please use %s.new() instead of %s() to instantiate this class.", self:get_name(), self:get_name()))
 		end
 	end;
 	
@@ -323,7 +308,7 @@ SIMPLOO.CLASS_MT = {
 		getmetatable(self).__tostring = nil
 		
 		if self:____member_isvalid("___meta__concat") then
-			local str = self:___meta__concat(self, string)
+			local str = self:___meta__concat(string)
 			if not str then
 				error(string.format("class %s, metamethod %s: must return string", self, "__concat"))
 			end
@@ -331,21 +316,25 @@ SIMPLOO.CLASS_MT = {
 			return str
 		end
 		
-		local str = (forwards and tostring(self) .. string) or string .. tostring(self)
-		
 		-- Enable our metamethod again.
 		getmetatable(self).__tostring = __tostring
+		
+		local str = (forwards and tostring(self) .. string) or string .. tostring(self)
 		
 		return str
 	end;
 
 	__index = function(invokedOn, mKey)
-		if not rawget(invokedOn, "___class") then
-			error("__index invoked on non-class.. something went really wrong here..")
+		if not isclass(invokedOn) then
+			error("__index invoked on invalid class.. did you reload simploo without reloading your class files?")
 		end
 		
 		if invokedOn.___parents[mKey] then
 			return invokedOn.___parents[mKey]
+		end
+		
+		if SIMPLOO.CLASS_FUNCTIONS[mKey] then
+			return SIMPLOO.CLASS_FUNCTIONS[mKey]
 		end
 		
 		local locationOf = invokedOn.___registry[mKey]
@@ -357,21 +346,29 @@ SIMPLOO.CLASS_MT = {
 			local isfunc = locationOf.___members[mKey].isfunc
 			
 			-- ...
-			if not static and not invokedOn.___instance then
-				print("---------------------" ..
+			
+			if invokedOn.___instance then
+				if static then -- if an instance tries to access a static variable
+					if not invokedOn:get_class() then
+						error(string.format("failed to index static %s: cannot find class of instance %s.. did you reload simploo without reloading your class files?", mKey, invokedOn))
+					end
+					
+					return invokedOn:get_class()[mKey]
+				end
+			else
+				-- if a class tries to access a non static variable
+				if not static then
+					print("---------------------" ..
 					"\n\tStatic: " .. tostring(static) .. "\n\tmKey = " .. mKey .. "\n\tAccess = " .. access .. "\n\tinvokedOn = " .. invokedOn ..
 					"\n\tlocationOf = " .. locationOf .. "\n\t__scope = " .. tostring(__scope))
 
-				error(string.format("access to %s member %s: you cannot access this member variable unless it's static", invokedOn, mKey))
+					error(string.format("access to %s member %s: you cannot access non-static members from the class level", invokedOn, mKey))
+				end
 			end
 			
 			-- Redirect statics
 			if invokedOn.___instance and static then -- Redirect to global class.
-				if not invokedOn:get_class() then
-					error(string.format("cannot find class of instance %s", invokedOn))
-				end
 				
-				return invokedOn:get_class()[mKey]
 			end
 			
 			if access == _public_ then
@@ -414,10 +411,12 @@ SIMPLOO.CLASS_MT = {
 					mKey))
 		else		
 			if invokedOn:____member_isvalid("___meta__index") then
-				local custval = invokedOn:___meta__index(invokedOn, mKey)
+				local custval = invokedOn:___meta__index(mKey)
 				
 				if custval then
 					return custval
+				else
+					error("key not found: " .. mKey)
 				end
 			end
 		end
@@ -426,8 +425,8 @@ SIMPLOO.CLASS_MT = {
 	end;
 	
 	__newindex = function(invokedOn, mKey, mValue)
-		if not rawget(invokedOn, "___class") then
-			error("__index invoked on non-class.. something went really wrong here..")
+		if not isclass(invokedOn) then
+			error("__index invoked on invalid class.. did you reload simploo without reloading your class files?")
 		end
 		
 		if invokedOn.___parents[mKey] then
@@ -440,31 +439,34 @@ SIMPLOO.CLASS_MT = {
 			local access = locationOf.___members[mKey].access
 			local static = locationOf.___members[mKey].static
 			local value = locationOf.___members[mKey].value
-			local final = locationOf.___members[mKey].final
+			local const = locationOf.___members[mKey].const
 			local isfunc = locationOf.___members[mKey].isfunc
 			
 			-- ...
-			if not static and not invokedOn.___instance then
+			if const then
+				error(string.format("access violation <%s>: cannot write to const member '%s'", invokedOn, mKey))
+			elseif isfunc then
+				error(string.format("access violation <%s>: cannot modify member function '%s' during runtime", invokedOn, mKey))
+			end
+			
+			-- Redirect statics
+			if invokedOn.___instance then
+				if static then -- if an instance tries to access a static variable
+					if not invokedOn:get_class() then
+						error(string.format("failed to index static %s: cannot find class of instance %s.. did you reload simploo without reloading your class files?", mKey, invokedOn))
+					end
+					
+					invokedOn:get_class()[mKey] = mValue
+				end
+			else
+				-- if a class tries to access a non static variable
+				if not static then
 					print("---------------------" ..
 					"\n\tStatic: " .. tostring(static) .. "\n\tmKey = " .. mKey .. "\n\tAccess = " .. access .. "\n\tinvokedOn = " .. invokedOn ..
 					"\n\tlocationOf = " .. locationOf .. "\n\t__scope = " .. tostring(__scope))
 
-				error(string.format("access to %s member %s: you cannot access this member variable unless it's static", invokedOn, mKey))
-			elseif final then
-				error(string.format("inside class <%s>: invalid write access to class member '%s': member is final", invokedOn, mKey))
-			elseif isfunc then
-				error(string.format("access to class member %s: you cannot modify class methods during runtime.", mKey))
-			end
-			
-			-- Redirect statics
-			if invokedOn.___instance and static then -- Redirect to global class.
-				if not invokedOn:get_class() then
-					error(string.format("cannot find class of instance %s", invokedOn))
+					error(string.format("access to %s member %s: you cannot access non-static members from the class level", invokedOn, mKey))
 				end
-				
-				invokedOn:get_class()[mKey] = mValue
-
-				return -- DO NOT REMOVE! because the callscope is false so things will bug out!
 			end
 
 			if access == _public_ then
@@ -509,7 +511,7 @@ SIMPLOO.CLASS_MT = {
 					mKey))
 		else
 			if invokedOn:____member_isvalid("___meta__newindex") then
-				invokedOn:___meta__newindex(invokedOn, mKey, mValue)
+				invokedOn:___meta__newindex(mKey, mValue)
 			
 				return
 			end
@@ -524,7 +526,7 @@ SIMPLOO.CLASS_MT = {
 		getmetatable(self).__unm = nil
 		
 		if self:____member_isvalid("___meta__unm") then
-			return self:___meta__unm(self)
+			return self:___meta__unm()
 		end
 		
 		getmetatable(self).__unm = __unm
@@ -536,7 +538,7 @@ SIMPLOO.CLASS_MT = {
 		getmetatable(self).__add = nil
 		
 		if self:____member_isvalid("___meta__add") then
-			return self:___meta__add(self, class2)
+			return self:___meta__add(class2)
 		end
 		
 		getmetatable(self).__add = __add
@@ -549,7 +551,7 @@ SIMPLOO.CLASS_MT = {
 		
 		
 		if self:____member_isvalid("___meta__sub") then
-			return self:___meta__sub(self, class2)
+			return self:___meta__sub(class2)
 		end
 		
 		getmetatable(self).__sub = __sub
@@ -561,7 +563,7 @@ SIMPLOO.CLASS_MT = {
 		getmetatable(self).__mul = nil
 		
 		if self:____member_isvalid("___meta__mul") then
-			return self:___meta__mul(self, class2)
+			return self:___meta__mul(class2)
 		end
 		
 		getmetatable(self).__mul = __mul
@@ -573,7 +575,7 @@ SIMPLOO.CLASS_MT = {
 		getmetatable(self).__div = nil
 		
 		if self:____member_isvalid("___meta__div") then
-			return self:___meta__div(self, class2)
+			return self:___meta__div(class2)
 		end
 		
 		getmetatable(self).__div = __div
@@ -585,7 +587,7 @@ SIMPLOO.CLASS_MT = {
 		getmetatable(self).__mod = nil
 		
 		if self:____member_isvalid("___meta__mod") then
-			return self:___meta__mod(self, class2)
+			return self:___meta__mod(class2)
 		end
 		
 		getmetatable(self).__mod = __mod
@@ -597,7 +599,7 @@ SIMPLOO.CLASS_MT = {
 		getmetatable(self).__pow = nil
 		
 		if self:____member_isvalid("___meta__pow") then
-			return self:___meta__pow(self, class2)
+			return self:___meta__pow(class2)
 		end
 		
 		getmetatable(self).__pow = __pow
@@ -610,7 +612,7 @@ SIMPLOO.CLASS_MT = {
 		
 		if self:____member_isvalid("___meta__eq") then
 			
-			return self:___meta__eq(self, class2)
+			return self:___meta__eq(class2)
 		end
 		
 		getmetatable(self).__eq = __eq
@@ -622,7 +624,7 @@ SIMPLOO.CLASS_MT = {
 		getmetatable(self).__lt = nil
 		
 		if self:____member_isvalid("___meta__lt") then
-			return self:___meta__lt(self, class2)
+			return self:___meta__lt(class2)
 		end
 		
 		getmetatable(self).__lt = __lt
@@ -634,7 +636,7 @@ SIMPLOO.CLASS_MT = {
 		getmetatable(self).__le = nil
 		
 		if self:____member_isvalid("___meta__add") then
-			return self:___meta__add(self, class2)
+			return self:___meta__add(class2)
 		end
 		
 		getmetatable(self).__le = __le
@@ -694,8 +696,10 @@ do
 		function SIMPLOO.CLASS_FUNCTIONS:get_class()
 			return SIMPLOO.CLASSES[self:get_name()]
 		end
+	end
 
-		function SIMPLOO.CLASS_FUNCTIONS:new(...)
+	do
+		function SIMPLOO.FUNCTIONS:new(...)
 			if self.___instance then
 				error("you cannot instantiate an instance!")
 			end
@@ -704,40 +708,44 @@ do
 				error(string.format("cannot instantiate class %s: class is abstract", self:get_name()))
 			end
 			
-			self:____do_check_unimplemented_abstract()
+			SIMPLOO.FUNCTIONS.____do_check_unimplemented_abstract(self)
 			
-			local instance = self:___instantiate(...)
+			-- Duplicate
+			local instance = SIMPLOO.FUNCTIONS.___instantiate(self)
 			
 			-- Update member functions
-			instance:____do_update_functions()
+			SIMPLOO.FUNCTIONS.____do_update_functions(instance)
 			
 			-- Activate the instance
-			instance:____do_add_finalizer()
+			SIMPLOO.FUNCTIONS.____do_add_finalizer(instance)
 			
 			-- Rebuild registry, because we duplicated everything and the references are still old.
-			instance:____do_build_registry()
+			SIMPLOO.FUNCTIONS.____do_build_registry(instance)
 			
 			-- Calls constructor
-			instance:____do_construct(instance, ...) -- Note to self: don't forget to pass in the caller!
+			SIMPLOO.FUNCTIONS.____do_construct(instance, instance, ...) -- Note to self: don't forget to pass in the caller!
 			
 			return instance
 		end
-	end
-
-	do -- Hidden class utility functions.
-		function SIMPLOO.CLASS_FUNCTIONS:____do_construct(_caller, ...)
+		
+		function SIMPLOO.FUNCTIONS:___instantiate()
+			local instance = _createClassInstance(self)
+			
+			-- Add parents
+			for parentName, parentObject in pairs(instance.___parents) do
+			print("parentObject>>>>", parentObject)
+				instance.___parents[parentName] = SIMPLOO.FUNCTIONS.___instantiate(parentObject)
+			end
+			
+			instance.___instance = true
+			
+			return instance
+		end
+		
+		function SIMPLOO.FUNCTIONS:____do_construct(_caller, ...)
+			-- No auto construction here, multiple inheritance makes the arguments impredictable.
 			if self.___instance then
-				--[[
-				-- While I would love to auto call constructors, it's probably
-				-- causing more problems then it solves because the number
-				-- of arguments is unpredictable.
-				
-				for parentName, parentObject in pairs(self.___parents) do
-					parentObject:____do_construct(_caller, ...)
-				end
-				]]
-				
-				for _, name in pairs({"__construct"}) do
+				for _, name in pairs(_constructors_) do
 					if self:____member_isvalid(name)
 						-- limit to local class only
 						and self:____member_getlocation(name) == self then
@@ -755,7 +763,7 @@ do
 					parentObject:___finalize()
 				end
 			
-				for _, name in pairs({"__finalize"}) do
+				for _, name in pairs(_finalizers_) do
 					if self:____member_isvalid(name)
 						-- limit to local class only
 						and self:____member_getlocation(name) == self then
@@ -772,14 +780,14 @@ do
 			end
 		end
 
-		function SIMPLOO.CLASS_FUNCTIONS:____do_declare()
+		function SIMPLOO.FUNCTIONS:____do_declare()
 			if not self.___instance then
 				-- We don't have to declare our parents again!
 				--for parentName, parentObject in pairs(self.___parents) do
 				--	parentObject:____do_declare()
 				--end
 			
-				for _, name in pairs({"__declare"}) do
+				for _, name in pairs(_declarers_) do
 					if self:____member_isvalid(name)
 						-- limit to local class only
 						and self:____member_getlocation(name) == self then
@@ -791,38 +799,21 @@ do
 				error("calling ____do_declare on instance")
 			end
 		end
-
-		function SIMPLOO.CLASS_FUNCTIONS:____duplicate()
-			return _duplicateClass(self, nil, true)
-		end
 		
-		function SIMPLOO.CLASS_FUNCTIONS:___instantiate(...)
-			-- Duplicate
-			local instance = self:____duplicate()
-			
-			instance.___instance = true
-			
-			-- Add parents
-			for parentName, parentObject in pairs(instance.___parents) do
-				instance.___parents[parentName] = parentObject:___instantiate(...)
-			end
-			
-			return instance
-		end
 		
-		function SIMPLOO.CLASS_FUNCTIONS:____do_update_functions(_child)
+		function SIMPLOO.FUNCTIONS:____do_update_functions(_child)
 			for mKey, mData in pairs(self.___members) do
 				if mData.isfunc then
-					mData.value = _doValue(mKey, mData.rawvalue, self, _child or self)
+					mData.value = classfunction(mKey, mData.rawvalue, mData.static, self, _child or self)
 				end
 			end
 			
 			for parentName, parentObject in pairs(self.___parents) do
-				parentObject:____do_update_functions(self)
+				SIMPLOO.FUNCTIONS.____do_update_functions(parentObject, self)
 			end
 		end
 		
-		function SIMPLOO.CLASS_FUNCTIONS:____do_add_finalizer()
+		function SIMPLOO.FUNCTIONS:____do_add_finalizer()
 			--[[
 			-- We don't loop through all parents here, only the lowest child needs this hook.
 			for parentName, parentObject in pairs(self.___parents) do
@@ -831,30 +822,58 @@ do
 
 			-- Setup the finalizer proxy for lua 5.1
 			if _VERSION == "Lua 5.1" then
-				local proxy = newproxy(true)
-				local mt = getmetatable(proxy)
-				mt.MetaName = "SimplooGC"
-				mt.__class = self
-				mt.__gc = function(self)
-					local tbl = getmetatable(self).__class
-					
-					if tbl then
-						-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
-						-- So we catch them by hand and print them!
-						local s, e = pcall(function()
-							tbl:___finalize()
-						end)
+				for _, name in pairs(_finalizers_) do -- Only adding finalizers when we actually have one defined.
+					if self.___members[name] then
+						local proxy = newproxy(true)
+						local mt = getmetatable(proxy)
+						mt.MetaName = "SimplooGC"
+						mt.__class = self
+						mt.__gc = function(self)
+							local tbl = getmetatable(self).__class
+							
+							if tbl then
+								-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
+								-- So we catch them by hand and print them!
+								local s, e = pcall(function()
+									tbl:___finalize()
+								end)
 
-						if not s then
-							print(string.format("ERROR: class %s: error __gc function: %s",
-								tbl:get_name(), e))
+								if not s then
+									print("ERROR: __gc failed!")
+									print(string.format("ERROR: class %s: error __gc function: %s",
+										tbl.___name, e))
+								end
+							else
+								--print("no tbl found in __gc of class.. what!!?") 
+							end
 						end
-					else
-						--print("no tbl found in __gc of class.. what!!?") 
+						
+						rawset(self, "___gc", proxy)
+					end
+					
+					return
+				end
+			else
+				local mt = getmetatable(self)
+				
+				for _, name in pairs(_finalizers_) do -- Only adding finalizers when we actually have one defined.
+					if self.___members[name] then
+						mt.__gc = function(self)
+							-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
+							-- So we catch them by hand and print them!
+							local s, e = pcall(function()
+								self:___finalize()
+							end)
+
+							if not s then
+								print("ERROR: __gc failed!")
+								print(string.format("ERROR: class %s: error __gc function: %s", self:get_name(), e))
+							end
+						end;
+						
+						return
 					end
 				end
-				
-				rawset(self, "___gc", proxy)
 			end
 		end
 
@@ -887,11 +906,11 @@ do
 
 	-- Build the registry and the reverse-registry.
 	do
-		function SIMPLOO.CLASS_FUNCTIONS:____do_build_registry()
+		function SIMPLOO.FUNCTIONS:____do_build_registry()
 			local registryVars = {}
 			
 			for parentName, parentObject in pairs(self.___parents) do
-				local parentVars = parentObject:____do_build_registry()
+				local parentVars = SIMPLOO.FUNCTIONS.____do_build_registry(parentObject)
 				
 				for mName, mObject in pairs(parentVars) do
 					if registryVars[mName] then
@@ -907,12 +926,6 @@ do
 			end
 			
 			for mName, mData in pairs(self.___members) do
-				if registryVars[mName] and registryVars[mName] ~= "?" then
-					if registryVars[mName]:____member_get(mName).final then
-						error(string.format("class %s: cannot override member %s: member is final", self, mName))
-					end
-				end
-				
 				registryVars[mName] = self
 			end
 			
@@ -923,7 +936,7 @@ do
 	end
 	
 	do
-		function SIMPLOO.CLASS_FUNCTIONS:____do_check_unimplemented_abstract()
+		function SIMPLOO.FUNCTIONS:____do_check_unimplemented_abstract()
 			for memberName, locationClass in pairs(self.___registry) do
 				if isclass(locationClass) then
 					local member = locationClass.___members[memberName]
@@ -949,7 +962,7 @@ do
 
 	-- Here we check if the access of children aren't less than those of parents
 	do
-		function SIMPLOO.CLASS_FUNCTIONS:____do_check_parent_access(_child)
+		function SIMPLOO.FUNCTIONS:____do_check_parent_access(_child)
 			local level = {} -- we just need this very shortly so can compare them
 			level[_public_] = 1
 			level[_private_] = 2
@@ -957,7 +970,7 @@ do
 			
 			if not self.___instance then
 				for parentName, parentObject in pairs(self.___parents) do
-					parentObject:____do_check_parent_access()
+					SIMPLOO.FUNCTIONS.____do_check_parent_access(parentObject)
 				end
 			end
 			
@@ -971,24 +984,16 @@ do
 			end
 		end
 	end
-
-	-- Setup the metatables on the class + all children
-	do
-		function SIMPLOO.CLASS_FUNCTIONS:____do_init_metatable()
-			setmetatable(self, SIMPLOO.CLASS_MT)
-		end
-	end
 end
 
-local function _setupClass(creatorData, creatorMembers)
-	local className = creatorData["name"]
-	local extendingClasses = creatorData["extends"] or {}
-	local finalClass = creatorData["final"] or false
+local function _setupClass(creatorInfo, creatorMembers)
+	local className = creatorInfo["name"]
+	local extendingClasses = creatorInfo["extends"] or {}
 	
 	-- Store the setup location of this class.
 	local setupLocationStack = debug and debug.getinfo(4)
 	local setupLocation = debug and
-		(_realPath(setupLocationStack.short_src .. ":" .. setupLocationStack.currentline))
+		(realpath(setupLocationStack.short_src .. ":" .. setupLocationStack.currentline))
 		or string.format("unknown location %d: no debug library", math.random(0, 10000000))
 	
 	-- Check for double
@@ -1007,28 +1012,24 @@ local function _setupClass(creatorData, creatorMembers)
 	for _, parentClassName in pairs(extendingClasses) do
 		if not SIMPLOO.CLASSES[parentClassName] then
 			error(string.format("parent %s for class %s does not exist. failed to setup class", parentClassName, className))
-		elseif SIMPLOO.CLASSES[parentClassName].___final then
-			error(string.format("parent %s for class %s is final and can not be extended from. failed to setup class", parentClassName, className))
 		end
 	end
 	
 	local newClass = {}
 	newClass.___name = className
-	newClass.___final = finalClass
-	newClass.___cache = {}
+	newClass.___members = {}
+	newClass.___parents = {}
 	newClass.___registry = {}
-	newClass.___class = false -- not a valid class yet
+	newClass.___cache = {}
+	newClass.___abstract = false
 	newClass.___setupLocation = setupLocation
 	
-	do -- Setup class data.
-		-- Setup members
-		newClass.___members = {}
-
+	do
 		for mKey, mData in pairs(creatorMembers) do
 			if newClass[mKey] then -- Check for double
 				error(string.format("failed to setup class %s: member %s already exists", className, mKey))
 			end
-
+			
 			local mValue = mData.value;
 			local isFunc = type(mValue) == "function"
 			local mAccess = (mData.modifiers[_public_] and _public_) or
@@ -1036,7 +1037,7 @@ local function _setupClass(creatorData, creatorMembers)
 					(mData.modifiers[_private_] and _private_) or
 					_private_ -- default value without keywords
 			local mStatic = mData.modifiers[_static_] and true or false;
-			local mFinal = (mData.modifiers[_final_] and true) or
+			local mConst = (mData.modifiers[_const_] and true) or
 				(isFunc and mAccess == _private and true) or
 				false;
 			local mAbstract = mData.modifiers[_abstract_] and true or false;
@@ -1046,7 +1047,7 @@ local function _setupClass(creatorData, creatorMembers)
 				value = mValue, -- will be handled by :____do_update_functions
 				access = mAccess,
 				static = mStatic,
-				final = mFinal,
+				const = mConst,
 				abstract = mAbstract,
 				isfunc = isFunc,
 				rawvalue = mValue,
@@ -1061,10 +1062,8 @@ local function _setupClass(creatorData, creatorMembers)
 	end
 	
 	do
-		-- Define the parents
-		newClass.___parents = {}
-		
 		for _, parentClassName in pairs(extendingClasses) do
+			print("PARENT = ", SIMPLOO.CLASSES[parentClassName])
 			if SIMPLOO.CLASSES[parentClassName] then
 				-- We do NOT DUPLICATE HERE
 				-- If we did, static variables wouldn't work because each class would have a different instance of the parent.
@@ -1075,10 +1074,6 @@ local function _setupClass(creatorData, creatorMembers)
 
 		-- Add a variable that will be set to true on instances.
 		newClass.___instance = false
-	end
-	
-	for k, v in pairs(SIMPLOO.CLASS_FUNCTIONS) do
-		newClass[k] = v -- copy reference
 	end
 	
 	newClass.new = function(arg1, ...)
@@ -1092,26 +1087,23 @@ local function _setupClass(creatorData, creatorMembers)
 			-- error("calling new() with ':'' instead of '.'?? or are you passsing yourself as the first argument (you can use 'self' for that in your code)")
 		end
 		
-		return SIMPLOO.CLASS_FUNCTIONS.new(newClass, arg1, ...)
+		return SIMPLOO.FUNCTIONS.new(newClass, arg1, ...)
 	end
 	
-	-- Update member functions
-	newClass:____do_update_functions()
-	
 	-- Initialize metatable
-	newClass:____do_init_metatable()
+	setmetatable(newClass, SIMPLOO.CLASS_MT)
+	
+	-- Update member functions
+	SIMPLOO.FUNCTIONS.____do_update_functions(newClass)
 	
 	-- Check parent access
-	newClass:____do_check_parent_access()
+	SIMPLOO.FUNCTIONS.____do_check_parent_access(newClass)
 	
 	-- Build registry
-	newClass:____do_build_registry()
-	
-	-- Set this variable so we know we have a valid class.
-	newClass.___class = true
+	SIMPLOO.FUNCTIONS.____do_build_registry(newClass)
 	
 	-- Call declare class function
-	newClass:____do_declare()
+	SIMPLOO.FUNCTIONS.____do_declare(newClass)
 	
 	-- Create global
 	_setGlobal(className, newClass)
@@ -1120,16 +1112,17 @@ local function _setupClass(creatorData, creatorMembers)
 	SIMPLOO.CLASSES[className] = newClass
 end
 
+
+
+
+
+
 do
 	local creatorActive = false
-	local creatorData = {}
+	local creatorInfo = {}
 	local creatorMembers = {}
 
-	--[[
-		This function gives a special table which is used to detect modifiers.
-	]]
-
-	local function _recursiveModifiers(key, onfinished, onKeywordNotFound, _modifiers)
+	local function recursiveModifiers(key, onfinished, onKeywordNotFound, _modifiers)
 		local _modifiers = _modifiers or {}
 
 		return setmetatable({}, {
@@ -1142,13 +1135,13 @@ do
 					_modifiers[_private_] = true
 				elseif key == "static" then
 					_modifiers[_static_] = true
-				elseif key == "final" then
-					_modifiers[_final_] = true
+				elseif key == "const" then
+					_modifiers[_const_] = true
 				else
 					return onKeywordNotFound(key)
 				end
 
-				return _recursiveModifiers(key, onfinished, onKeywordNotFound, _modifiers)
+				return recursiveModifiers(key, onfinished, onKeywordNotFound, _modifiers)
 			end,
 
 			__newindex = function(self, key, value)
@@ -1163,7 +1156,7 @@ do
 		})
 	end
 
-	local function _pushMembersModifier(dataTable, modifierTable)
+	local function pushMembersModifier(dataTable, modifierTable)
 		if not creatorMembers then
 			error("defining members without any class specification")
 		end
@@ -1184,12 +1177,12 @@ do
 		return new;
 	end
 
-	local function _assembleMembers(data, _results, _modifiers)
+	local function assembleMembers(data, _results, _modifiers)
 		if not _results then
 			local results = {}
 			local modifiers = {}
 			
-			_assembleMembers(data, results, modifiers)
+			assembleMembers(data, results, modifiers)
 
 			return results;
 		else
@@ -1200,18 +1193,18 @@ do
 
 				for mKey, mValue in pairs(data["___members"]) do
 					if mKey:sub(1, ("___meta"):len()) == "___meta" and not _modifiers[_meta_] then
-						error(string.format("failed to setup class %s: member %s: members starting with '___meta' are reserved for internal use!", creatorData['name'], mKey))
+						error(string.format("failed to setup class %s: member %s: members starting with '___meta' are reserved for internal use!", creatorInfo['name'], mKey))
 					end
 					
 					if _results[mKey] then
-						error(string.format("failed to setup class %s: double usage of variable %s", creatorData['name'], mKey))
+						error(string.format("failed to setup class %s: double usage of variable %s", creatorInfo['name'], mKey))
 					end
 
 					_results[mKey] = {value = mValue, modifiers = _duplicateTable(_modifiers)}
 				end
 
 				for childNum, childVal in pairs(data["___children"]) do
-					_assembleMembers(childVal, _results, _modifiers)
+					assembleMembers(childVal, _results, _modifiers)
 				end
 
 				for _, pKey in pairs(data["___modifiers"]) do
@@ -1223,28 +1216,28 @@ do
 
 	local function resetSetup()
 		creatorActive = false
-		creatorData = {}
+		creatorInfo = {}
 		creatorMembers = {}
 	end
 
 	local classSetupObject = setmetatable({
 			register = function()
 				-- We copy our tables
-				local _creatorData = _duplicateTable(creatorData)
+				local _creatorInfo = _duplicateTable(creatorInfo)
 				local _creatorMembers = _duplicateTable(creatorMembers)
 
 				-- Reset the setup variables
 				resetSetup()
 				
 				-- Setup our class
-				_setupClass(_creatorData, _creatorMembers)
+				_setupClass(_creatorInfo, _creatorMembers)
 			end
 		}, {
 			__call = function(self, data)
 				if data then
-					local wrapper = _pushMembersModifier(data, {})
+					local wrapper = pushMembersModifier(data, {})
 
-					creatorMembers = _assembleMembers(wrapper)
+					creatorMembers = assembleMembers(wrapper)
 				end
 
 				self.register()
@@ -1252,7 +1245,7 @@ do
 
 			-- called when adding modifiers
 			__index = function(self, key)
-				local t = _recursiveModifiers(key, function(modifierTable, mKey, mValue) -- found
+				local t = recursiveModifiers(key, function(modifierTable, mKey, mValue) -- found
 					creatorMembers[mKey] = {value = mValue, modifiers = _duplicateTable(modifierTable)}
 				end, function(mKey) -- not found, return member
 					return creatorMembers[mKey] and creatorMembers[mKey].value
@@ -1272,14 +1265,14 @@ do
 		function class(newClassName, opt)
 			if creatorActive then
 				local err = string.format("invalid class setup: class %s: you still haven't finished setting up class %s",
-					newClassName, creatorData["name"])
+					newClassName, creatorInfo["name"])
 				resetSetup()
 				error(err)
 			end
 
 			-- Set data
 			creatorActive = true
-			creatorData["name"] = newClassName
+			creatorInfo["name"] = newClassName
 
 			-- Parse options for alternative syntax
 			if opt then
@@ -1291,10 +1284,10 @@ do
 
 		function extends(s)
 			if creatorActive then
-				creatorData["extends"] = creatorData["extends"] or {}
+				creatorInfo["extends"] = creatorInfo["extends"] or {}
 				
-				for parent in string.gmatch(s, "([^,^%s.]+)") do
-					table.insert(creatorData["extends"], parent)
+				for parent in string.gmatch(s, "([^,^%s*]+)") do
+					table.insert(creatorInfo["extends"], parent)
 				end
 			else
 				error("extending on nothing - make sure you called class() first")
@@ -1314,10 +1307,6 @@ do
 				end
 			end
 
-			if options["final"] then
-				final()
-			end
-
 			return classSetupObject
 		end
 	end
@@ -1328,7 +1317,7 @@ do
 				error("running public keyword without value")
 			end
 
-			return _pushMembersModifier(rawMemberTable, {_public_})
+			return pushMembersModifier(rawMemberTable, {_public_})
 		end
 
 		function protected(rawMemberTable)
@@ -1336,7 +1325,7 @@ do
 				error("running protected keyword without value")
 			end
 
-			return _pushMembersModifier(rawMemberTable, {_protected_})
+			return pushMembersModifier(rawMemberTable, {_protected_})
 		end
 
 		function private(rawMemberTable)
@@ -1344,7 +1333,7 @@ do
 				error("running private keyword without value")
 			end
 
-			return _pushMembersModifier(rawMemberTable, {_private_})
+			return pushMembersModifier(rawMemberTable, {_private_})
 		end
 
 		function static(rawMemberTable)
@@ -1352,7 +1341,7 @@ do
 				error("running static keyword without value")
 			end
 
-			return _pushMembersModifier(rawMemberTable, {_static_})
+			return pushMembersModifier(rawMemberTable, {_static_})
 		end
 		
 		function abstract(rawMemberTable)
@@ -1360,7 +1349,15 @@ do
 				error("running abstract keyword without value")
 			end
 			
-			return _pushMembersModifier(rawMemberTable, {_abstract_})
+			return pushMembersModifier(rawMemberTable, {_abstract_})
+		end
+		
+		function const(rawMemberTable)
+			if not rawMemberTable then
+				error("running const keyword without value")
+			end
+			
+			return pushMembersModifier(rawMemberTable, {_const_})
 		end
 		
 		function meta(rawMemberTable)
@@ -1373,23 +1370,7 @@ do
 				t["___meta" .. k] = v
 			end
 			
-			return _pushMembersModifier(t, {_meta_, _public_})
-		end
-	end
-
-	do -- Either to set modifiers of a class, OR to set modifiers of a class member
-		function final(rawMemberTable)
-			if rawMemberTable then -- We're making class members final
-				return _pushMembersModifier(rawMemberTable, {_final_})
-			else -- We're making a class final
-				if not creatorData then
-					error("setting final on nothing")
-				end
-
-				creatorData["final"] = true
-				
-				return classSetupObject
-			end
+			return pushMembersModifier(t, {_meta_, _public_})
 		end
 	end
 end
