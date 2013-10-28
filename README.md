@@ -1,6 +1,8 @@
 SIMPLOO - The simple lua object-oriented programming library!
 =====
 
+### This library is a work in progress. There are no guarantees that it's bug free.
+
 #### Introduction
 
 SIMPLOO is a library designed to simplify object-oriented programming in lua.
@@ -41,3 +43,4 @@ https://github.com/maurits150/simploo/wiki
 #### Feedback
 
 Any feedback will be appreciated.
+You can post an issue or pull request on github, or contact me using the information on my profile page.
