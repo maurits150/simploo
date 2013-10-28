@@ -44,6 +44,10 @@ local _finalizers_ = {"__finalize"}
 local _constructors_ = {"__construct"}
 local _declarers_ = {"__declare"}
 
+function isclass(v)
+	return getmetatable(v) == SIMPLOO.CLASS_MT
+end
+
 local function _duplicateTable(tbl, _lookup)
 	local copy = {}
 	
@@ -158,7 +162,6 @@ local function _setGlobal(name, value)
 				
 				lastTable = _G[classTable]
 			elseif i == #classTableChain then
-				--print(name, classTable, value)
 				lastTable[classTable] = value
 			else
 				if not lastTable[classTable] then
@@ -194,10 +197,6 @@ local function _getFunctionArgs(func)
 	return strargs
 end
 
-function isclass(v)
-	return getmetatable(v) == SIMPLOO.CLASS_MT
-end
-
 local function realpath(p)
 	return 
 		p:gsub("[^/]+/%.%./","/")
@@ -213,18 +212,15 @@ local function classfunction(key, value, static, scope, child)
 		
 		local prev_self = self
 		local prev_scope = __scope
-		local prev_static_context = __static_context
 		
 		self = child
 		__scope = scope
-		__static_context = static
 		
 		k, l, m, n, o, p, q, r, s, t =
 			value(a, b, c, d, e, f, g, h, i, j)
 		
 		self = prev_self
 		__scope = prev_scope
-		__static_context = prev_static_context
 		
 		-- I can't find a faster way to trim trailing nils.. so enjoy this hacky code!
 		if t ~= nil then
@@ -365,11 +361,6 @@ SIMPLOO.CLASS_MT = {
 				end
 			end
 			
-			-- Redirect statics
-			if invokedOn.___instance and static then -- Redirect to global class.
-				
-			end
-			
 			if access == _public_ then
 				-- continue...
 			elseif access == _protected_ then
@@ -414,8 +405,8 @@ SIMPLOO.CLASS_MT = {
 				
 				if custval then
 					return custval
-				else
-					error("key not found: " .. mKey)
+				-- else
+					-- error("key not found: " .. mKey)
 				end
 			end
 		end
@@ -704,10 +695,8 @@ do
 			end
 			
 			if self.___abstract then
-				error(string.format("cannot instantiate class %s: class is abstract", self:get_name()))
+				SIMPLOO.FUNCTIONS.____find_unimplemented_abstract(self)
 			end
-			
-			SIMPLOO.FUNCTIONS.____do_check_unimplemented_abstract(self)
 			
 			-- Duplicate
 			local instance = SIMPLOO.FUNCTIONS.___instantiate(self)
@@ -771,19 +760,15 @@ do
 				end
 			else
 				-- Lua 5.2 will call this in __gc even when we're working with a class
-				-- so let's just return false here
-				--error("calling ___finalize on non-instance")
-				
-				return false
 			end
 		end
 
 		function SIMPLOO.FUNCTIONS:____do_declare()
 			if not self.___instance then
 				-- We don't have to declare our parents again!
-				--for parentName, parentObject in pairs(self.___parents) do
-				--	parentObject:____do_declare()
-				--end
+				--	for parentName, parentObject in pairs(self.___parents) do
+				--		parentObject:____do_declare()
+				--	end
 			
 				for _, name in pairs(_declarers_) do
 					if self:____member_isvalid(name)
@@ -812,11 +797,11 @@ do
 		end
 		
 		function SIMPLOO.FUNCTIONS:____do_add_finalizer()
-			--[[
-			-- We don't loop through all parents here, only the lowest child needs this hook.
-			for parentName, parentObject in pairs(self.___parents) do
-				parentObject:____do_add_finalizer()
-			end]]
+			-- We don't loop through all parents here.
+			-- The entrypoint class only needs this.
+			--	for parentName, parentObject in pairs(self.___parents) do
+			--		parentObject:____do_add_finalizer()
+			--	end
 
 			-- Setup the finalizer proxy for lua 5.1
 			if _VERSION == "Lua 5.1" then
@@ -830,8 +815,7 @@ do
 							local tbl = getmetatable(self).__class
 							
 							if tbl then
-								-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
-								-- So we catch them by hand and print them!
+								-- Lua doesn't really like errors happening inside __gc, so we catch them manually.
 								local s, e = pcall(function()
 									tbl:___finalize()
 								end)
@@ -842,7 +826,7 @@ do
 										tbl.___name, e))
 								end
 							else
-								--print("no tbl found in __gc of class.. what!!?") 
+								--print("__gc error: missing __class!?!") 
 							end
 						end
 						
@@ -852,10 +836,9 @@ do
 					return
 				end
 			else
-				local mt = getmetatable(self)
-				
 				for _, name in pairs(_finalizers_) do -- Only adding finalizers when we actually have one defined.
 					if self.___members[name] then
+						local mt = getmetatable(self)
 						mt.__gc = function(self)
 							-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
 							-- So we catch them by hand and print them!
@@ -902,7 +885,7 @@ do
 		end
 	end		
 
-	-- Build the registry and the reverse-registry.
+	-- Build the registry.
 	do
 		function SIMPLOO.FUNCTIONS:____do_build_registry()
 			local registryVars = {}
@@ -934,7 +917,7 @@ do
 	end
 	
 	do
-		function SIMPLOO.FUNCTIONS:____do_check_unimplemented_abstract()
+		function SIMPLOO.FUNCTIONS:____find_unimplemented_abstract()
 			for memberName, locationClass in pairs(self.___registry) do
 				if isclass(locationClass) then
 					local member = locationClass.___members[memberName]

@@ -21,6 +21,7 @@ SIMPLOO is a library designed to simplify object-oriented programming in lua.
 
 * This library uses the following globals: SIMPLOO, null, class, extends, options, public, protected, private, static, abstract, meta, const, isclass
 * There are no guarantees that this library behaves exactly like other object oriented programming languages.
+* Features that are not documented on the wiki may be added or removed at any time.
 
 #### Requirements
 
