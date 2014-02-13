@@ -52,7 +52,7 @@ local function _duplicateTable(tbl, _lookup)
 	local copy = {}
 	
 	for i, v in pairs(tbl) do
-		if not _notable and type(v) == "table" then
+		if type(v) == "table" then
 			_lookup = _lookup or {}
 			_lookup[tbl] = copy
 
@@ -84,35 +84,26 @@ end
 local function _createClassInstance(tbl, _lookup)
 	local copy = {}
 	for strKey, tblValue in pairs(tbl) do
-		if strKey == "___members" or strKey == "___parents" then
+		if strKey == "___attributes" or strKey == "___parents" then
 			_lookup = _lookup or {}
 			_lookup[tbl] = copy
 
 			if _lookup[tblValue] then
-				copy[strKey] = _lookup[tblValue] -- we already copied this table. reuse the copy.
+				copy[strKey] = _lookup[tblValue] -- Reuse previous reference.
 			else
-				if strKey == "___members" then -- deepcopy members
+				if strKey == "___attributes" then
 					copy[strKey] = {}
 					
-					for memberName, memberData in pairs(tblValue) do
-						copy[strKey][memberName] = {}
-						
-						for memberKey, memberValue in pairs(memberData) do
-							if memberKey == "value" then
-								if not memberData.static then
-									if type(memberValue) == "table" then
-										copy[strKey][memberName][memberKey] = _duplicateTable(memberValue, _lookup)
-									else
-										copy[strKey][memberName][memberKey] = rawget(memberData, memberKey)
-									end
-								end
-							else
-								copy[strKey][memberName][memberKey] = rawget(memberData, memberKey)
-							end
+					for mKey, mTbl in pairs(tblValue) do
+						copy[strKey][mKey] = {}
+						if type(copy[strKey][mKey]["value"]) == "table" then
+							copy[strKey][mKey]["value"] = _duplicateTable(mTbl["value"], _lookup)
+						else
+							copy[strKey][mKey]["value"] = rawget(mTbl, "value")
 						end
 					end
 				elseif strKey == "___parents" then
-					copy[strKey] = _createClassInstance(tblValue, _lookup) -- not yet copied. copy it.
+					copy[strKey] = _createClassInstance(tblValue, _lookup)
 				end
 			end
 		elseif strKey == "___registry" or strKey == "___cache" then
@@ -122,16 +113,9 @@ local function _createClassInstance(tbl, _lookup)
 		end
 	end
 
-	if debug then -- bypasses __metatable
-		local mt = debug.getmetatable(tbl)
-		if mt then
-			debug.setmetatable(copy, mt)
-		end
-	else -- oh well...
-		local mt = getmetatable(tbl)
-		if mt then
-			setmetatable(copy, mt)
-		end
+	local mt = getmetatable(tbl)
+	if mt then
+		setmetatable(copy, mt)
 	end
 
 	return copy
@@ -335,10 +319,11 @@ SIMPLOO.CLASS_MT = {
 		local locationOf = invokedOn.___registry[mKey]
 		
 		if isclass(locationOf) then
-			local access = locationOf.___members[mKey].access
-			local static = locationOf.___members[mKey].static
-			local value = locationOf.___members[mKey].value
-			local isfunc = locationOf.___members[mKey].isfunc
+			local value = locationOf.___attributes[mKey]["value"]
+			
+			local access = locationOf:get_class().___attributes[mKey]["properties"].access
+			local static = locationOf:get_class().___attributes[mKey]["properties"].static
+			local isfunc = locationOf:get_class().___attributes[mKey]["properties"].isfunc
 			
 			-- ...
 			
@@ -426,11 +411,12 @@ SIMPLOO.CLASS_MT = {
 		local locationOf = invokedOn.___registry[mKey]
 		
 		if isclass(locationOf) then
-			local access = locationOf.___members[mKey].access
-			local static = locationOf.___members[mKey].static
-			local value = locationOf.___members[mKey].value
-			local const = locationOf.___members[mKey].const
-			local isfunc = locationOf.___members[mKey].isfunc
+			local value = locationOf.___attributes[mKey]["value"]
+			
+			local access = locationOf:get_class().___attributes[mKey]["properties"].access
+			local static = locationOf:get_class().___attributes[mKey]["properties"].static
+			local const = locationOf:get_class().___attributes[mKey]["properties"].const
+			local isfunc = locationOf:get_class().___attributes[mKey]["properties"].isfunc
 			
 			-- ...
 			if const then
@@ -491,7 +477,7 @@ SIMPLOO.CLASS_MT = {
 				end
 			end
 
-			locationOf.___members[mKey].value = mValue
+			locationOf.___attributes[mKey]["value"] = mValue
 			
 			return
 		elseif locationOf == "?" then
@@ -694,9 +680,8 @@ do
 				error("you cannot instantiate an instance!")
 			end
 			
-			if self.___abstract then
-				SIMPLOO.FUNCTIONS.____find_unimplemented_abstract(self)
-			end
+			SIMPLOO.FUNCTIONS.____find_unimplemented_abstract(self)
+			
 			
 			-- Duplicate
 			local instance = SIMPLOO.FUNCTIONS.___instantiate(self)
@@ -785,9 +770,11 @@ do
 		
 		
 		function SIMPLOO.FUNCTIONS:____do_update_functions(_child)
-			for mKey, mData in pairs(self.___members) do
-				if mData.isfunc then
-					mData.value = classfunction(mKey, mData.rawvalue, mData.static, self, _child or self)
+			for mKey, mTbl in pairs((self:get_class() or self).___attributes) do
+				local tblProperties = mTbl["properties"]
+				
+				if tblProperties.isfunc then
+					self.___attributes[mKey]["value"] = classfunction(mKey, tblProperties.rawvalue, tblProperties.static, self, _child or self)
 				end
 			end
 			
@@ -806,7 +793,7 @@ do
 			-- Setup the finalizer proxy for lua 5.1
 			if _VERSION == "Lua 5.1" then
 				for _, name in pairs(_finalizers_) do -- Only adding finalizers when we actually have one defined.
-					if self.___members[name] then
+					if self.___attributes[name] then
 						local proxy = newproxy(true)
 						local mt = getmetatable(proxy)
 						mt.MetaName = "SimplooGC"
@@ -837,7 +824,7 @@ do
 				end
 			else
 				for _, name in pairs(_finalizers_) do -- Only adding finalizers when we actually have one defined.
-					if self.___members[name] then
+					if self.___attributes[name] then
 						local mt = getmetatable(self)
 						mt.__gc = function(self)
 							-- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
@@ -867,11 +854,11 @@ do
 		end
 
 		function SIMPLOO.CLASS_FUNCTIONS:____member_getluatype(memberName)
-			return type(self.___registry[memberName] and self.___registry[memberName].___members[memberName].value)
+			return type(self.___registry[memberName] and self.___registry[memberName].___attributes[memberName]["value"])
 		end
 		
 		function SIMPLOO.CLASS_FUNCTIONS:____member_get(memberName)
-			return self.___registry[memberName] and self.___registry[memberName].___members[memberName]
+			return self.___registry[memberName] and self.___registry[memberName].___attributes[memberName]
 		end
 
 		function SIMPLOO.CLASS_FUNCTIONS:____member_getargs(memberName)
@@ -906,7 +893,7 @@ do
 				end
 			end
 			
-			for mName, mData in pairs(self.___members) do
+			for mName, mData in pairs(self.___attributes) do
 				registryVars[mName] = self
 			end
 			
@@ -920,8 +907,8 @@ do
 		function SIMPLOO.FUNCTIONS:____find_unimplemented_abstract()
 			for memberName, locationClass in pairs(self.___registry) do
 				if isclass(locationClass) then
-					local member = locationClass.___members[memberName]
-					if member.abstract then
+					local member = locationClass.___attributes[memberName]
+					if member["properties"].abstract then
 						local memberType = locationClass:____member_getluatype(memberName)
 						local err = string.format("cannot instantiate class %s: class has unimplemented abstract member ",
 							self:get_name())
@@ -998,11 +985,10 @@ local function _setupClass(creatorInfo, creatorMembers)
 	
 	local newClass = {}
 	newClass.___name = className
-	newClass.___members = {}
+	newClass.___attributes = {}
 	newClass.___parents = {}
 	newClass.___registry = {}
 	newClass.___cache = {}
-	newClass.___abstract = false
 	newClass.___setupLocation = setupLocation
 	
 	do
@@ -1023,22 +1009,19 @@ local function _setupClass(creatorInfo, creatorMembers)
 				false;
 			local mAbstract = mData.modifiers[_abstract_] and true or false;
 			local mMeta = mData.modifiers[_meta_] and true or false;
-			
-			newClass.___members[mKey] = {
-				value = mValue, -- will be handled by :____do_update_functions
+			-- print(mKey)
+			newClass.___attributes[mKey] = {}
+			newClass.___attributes[mKey]["value"] = mValue
+			newClass.___attributes[mKey]["properties"] = {
 				access = mAccess,
 				static = mStatic,
 				const = mConst,
 				abstract = mAbstract,
 				isfunc = isFunc,
-				rawvalue = mValue,
 				meta = mMeta,
+				rawvalue = mValue,
 				args = isFunc and _getFunctionArgs(mValue), -- used in ____member_getargs
 			}
-			
-			if mAbstract then
-				newClass.___abstract = true
-			end
 		end
 	end
 	
@@ -1056,18 +1039,14 @@ local function _setupClass(creatorInfo, creatorMembers)
 		newClass.___instance = false
 	end
 	
-	newClass.new = function(arg1, ...)
+	newClass.new = function(...)
 		local arguments = {...}
 		
-		if arg1 == newClass then
-			-- Strip out the first argument
-			arguments = {select(2, ...)}
-			
-			-- Allowing this now!
-			-- error("calling new() with ':'' instead of '.'?? or are you passsing yourself as the first argument (you can use 'self' for that in your code)")
+		if arguments[1] == newClass then
+			return SIMPLOO.FUNCTIONS.new(newClass, select(2, ...))
 		end
 		
-		return SIMPLOO.FUNCTIONS.new(newClass, arg1, ...)
+		return SIMPLOO.FUNCTIONS.new(newClass, ...)
 	end
 	
 	-- Initialize metatable
@@ -1354,5 +1333,3 @@ do
 		end
 	end
 end
-
-
