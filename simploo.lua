@@ -172,7 +172,7 @@ local function _getFunctionArgs(func)
 				strargs = strargs .. debug.getlocal(func, i) .. (i < dbg.nparams and ", " or "")
 			end
 		else
-			return {"no dbg or dbg.nparams for " .. func}
+			return {"no dbg or dbg.nparams for " .. tostring(func)}
 		end
 	else
 		strargs = "unknown.. no debug library!"
