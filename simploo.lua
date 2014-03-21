@@ -235,14 +235,16 @@ end
 
 SIMPLOO.CLASS_MT = {
 	__tostring = function(self)
-		
 		-- We disable the metamethod on ourselfs, so we can tostring ourselves without getting into an infinite loop.
 		-- And no, rawget doesn't work because we want to call a metamethod on ourself: __tostring
 		local __tostring = getmetatable(self).__tostring
 		getmetatable(self).__tostring = nil
-
+		
 		-- Grap the definition string.
 		local origstr = string.format("LuaClass: %s <%s> {%s}", self:get_name(), self.___instance and "instance" or "class", tostring(self):sub(8))
+		
+		-- Enable our metamethod again.
+		getmetatable(self).__tostring = __tostring
 		
 		-- see if we have a custom tostring, this is below the actual tostring because we wanna be able to use the original tostring inside the error
 		if self:____member_isvalid("___meta__tostring") then
@@ -251,9 +253,6 @@ SIMPLOO.CLASS_MT = {
 				return custstr
 			end
 		end
-		
-		-- Enable our metamethod again.
-		getmetatable(self).__tostring = __tostring
 		
 		-- Return string.
 		return origstr
@@ -1335,3 +1334,20 @@ do
 		end
 	end
 end
+
+class "Test" {
+	meta {
+		__tostring = function(self)
+			return "DERP";
+		end;
+	}
+}
+
+local instance = Test.new();
+local instance2 = Test.new();
+
+print(instance)
+print(instance)
+print(instance)
+print(instance)
+print(instance)
