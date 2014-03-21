@@ -51,18 +51,18 @@ end
 local function _duplicateTable(tbl, _lookup)
 	local copy = {}
 	
-	for i, v in pairs(tbl) do
+	for k, v in pairs(tbl) do
 		if type(v) == "table" then
 			_lookup = _lookup or {}
 			_lookup[tbl] = copy
 
 			if _lookup[v] then
-				copy[i] = _lookup[v] -- we already copied this table. reuse the copy.
+				copy[k] = _lookup[v] -- we already copied this table. reuse the copy.
 			else
-				copy[i] = _duplicateTable(v,_lookup) -- not yet copied. copy it.
+				copy[k] = _duplicateTable(v, _lookup) -- not yet copied. copy it.
 			end
 		else
-			copy[i] = rawget(tbl, i)
+			copy[k] = rawget(tbl, k)
 		end
 	end
 	
@@ -96,7 +96,7 @@ local function _createClassInstance(tbl, _lookup)
 					
 					for mKey, mTbl in pairs(tblValue) do
 						copy[strKey][mKey] = {}
-						if type(copy[strKey][mKey]["value"]) == "table" then
+						if type(mTbl["value"]) == "table" then
 							copy[strKey][mKey]["value"] = _duplicateTable(mTbl["value"], _lookup)
 						else
 							copy[strKey][mKey]["value"] = rawget(mTbl, "value")
@@ -770,8 +770,10 @@ do
 		
 		
 		function SIMPLOO.FUNCTIONS:____do_update_functions(_child)
-			for mKey, mTbl in pairs((self:get_class() or self).___attributes) do
-				local tblProperties = mTbl["properties"]
+			local location = self.___instance and self:get_class() or self
+			
+			for mKey, mTbl in pairs(location.___attributes) do
+				local tblProperties = mTbl["properties"];
 				
 				if tblProperties.isfunc then
 					self.___attributes[mKey]["value"] = classfunction(mKey, tblProperties.rawvalue, tblProperties.static, self, _child or self)
