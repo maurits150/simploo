@@ -1334,20 +1334,3 @@ do
 		end
 	end
 end
-
-class "Test" {
-	meta {
-		__tostring = function(self)
-			return "DERP";
-		end;
-	}
-}
-
-local instance = Test.new();
-local instance2 = Test.new();
-
-print(instance)
-print(instance)
-print(instance)
-print(instance)
-print(instance)
