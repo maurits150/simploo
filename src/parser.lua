@@ -1,7 +1,7 @@
 parser = {}
 simploo.parser = parser
 
-parser.builder = false
+parser.instance = false
 parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract"}
 
 -- Parses the simploo class syntax into the following table format:
@@ -20,8 +20,7 @@ function parser:new()
     local object = {}
     object.className = ""
     object.classParentNames = {}
-    object.classFunctions = {}
-    object.classVariables = {}
+    object.classMembers = {}
 
     object.onFinishedData = false
     object.onFinished = function(self, output)
@@ -52,6 +51,7 @@ function parser:new()
     end
 
     function object:extends(parentNamesString)
+    pt(self.classParentNames)
         for className in string.gmatch(parentNamesString, "([^,^%s*]+)") do
             -- Update class cache
             table.insert(self.classParentNames, className)
@@ -69,8 +69,7 @@ function parser:new()
         local output = {}
         output.name = self.className
         output.parentNames = self.classParentNames
-        output.functions = self.classFunctions
-        output.variables = self.classVariables
+        output.members = self.classMembers
 
         self:onFinished(output)
     end
@@ -96,15 +95,14 @@ function parser:new()
 
     -- Adds a member to the class definition
     function object:addMember(memberName, memberValue, modifiers)
-        local memberType = (type(memberValue) == "function") and "classFunctions" or "classVariables"
-
-        self[memberType][memberName] = self[memberType][memberName] or {
+        self['classMembers'][memberName] = {
             value = memberValue,
+            valuetype = type(memberValue),
             modifiers = {}
         }
 
         for _, modifier in pairs(modifiers or {}) do
-            self[memberType][memberName].modifiers[modifier] = true
+            self['classMembers'][memberName].modifiers[modifier] = true
         end
     end
 
@@ -135,27 +133,24 @@ function parser:new()
 end
 
 function class(className, classOperation)
-    if not parser.builder then
-        parser.builder = parser:new(onFinished)
-        parser.builder:setOnFinished(function(self, output)
-            parser.builder = nil
+    if not parser.instance then
+        parser.instance = parser:new(onFinished)
+        parser.instance:setOnFinished(function(self, output)
+            simploo.instancer:initClass(output)
+
+            parser.instance = nil
         end)
     end
 
-    local parser = parser.builder:class(className, classOperation)
-    parser:setOnFinished(function(self, output)
-        simploo.instancer:addClass(output)
-    end)
-
-    return parser
+    return parser.instance:class(className, classOperation)
 end
 
 function extends(parentNames)
-   if not parser.builder then
+   if not parser.instance then
         error("calling extends without calling class first")
     end
 
-    return parser.builder:extends(parentNames)
+    return parser.instance:extends(parentNames)
 end
 
 for _, modifierName in pairs(parser.modifiers) do
@@ -166,3 +161,5 @@ for _, modifierName in pairs(parser.modifiers) do
         return body
     end
 end
+
+

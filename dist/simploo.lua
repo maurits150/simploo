@@ -55,14 +55,14 @@ function util.duplicateTable(tbl, lookup)
     local copy = {}
     
     for k, v in pairs(tbl) do
-        if type(v) == "table" then
+        if k ~= "classFormat" and type(v) == "table" then
             lookup = lookup or {}
             lookup[tbl] = copy
 
             if lookup[v] then
                 copy[k] = lookup[v] -- we already copied this table. reuse the copy.
             else
-                copy[k] = _duplicateTable(v, lookup) -- not yet copied. copy it.
+                copy[k] = util.duplicateTable(v, lookup) -- not yet copied. copy it.
             end
         else
             copy[k] = rawget(tbl, k)
@@ -84,6 +84,44 @@ function util.duplicateTable(tbl, lookup)
     return copy
 end
 
+
+function util.addGcCallback(object, callback)
+    if not _VERSION or _VERSION == "Lua 5.1" then
+        local proxy = newproxy(true)
+        local mt = getmetatable(proxy) -- Lua 5.1 doesn't allow __gc on tables. This function is a hidden lua feature which creates an empty userdata object instead, which allows the usage of __gc.
+        mt.MetaName = "SimplooGC" -- This is used internally when printing or displaying info.
+        mt.__class = object -- Store a reference to our object, so the userdata object lives as long as the object does.
+        mt.__gc = function(self)
+            -- Lua < 5.1 flips out when errors happen inside a userdata __gc, so we catch and print them!
+            local success, error = pcall(function()
+                callback(object)
+            end)
+
+            if not success then
+                print(string.format("ERROR: class %s: error __gc function: %s", object, error))
+            end
+        end
+        
+        rawset(object, "___gc", proxy)
+    else
+        local mt = getmetatable(object)
+        mt.__gc = function(self)
+            -- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
+            -- So we catch them by hand and print them!
+            local success, error = pcall(function()
+                callback(object)
+            end)
+
+            if not success then
+                print(string.format("ERROR: %s: error __gc function: %s", self, error))
+            end
+        end
+        
+        return
+    end
+end
+
+
 ----
 ---- parser.lua
 ----
@@ -91,7 +129,7 @@ end
 parser = {}
 simploo.parser = parser
 
-parser.builder = false
+parser.instance = false
 parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract"}
 
 -- Parses the simploo class syntax into the following table format:
@@ -110,18 +148,19 @@ function parser:new()
     local object = {}
     object.className = ""
     object.classParentNames = {}
-    object.classFunctions = {}
-    object.classVariables = {}
+    object.classMembers = {}
 
     object.onFinishedData = false
-    object.onFinished = function() end
+    object.onFinished = function(self, output)
+        self.onFinishedData = output
+    end
 
     function object:setOnFinished(fn)
-        self.onFinished = fn
-
-        -- Directly call the finished function if we have a result
         if self.onFinishedData then
-            self:onFinished(self.onFinishedData)
+            -- Directly call the finished function if we already have a result available
+            fn(self, self.onFinishedData)
+        else 
+            self.onFinished = fn
         end
     end
 
@@ -140,6 +179,7 @@ function parser:new()
     end
 
     function object:extends(parentNamesString)
+    pt(self.classParentNames)
         for className in string.gmatch(parentNamesString, "([^,^%s*]+)") do
             -- Update class cache
             table.insert(self.classParentNames, className)
@@ -157,11 +197,9 @@ function parser:new()
         local output = {}
         output.name = self.className
         output.parentNames = self.classParentNames
-        output.functions = self.classFunctions
-        output.variables = self.classVariables
+        output.members = self.classMembers
 
         self:onFinished(output)
-        self.onFinishedData = output
     end
 
     -- Recursively compile and pass through all members and modifiers found in a tree like structured table.
@@ -185,15 +223,14 @@ function parser:new()
 
     -- Adds a member to the class definition
     function object:addMember(memberName, memberValue, modifiers)
-        local memberType = (type(memberValue) == "function") and "classFunctions" or "classVariables"
-
-        self[memberType][memberName] = self[memberType][memberName] or {
+        self['classMembers'][memberName] = {
             value = memberValue,
+            valuetype = type(memberValue),
             modifiers = {}
         }
 
         for _, modifier in pairs(modifiers or {}) do
-            self[memberType][memberName].modifiers[modifier] = true
+            self['classMembers'][memberName].modifiers[modifier] = true
         end
     end
 
@@ -224,25 +261,24 @@ function parser:new()
 end
 
 function class(className, classOperation)
-    if not parser.builder then
-        parser.builder = parser:new(onFinished)
-        parser.builder:setOnFinished(function(self, output)
-            parser.builder = nil
+    if not parser.instance then
+        parser.instance = parser:new(onFinished)
+        parser.instance:setOnFinished(function(self, output)
+            simploo.instancer:initClass(output)
+
+            parser.instance = nil
         end)
     end
 
-    local parser = parser.builder:class(className, classOperation)
-    parser:setOnFinished(function(self, output)
-        simploo.instancer:addClass(output)
-    end)
+    return parser.instance:class(className, classOperation)
 end
 
 function extends(parentNames)
-   if not parser.builder then
+   if not parser.instance then
         error("calling extends without calling class first")
     end
 
-    return parser.builder:extends(parentNames)
+    return parser.instance:extends(parentNames)
 end
 
 for _, modifierName in pairs(parser.modifiers) do
@@ -255,6 +291,8 @@ for _, modifierName in pairs(parser.modifiers) do
 end
 
 
+
+
 ----
 ---- instancer.lua
 ----
@@ -264,81 +302,124 @@ simploo.instancer = instancer
 
 instancer.classes = {}
 
-function instancer:addClass(classFormat)
-    self.classes[classFormat.name] = classFormat
+function instancer:initClass(classFormat)
+    local instance = {}
 
-    self:initClass(classFormat.name)
-end
+    -- Base variables
+    instance.className = classFormat.name
+    instance.classFormat = classFormat -- Exception was added in duplicateTable so this is always referenced, never copied
+    instance.members = {}
 
-function instancer:initClass(className)
-    local object = {}
-    local meta = {}
-    local instance = setmetatable(object, meta)
-
-    function object:new()
-        local self = self or instance -- reverse compatibility with dotnew calls as well as colonnew calls
-
-        return simploo.util.duplicateTable(self)
+    -- Base methods
+    function instance:clone()
+        local clone = simploo.util.duplicateTable(self)
+        return clone
     end
 
-    _G[className] = instance
+    function instance:new()
+        -- Clone and construct new instance
+        local self = self or instance -- Reverse compatibility with dotnew calls as well as colonnew calls
+        local copy = self:clone()
+
+        for memberName, memberData in pairs(copy.members) do
+            if memberData.modifiers.abstract then
+                error("class %s: can not instantiate because it has unimplemented abstract members")
+            end
+        end
+
+        simploo.util.addGcCallback(copy, function()
+            copy:__finalize()
+        end)
+
+        copy:__construct()
+
+        return copy
+    end
+
+    -- Placeholder methods
+    function instance:__declare() end
+    function instance:__construct() end
+    function instance:__finalize() end
+
+    -- Assign parent instances
+    for _, parentName in pairs(classFormat.parentNames) do
+        instance[parentName] = _G[parentName] -- No clone here, already handled by :new()
+    end
+
+    -- Setup members
+    for _, parentName in pairs(classFormat.parentNames) do
+        -- Add variables from parents to child
+        for memberName, memberData in pairs(instance[parentName].classFormat.members) do
+            local isAmbiguousMember = instance.members[memberName] and true or false
+            instance.members[memberName] = instance[parentName].members[memberName]
+            instance.members[memberName].ambiguous = isAmbiguousMember
+        end
+    end
+
+    for memberName, memberData in pairs(classFormat.members) do
+        instance.members[memberName] = {
+            value = memberData.value,
+            modifiers = memberData.modifiers or {}
+        }
+    end
+
+    -- Meta methods
+    local meta = {}
+
+    function meta:__index(key)
+        if not self.members[key] then
+            return
+        end
+
+        if self.members[key].ambiguous then
+            error(string.format("class %s: call to member %s is ambigious as it is present in both parents", self.className, key))
+        end
+
+        if self.members[key].modifiers.static then
+            return _G[self.className][key]
+        end
+
+        return self.members[key].value
+    end
+
+    function meta:__newindex(key, value)
+        if not self.members[key] then
+            return
+        end
+
+        if self.members[key].modifiers.const then
+            error(string.format("class %s: can not modify const variable %s", self.className, key))
+        end
+
+        if self.members[key].modifiers.static then
+            _G[self.className][key] = value
+
+            return
+        end
+
+        self.members[key].value = value
+    end
+
+    -- Add meta functions
+    local metaFunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
+
+    for _, metaName in pairs(metaFunctions) do
+        local fnOriginal = meta[metaName]
+
+        meta[metaName] = function(self, ...)
+            return (fnOriginal and fnOriginal(self, ...)) or (self.members[metaName] and self[metaName](self, ...) or nil)
+        end
+    end
+
+    setmetatable(instance, meta)
+
+    -- Initialize the instance for use
+    self:initInstance(instance)
 end
 
-class "Asd" {
-    protected {
-        sugarLevel = 11.2;
-    };
-}
+function instancer:initInstance(instance)
+    instance = instance:clone()
+    instance:__declare()
 
-class "Test" extends "Asd" {
-    public {
-        co2Level = 3.2;
-
-        static {
-            abstract {
-                derpLevel = 1337;
-            };
-        };
-    };
-
-    private {
-        asdLevel = 11.2;
-    };
-}
-
-local instance = Test.new()
-print("instance: ", instance)
-
---[[
-local s = os.clock()
-
-class "Parent" {
-    protected {
-        var = 0;
-    };
-    
-    public {
-        static {
-            test2 = function(self)
-            end;
-        }
-    };
-
-    meta {
-        __tostring = function()
-            return "ParentTestClass"
-        end
-    }
-}
-
-class "Test" extends "Parent" {
-    public {
-        test = function(self)
-            self:test2()
-            
-            self.var = self.var + 1
-        end;
-    };
-}
-print(os.clock() - s)
-]]
+    _G[instance.className] = instance
+end

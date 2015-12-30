@@ -88,9 +88,19 @@ function menu:watch()
 			if file then
 				local content = file:read("*all")
 
-				if lastContent[name] ~= content then
+				if not lastContent[name] then -- First boot
+					lastContent[name] = content
+				elseif lastContent[name] ~= content then
+					for i=0, 10 do
+						print()
+					end
+					
 					local status, err = pcall(function()
-						dofile("src/" .. name)
+						local files = build:getSourceFiles()
+
+						for k, v in pairs(files) do
+							dofile("src/" .. v)
+						end
 					end)
 
 					if not status then
@@ -126,6 +136,11 @@ function menu:watch()
 
 		lastContent = fileContent
 		]]
+
+		-- Force all discarded instances to be finalized constantly
+        if collectgarbage then
+            collectgarbage()
+        end
 
 		shell:sleep(WATCHER_INTERVAL_MS)
 	end
