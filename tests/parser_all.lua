@@ -1,3 +1,6 @@
+local instancer = simploo.instancer
+simploo.instancer = nil -- Disable the instancer
+
 TestParser = {}
 
 function TestParser:testOutput()
@@ -50,3 +53,5 @@ function TestParser:testOutput()
 end
 
 LuaUnit:run("TestParser")
+
+simploo.instancer = instancer -- Re-enable the instancer

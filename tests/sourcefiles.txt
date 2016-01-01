@@ -1,1 +1,2 @@
-test_parser.lua
+parser_all.lua
+instancer_namespaces.lua

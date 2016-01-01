@@ -130,13 +130,15 @@ parser = {}
 simploo.parser = parser
 
 parser.instance = false
+parser.namespace = ""
+parser.usings = {}
 parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract"}
 
 -- Parses the simploo class syntax into the following table format:
 --
 -- {
 --     name = "ExampleClass",
---     parentNames = {"ExampleParent1", "ExampleParent2"},
+--     parents = {"ExampleParent1", "ExampleParent2"},
 --     functions = {
 --         exampleFunction = {value = function() ... end, modifiers = {public = true, static = true, ...}}
 --     }
@@ -144,11 +146,13 @@ parser.modifiers = {"public", "private", "protected", "static", "const", "meta",
 --         exampleVariablt = {value = 0, modifiers = {public = true, static = true, ...}}
 --     }
 -- }
+
 function parser:new()
     local object = {}
     object.className = ""
-    object.classParentNames = {}
+    object.classparents = {}
     object.classMembers = {}
+    object.classUsings = {}
 
     object.onFinishedData = false
     object.onFinished = function(self, output)
@@ -159,7 +163,7 @@ function parser:new()
         if self.onFinishedData then
             -- Directly call the finished function if we already have a result available
             fn(self, self.onFinishedData)
-        else 
+        else
             self.onFinished = fn
         end
     end
@@ -178,11 +182,10 @@ function parser:new()
         return self
     end
 
-    function object:extends(parentNamesString)
-    pt(self.classParentNames)
-        for className in string.gmatch(parentNamesString, "([^,^%s*]+)") do
+    function object:extends(parentsString)
+        for className in string.gmatch(parentsString, "([^,^%s*]+)") do
             -- Update class cache
-            table.insert(self.classParentNames, className)
+            table.insert(self.classparents, className)
         end
 
         return self
@@ -194,12 +197,25 @@ function parser:new()
             self:addMemberRecursive(classContent)
         end
 
+        if parser.namespace ~= "" then
+            self.className = parser.namespace .. "." .. self.className
+        end
+
+        if parser.usings then
+            self.classUsings = parser.usings
+        end
+
         local output = {}
         output.name = self.className
-        output.parentNames = self.classParentNames
+        output.parents = self.classparents
         output.members = self.classMembers
-
+        output.usings = self.classUsings
+        
         self:onFinished(output)
+    end
+
+    function object:namespace(namespace)
+        parser.namespace = namespace
     end
 
     -- Recursively compile and pass through all members and modifiers found in a tree like structured table.
@@ -260,27 +276,8 @@ function parser:new()
     return setmetatable(object, meta)
 end
 
-function class(className, classOperation)
-    if not parser.instance then
-        parser.instance = parser:new(onFinished)
-        parser.instance:setOnFinished(function(self, output)
-            simploo.instancer:initClass(output)
 
-            parser.instance = nil
-        end)
-    end
-
-    return parser.instance:class(className, classOperation)
-end
-
-function extends(parentNames)
-   if not parser.instance then
-        error("calling extends without calling class first")
-    end
-
-    return parser.instance:extends(parentNames)
-end
-
+-- Add modifiers as global functions
 for _, modifierName in pairs(parser.modifiers) do
     _G[modifierName] = function(body)
         body["__modifiers"] = body["__modifiers"] or {}
@@ -290,7 +287,45 @@ for _, modifierName in pairs(parser.modifiers) do
     end
 end
 
+-- Add additional globals
+function class(className, classOperation)
+    if not parser.instance then
+        parser.instance = parser:new(onFinished)
+        parser.instance:setOnFinished(function(self, output)
+            if simploo.instancer then
+                simploo.instancer:initClass(output)
+            end
 
+            parser.instance = nil
+        end)
+    end
+
+    return parser.instance:class(className, classOperation)
+end
+
+function extends(parents)
+   if not parser.instance then
+        error("calling extends without calling class first")
+    end
+
+    return parser.instance:extends(parents)
+end
+
+function namespace(namespaceName)
+    parser.namespace = namespaceName
+
+    parser.usings = {}
+end
+
+function using(namespaceName)
+    for _, v in pairs(parser.usings) do
+        if v == parser.usings then
+            return
+        end
+    end
+
+    table.insert(parser.usings, namespaceName)
+end
 
 
 ----
@@ -307,7 +342,7 @@ function instancer:initClass(classFormat)
 
     -- Base variables
     instance.className = classFormat.name
-    instance.classFormat = classFormat -- Exception was added in duplicateTable so this is always referenced, never copied
+    instance.classFormat = classFormat -- Exception was added in duplicateTable so that this is always referenced, never copied. TODO: test this claim
     instance.members = {}
 
     -- Base methods
@@ -341,17 +376,35 @@ function instancer:initClass(classFormat)
     function instance:__construct() end
     function instance:__finalize() end
 
+    function instance:get_name()
+        return self.className
+    end
+
+    function instance:get_class()
+        return _G[self.className]
+    end
+
+    function instance:instance_of(className)
+        for _, parent in pairs(self.classFormat.parents) do
+            if self[parent]:instance_of(className) then
+                return true
+            end
+        end
+
+        return self.className == className
+    end
+
     -- Assign parent instances
-    for _, parentName in pairs(classFormat.parentNames) do
-        instance[parentName] = _G[parentName] -- No clone here, already handled by :new()
+    for _, parent in pairs(classFormat.parents) do
+        instance[parent] = _G[parent] -- No clone needed here as :new() will also copy the parents
     end
 
     -- Setup members
-    for _, parentName in pairs(classFormat.parentNames) do
+    for _, parent in pairs(classFormat.parents) do
         -- Add variables from parents to child
-        for memberName, memberData in pairs(instance[parentName].classFormat.members) do
-            local isAmbiguousMember = instance.members[memberName] and true or false
-            instance.members[memberName] = instance[parentName].members[memberName]
+        for memberName, memberData in pairs(instance[parent].classFormat.members) do
+            local isAmbiguousMember = instance.members[memberName] and true or false -- Need to check if already exists before it's overwritten
+            instance.members[memberName] = instance[parent].members[memberName]
             instance.members[memberName].ambiguous = isAmbiguousMember
         end
     end
@@ -359,8 +412,50 @@ function instancer:initClass(classFormat)
     for memberName, memberData in pairs(classFormat.members) do
         instance.members[memberName] = {
             value = memberData.value,
+            valuetype = memberData.valuetype,
             modifiers = memberData.modifiers or {}
         }
+    end
+
+    -- Add used namespace classes to the environment of all function members
+    do
+        -- Create our new environment
+        local env = setmetatable({_G = _G}, {
+            __index = function(self, key) return _G[key] end,
+            __newindex = function(self, key, value) _G[key] = value end
+        })
+
+        -- Assign all usings to the environment
+        for _, using in pairs(instance.classFormat.usings) do
+            instancer:usingsToTable(using, env, _G)
+        end
+
+        -- Assign the environment to all members
+        for memberName, memberData in pairs(instance.members) do
+            if memberData.valuetype == "function" then
+                if setfenv then -- Lua 5.1
+
+                    setfenv(memberData.value, env)
+                else -- Lua 5.2
+                    if debug then
+                        -- Lookup the _ENV local
+                        local localId = 0
+                        local localName, localValue
+
+                        repeat
+                            localId = localId + 1
+                            localName, localValue = debug.getupvalue(memberData.value, localId)
+
+                            if localName == "_ENV" then
+                                -- Assign the new environment to the _ENV local
+                                debug.setupvalue(memberData.value, localId, env)
+                                break
+                            end
+                        until localName == nil
+                    end
+                end
+            end
+        end
     end
 
     -- Meta methods
@@ -371,8 +466,10 @@ function instancer:initClass(classFormat)
             return
         end
 
-        if self.members[key].ambiguous then
-            error(string.format("class %s: call to member %s is ambigious as it is present in both parents", self.className, key))
+        if not simploo.config['production'] then
+            if self.members[key].ambiguous then
+                error(string.format("class %s: call to member %s is ambigious as it is present in both parents", self.className, key))
+            end
         end
 
         if self.members[key].modifiers.static then
@@ -387,27 +484,32 @@ function instancer:initClass(classFormat)
             return
         end
 
-        if self.members[key].modifiers.const then
-            error(string.format("class %s: can not modify const variable %s", self.className, key))
-        end
+        if not simploo.config['production'] then
 
-        if self.members[key].modifiers.static then
-            _G[self.className][key] = value
+            if self.members[key].modifiers.const then
+                error(string.format("class %s: can not modify const variable %s", self.className, key))
+            end
 
-            return
+            if self.members[key].modifiers.static then
+                _G[self.className][key] = value
+
+                return
+            end
         end
 
         self.members[key].value = value
     end
 
-    -- Add meta functions
+    -- Add support for meta methods as class members.
     local metaFunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
 
     for _, metaName in pairs(metaFunctions) do
         local fnOriginal = meta[metaName]
 
-        meta[metaName] = function(self, ...)
-            return (fnOriginal and fnOriginal(self, ...)) or (self.members[metaName] and self[metaName](self, ...) or nil)
+        if instance.members[metaName] then
+            meta[metaName] = function(self, ...)
+                return self[metaName](self, ...) or (fnOriginal and fnOriginal(self, ...)) or nil -- 'or nil' because we will return false on the end otherwise
+            end
         end
     end
 
@@ -417,9 +519,54 @@ function instancer:initClass(classFormat)
     self:initInstance(instance)
 end
 
+-- Sets up a global instance of a class instance in which static member values are stored
 function instancer:initInstance(instance)
     instance = instance:clone()
     instance:__declare()
 
     _G[instance.className] = instance
+
+    self:namespaceToTable(instance.className, _G, instance)
+end
+
+-- Inserts a namespace like string into a nested table
+-- E.g: ("a.b.C", t, "Hi") turns into:
+-- t = {a = {b = {C = "Hi"}}}
+function instancer:namespaceToTable(namespaceName, targetTable, assignValue)
+    local firstword, remainingwords = string.match(namespaceName, "(%w+)%.(.+)")
+    
+    if firstword and remainingwords then
+        targetTable[firstword] = targetTable[firstword] or {}
+
+        self:namespaceToTable(remainingwords, targetTable[firstword], assignValue)
+    else
+        targetTable[namespaceName] = assignValue
+    end
+end
+
+-- Resolve a using-declaration
+-- Looks in searchTable for namespaceName and assigns it to targetTable.
+-- Supports the following formats:
+-- > a.b.c -- Everything inside that namespace
+-- > a.b.c.Foo -- Specific class inside namespace 
+function instancer:usingsToTable(name, targetTable, searchTable)
+    local firstchunk, remainingchunks = string.match(name, "(%w+)%.(.+)")
+
+    if searchTable[firstchunk] then
+        self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk])
+    else
+        if not searchTable[name] then
+            error("something went horribly wrong")
+        end
+
+        if searchTable[name].className then
+            -- Assign a single class
+            targetTable[name] = searchTable[name]
+        else
+            -- Assign everything found in the table
+            for k, v in pairs(searchTable[name]) do
+                targetTable[k] = v
+            end
+        end
+    end
 end

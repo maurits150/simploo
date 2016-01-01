@@ -2,13 +2,15 @@ parser = {}
 simploo.parser = parser
 
 parser.instance = false
+parser.namespace = ""
+parser.usings = {}
 parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract"}
 
 -- Parses the simploo class syntax into the following table format:
 --
 -- {
 --     name = "ExampleClass",
---     parentNames = {"ExampleParent1", "ExampleParent2"},
+--     parents = {"ExampleParent1", "ExampleParent2"},
 --     functions = {
 --         exampleFunction = {value = function() ... end, modifiers = {public = true, static = true, ...}}
 --     }
@@ -16,11 +18,13 @@ parser.modifiers = {"public", "private", "protected", "static", "const", "meta",
 --         exampleVariablt = {value = 0, modifiers = {public = true, static = true, ...}}
 --     }
 -- }
+
 function parser:new()
     local object = {}
     object.className = ""
-    object.classParentNames = {}
+    object.classparents = {}
     object.classMembers = {}
+    object.classUsings = {}
 
     object.onFinishedData = false
     object.onFinished = function(self, output)
@@ -31,7 +35,7 @@ function parser:new()
         if self.onFinishedData then
             -- Directly call the finished function if we already have a result available
             fn(self, self.onFinishedData)
-        else 
+        else
             self.onFinished = fn
         end
     end
@@ -50,11 +54,10 @@ function parser:new()
         return self
     end
 
-    function object:extends(parentNamesString)
-    pt(self.classParentNames)
-        for className in string.gmatch(parentNamesString, "([^,^%s*]+)") do
+    function object:extends(parentsString)
+        for className in string.gmatch(parentsString, "([^,^%s*]+)") do
             -- Update class cache
-            table.insert(self.classParentNames, className)
+            table.insert(self.classparents, className)
         end
 
         return self
@@ -66,12 +69,25 @@ function parser:new()
             self:addMemberRecursive(classContent)
         end
 
+        if parser.namespace ~= "" then
+            self.className = parser.namespace .. "." .. self.className
+        end
+
+        if parser.usings then
+            self.classUsings = parser.usings
+        end
+
         local output = {}
         output.name = self.className
-        output.parentNames = self.classParentNames
+        output.parents = self.classparents
         output.members = self.classMembers
-
+        output.usings = self.classUsings
+        
         self:onFinished(output)
+    end
+
+    function object:namespace(namespace)
+        parser.namespace = namespace
     end
 
     -- Recursively compile and pass through all members and modifiers found in a tree like structured table.
@@ -132,27 +148,8 @@ function parser:new()
     return setmetatable(object, meta)
 end
 
-function class(className, classOperation)
-    if not parser.instance then
-        parser.instance = parser:new(onFinished)
-        parser.instance:setOnFinished(function(self, output)
-            simploo.instancer:initClass(output)
 
-            parser.instance = nil
-        end)
-    end
-
-    return parser.instance:class(className, classOperation)
-end
-
-function extends(parentNames)
-   if not parser.instance then
-        error("calling extends without calling class first")
-    end
-
-    return parser.instance:extends(parentNames)
-end
-
+-- Add modifiers as global functions
 for _, modifierName in pairs(parser.modifiers) do
     _G[modifierName] = function(body)
         body["__modifiers"] = body["__modifiers"] or {}
@@ -162,4 +159,42 @@ for _, modifierName in pairs(parser.modifiers) do
     end
 end
 
+-- Add additional globals
+function class(className, classOperation)
+    if not parser.instance then
+        parser.instance = parser:new(onFinished)
+        parser.instance:setOnFinished(function(self, output)
+            if simploo.instancer then
+                simploo.instancer:initClass(output)
+            end
 
+            parser.instance = nil
+        end)
+    end
+
+    return parser.instance:class(className, classOperation)
+end
+
+function extends(parents)
+   if not parser.instance then
+        error("calling extends without calling class first")
+    end
+
+    return parser.instance:extends(parents)
+end
+
+function namespace(namespaceName)
+    parser.namespace = namespaceName
+
+    parser.usings = {}
+end
+
+function using(namespaceName)
+    for _, v in pairs(parser.usings) do
+        if v == parser.usings then
+            return
+        end
+    end
+
+    table.insert(parser.usings, namespaceName)
+end
