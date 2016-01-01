@@ -1,23 +1,26 @@
 instancer = {}
 simploo.instancer = instancer
 
-instancer.classes = {}
+instancer.classFormats = {}
 
 function instancer:initClass(classFormat)
+    -- Store class format
+    instancer.classFormats[classFormat.name] = classFormat
+
+    -- Create instance
     local instance = {}
 
     -- Base variables
     instance.className = classFormat.name
-    instance.classFormat = classFormat -- Exception was added in duplicateTable so that this is always referenced, never copied. TODO: test this claim
     instance.members = {}
-
+    
     -- Base methods
     function instance:clone()
         local clone = simploo.util.duplicateTable(self)
         return clone
     end
 
-    function instance:new()
+    function instance:new(...)
         -- Clone and construct new instance
         local self = self or instance -- Reverse compatibility with dotnew calls as well as colonnew calls
         local copy = self:clone()
@@ -29,18 +32,17 @@ function instancer:initClass(classFormat)
         end
 
         simploo.util.addGcCallback(copy, function()
-            copy:__finalize()
+            if copy.members['__finalize'] and copy.members['__finalize'].instance == copy then
+                copy:__finalize()
+            end
         end)
 
-        copy:__construct()
+        if copy.members['__construct'] and copy.members['__construct'].instance == copy then
+            copy:__construct(...)
+        end
 
         return copy
     end
-
-    -- Placeholder methods
-    function instance:__declare() end
-    function instance:__construct() end
-    function instance:__finalize() end
 
     function instance:get_name()
         return self.className
@@ -51,8 +53,8 @@ function instancer:initClass(classFormat)
     end
 
     function instance:instance_of(className)
-        for _, parent in pairs(self.classFormat.parents) do
-            if self[parent]:instance_of(className) then
+        for _, parentName in pairs(classFormat.parents) do
+            if self[parentName]:instance_of(className) then
                 return true
             end
         end
@@ -61,46 +63,47 @@ function instancer:initClass(classFormat)
     end
 
     -- Assign parent instances
-    for _, parent in pairs(classFormat.parents) do
-        instance[parent] = _G[parent] -- No clone needed here as :new() will also copy the parents
+    for _, parentName in pairs(classFormat.parents) do
+        instance[parentName] = _G[parentName] -- No clone needed here as :new() will also copy the parents
     end
 
-    -- Setup members
-    for _, parent in pairs(classFormat.parents) do
+    -- Setup members based on parent members
+    for _, parentName in pairs(classFormat.parents) do
         -- Add variables from parents to child
-        for memberName, memberData in pairs(instance[parent].classFormat.members) do
+        for memberName, memberData in pairs(instancer.classFormats[parentName].members) do
             local isAmbiguousMember = instance.members[memberName] and true or false -- Need to check if already exists before it's overwritten
-            instance.members[memberName] = instance[parent].members[memberName]
+            instance.members[memberName] = instance[parentName].members[memberName]
+            instance.members[memberName].instance = instance[parentName]
             instance.members[memberName].ambiguous = isAmbiguousMember
         end
     end
 
+    -- Set own members
     for memberName, memberData in pairs(classFormat.members) do
-        instance.members[memberName] = {
-            value = memberData.value,
-            valuetype = memberData.valuetype,
-            modifiers = memberData.modifiers or {}
-        }
+        instance.members[memberName] = {}
+        instance.members[memberName].instance = instance
+        instance.members[memberName].value = memberData.value
+        instance.members[memberName].modifiers = memberData.modifiers
     end
 
     -- Add used namespace classes to the environment of all function members
     do
         -- Create our new environment
-        local env = setmetatable({_G = _G}, {
-            __index = function(self, key) return _G[key] end,
-            __newindex = function(self, key, value) _G[key] = value end
+        local global = _G
+        local env = setmetatable({}, {
+            __index = function(self, key) return global[key] end,
+            __newindex = function(self, key, value) global[key] = value end
         })
 
         -- Assign all usings to the environment
-        for _, using in pairs(instance.classFormat.usings) do
+        for _, using in pairs(classFormat.usings) do
             instancer:usingsToTable(using, env, _G)
         end
 
         -- Assign the environment to all members
         for memberName, memberData in pairs(instance.members) do
-            if memberData.valuetype == "function" then
+            if type(memberData.value) == "function" then
                 if setfenv then -- Lua 5.1
-
                     setfenv(memberData.value, env)
                 else -- Lua 5.2
                     if debug then
@@ -138,7 +141,7 @@ function instancer:initClass(classFormat)
             end
         end
 
-        if self.members[key].modifiers.static then
+        if self.members[key].modifiers.static and _G[self.className] ~= self then
             return _G[self.className][key]
         end
 
@@ -156,7 +159,7 @@ function instancer:initClass(classFormat)
                 error(string.format("class %s: can not modify const variable %s", self.className, key))
             end
 
-            if self.members[key].modifiers.static then
+            if self.members[key].modifiers.static and _G[self.className] ~= self then
                 _G[self.className][key] = value
 
                 return
@@ -188,11 +191,14 @@ end
 -- Sets up a global instance of a class instance in which static member values are stored
 function instancer:initInstance(instance)
     instance = instance:clone()
-    instance:__declare()
 
     _G[instance.className] = instance
 
     self:namespaceToTable(instance.className, _G, instance)
+        
+    if instance.members['__declare'] and instance.members['__declare'].instance == instance then
+        instance:__declare()
+    end
 end
 
 -- Inserts a namespace like string into a nested table

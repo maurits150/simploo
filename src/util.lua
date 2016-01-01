@@ -51,8 +51,6 @@ function util.addGcCallback(object, callback)
                 print(string.format("ERROR: class %s: error __gc function: %s", object, error))
             end
         end
-        
-        rawset(object, "___gc", proxy)
     else
         local mt = getmetatable(object)
         mt.__gc = function(self)

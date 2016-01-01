@@ -113,7 +113,6 @@ function parser:new()
     function object:addMember(memberName, memberValue, modifiers)
         self['classMembers'][memberName] = {
             value = memberValue,
-            valuetype = type(memberValue),
             modifiers = {}
         }
 
