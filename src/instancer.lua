@@ -17,6 +17,7 @@ function instancer:initClass(classFormat)
     -- Base variables
     instance.className = classFormat.name
     instance.members = {}
+    instance.callStack = {}
 
     -- Base methods
     function instance:clone()
@@ -36,12 +37,12 @@ function instancer:initClass(classFormat)
         end
 
         simploo.util.addGcCallback(copy, function()
-            if copy.members['__finalize'] and copy.members['__finalize'].instance == copy then
+            if copy.members['__finalize'] and copy.members['__finalize'].owner == copy then
                 copy:__finalize()
             end
         end)
 
-        if copy.members['__construct'] and copy.members['__construct'].instance == copy then
+        if copy.members['__construct'] and copy.members['__construct'].owner == copy then
             if instancer:classIsGlobal(self) then
                 copy:__construct(...)
             else
@@ -71,29 +72,53 @@ function instancer:initClass(classFormat)
         return self.className == className
     end
 
-    -- Assign parent instances
-    for _, parentName in pairs(classFormat.parents) do
-        instance[parentName] = _G[parentName] -- No clone needed here as :new() will also copy the parents
-    end
-
     -- Setup members based on parent members
     for _, parentName in pairs(classFormat.parents) do
+        local parentInstance = _G[parentName]
+
+        -- Add parent instance to child
+        local newMember = {}
+        newMember.owner = instance
+        newMember.value = parentInstance
+        newMember.modifiers = {}
+        instance.members[parentName] = newMember
+
         -- Add variables from parents to child
-        for memberName, memberData in pairs(instancer.classFormats[parentName].members) do
-            local isAmbiguousMember = instance.members[memberName] and true or false -- Need to check if already exists before it's overwritten
-            instance.members[memberName] = instance[parentName].members[memberName]
-            instance.members[memberName].instance = instance[parentName]
-            instance.members[memberName].ambiguous = isAmbiguousMember
+        for memberName, _ in pairs(instancer.classFormats[parentName].members) do
+            local parentMember = parentInstance.members[memberName]
+            parentMember.ambigious = instance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
+
+            if not simploo.config['production'] then
+                if type(parentMember.value) == "function" then
+                    -- When not in production, we add a wrapper around each member function that handles access
+                    -- To do this we pass the parent object as 'self', instead of the child object
+                    local newMember = simploo.util.duplicateTable(parentMember)
+                    newMember.value = function(_, ...)
+                        return parentMember.value(_.members[memberName].owner, ...)
+                    end
+
+                    instance.members[memberName] = newMember
+                else
+                    -- Assign the member by reference
+                    instance.members[memberName] = parentMember
+                end
+            else
+                -- Assign the member by reference, always
+                instance.members[memberName] = parentMember
+            end
         end
     end
 
     -- Set own members
     for memberName, memberData in pairs(classFormat.members) do
-        instance.members[memberName] = {}
-        instance.members[memberName].instance = instance
-        instance.members[memberName].value = memberData.value
-        instance.members[memberName].modifiers = memberData.modifiers
+        local newMember = {}
+        newMember.owner = instance
+        newMember.value = memberData.value
+        newMember.modifiers = memberData.modifiers
+
+        instance.members[memberName] = newMember
     end
+
 
     -- Add used namespace classes to the environment of all function members
     do
@@ -116,7 +141,7 @@ function instancer:initClass(classFormat)
                     setfenv(memberData.value, env)
                 else -- Lua 5.2
                     if debug then
-                        -- Lookup the _ENV local
+                        -- Lookup the _ENV local inside the function
                         local localId = 0
                         local localName, localValue
 
@@ -146,7 +171,11 @@ function instancer:initClass(classFormat)
 
         if not simploo.config['production'] then
             if self.members[key].ambiguous then
-                error(string.format("class %s: call to member %s is ambigious as it is present in both parents", self.className, key))
+                error(string.format("class %s: call to member %s is ambigious as it is present in both parents", tostring(self), key))
+            end
+
+            if self.members[key].modifiers.private and self.members[key].owner ~= self then
+                error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
         end
 
@@ -165,14 +194,17 @@ function instancer:initClass(classFormat)
         if not simploo.config['production'] then
 
             if self.members[key].modifiers.const then
-                error(string.format("class %s: can not modify const variable %s", self.className, key))
+                error(string.format("class %s: can not modify const variable %s", tostring(self), key))
             end
 
-            if self.members[key].modifiers.static and not instancer:classIsGlobal(self) then
-                _G[self.className][key] = value
-
-                return
+            if self.members[key].modifiers.private and self.members[key].owner ~= self then
+                error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
+        end
+
+        if self.members[key].modifiers.static and not instancer:classIsGlobal(self) then
+            _G[self.className][key] = value
+            return
         end
 
         self.members[key].value = value
@@ -222,7 +254,7 @@ function instancer:initInstance(instance)
 
     self:namespaceToTable(instance.className, _G, instance)
         
-    if instance.members['__declare'] and instance.members['__declare'].instance == instance then
+    if instance.members['__declare'] and instance.members['__declare'].owner == instance then
         instance:__declare()
     end
 end
