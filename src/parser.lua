@@ -112,7 +112,7 @@ function parser:new()
     -- Adds a member to the class definition
     function object:addMember(memberName, memberValue, modifiers)
         self['classMembers'][memberName] = {
-            value = memberValue,
+            value = memberValue == null and nil or memberValue,
             modifiers = {}
         }
 
@@ -197,3 +197,5 @@ function using(namespaceName)
 
     table.insert(parser.usings, namespaceName)
 end
+
+null = "NullVariable_WgVtlrvpP194T7wUWDWv2mjB" -- Parsed into nil value when assigned to member variables

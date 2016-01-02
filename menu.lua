@@ -147,31 +147,6 @@ function menu:watch()
 end
 
 function menu:tests()
-	-- Execute simploo files
-	local files, err = build:getSourceFiles()
-
-	if not files then
-		print("[exec] failed: " .. tostring(err))
-	end
-
-	for k, name in pairs(files) do
-		local file, err = io.open("src/" .. name, "r")
-
-		if file then
-			local content = file:read("*all")
-
-			local status, err = pcall(function()
-				dofile("src/" .. name)
-			end)
-
-			if not status then
-				print("[exec] failed: " .. tostring(err))
-			end
-
-			file:close()
-		end
-	end
-
 	-- Execute test files
 	local files, err = tests:getSourceFiles()
 
@@ -180,6 +155,34 @@ function menu:tests()
 	end
 
 	for k, v in pairs(files) do
+		-- Execute simploo files
+		simploo = nil
+		
+		local files, err = build:getSourceFiles()
+
+		if not files then
+			print("[exec] failed: " .. tostring(err))
+		end
+
+		for k, name in pairs(files) do
+			local file, err = io.open("src/" .. name, "r")
+
+			if file then
+				local content = file:read("*all")
+
+				local status, err = pcall(function()
+					dofile("src/" .. name)
+				end)
+
+				if not status then
+					print("[exec] failed: " .. tostring(err))
+				end
+
+				file:close()
+			end
+		end
+
+		-- Execute the test file
 		dofile("tests/" .. v)
 	end
 end

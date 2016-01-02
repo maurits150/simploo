@@ -238,7 +238,7 @@ function parser:new()
     -- Adds a member to the class definition
     function object:addMember(memberName, memberValue, modifiers)
         self['classMembers'][memberName] = {
-            value = memberValue,
+            value = memberValue == null and nil or memberValue,
             modifiers = {}
         }
 
@@ -324,6 +324,7 @@ function using(namespaceName)
     table.insert(parser.usings, namespaceName)
 end
 
+null = "NullVariable" -- Parsed into nil
 
 ----
 ---- instancer.lua
@@ -333,6 +334,10 @@ instancer = {}
 simploo.instancer = instancer
 
 instancer.classFormats = {}
+
+function instancer:classIsGlobal(obj)
+    return obj and obj.className and obj == _G[obj.className]
+end
 
 function instancer:initClass(classFormat)
     -- Store class format
@@ -344,7 +349,7 @@ function instancer:initClass(classFormat)
     -- Base variables
     instance.className = classFormat.name
     instance.members = {}
-    
+
     -- Base methods
     function instance:clone()
         local clone = simploo.util.duplicateTable(self)
@@ -353,8 +358,8 @@ function instancer:initClass(classFormat)
 
     function instance:new(...)
         -- Clone and construct new instance
-        local self = self or instance -- Reverse compatibility with dotnew calls as well as colonnew calls
-        local copy = self:clone()
+        local arg1 = self
+        local copy = instance:clone()
 
         for memberName, memberData in pairs(copy.members) do
             if memberData.modifiers.abstract then
@@ -369,7 +374,12 @@ function instancer:initClass(classFormat)
         end)
 
         if copy.members['__construct'] and copy.members['__construct'].instance == copy then
-            copy:__construct(...)
+            if instancer:classIsGlobal(self) then
+                copy:__construct(...)
+            else
+                -- Append self when its a dotnew call
+                copy:__construct(arg1, ...)
+            end
         end
 
         return copy
@@ -472,7 +482,7 @@ function instancer:initClass(classFormat)
             end
         end
 
-        if self.members[key].modifiers.static and _G[self.className] ~= self then
+        if self.members[key].modifiers.static and not instancer:classIsGlobal(self) then
             return _G[self.className][key]
         end
 
@@ -490,7 +500,7 @@ function instancer:initClass(classFormat)
                 error(string.format("class %s: can not modify const variable %s", self.className, key))
             end
 
-            if self.members[key].modifiers.static and _G[self.className] ~= self then
+            if self.members[key].modifiers.static and not instancer:classIsGlobal(self) then
                 _G[self.className][key] = value
 
                 return
@@ -498,6 +508,23 @@ function instancer:initClass(classFormat)
         end
 
         self.members[key].value = value
+    end
+
+    function meta:__tostring()
+        -- We disable the metamethod on ourselfs, so we can tostring ourselves without getting into an infinite loop.
+        -- And no, rawget doesn't work because we want to call a metamethod on ourself: __tostring
+        local mt = getmetatable(self)
+        local fn = mt.__tostring
+        mt.__tostring = nil
+        
+        -- Grap the definition string.
+        local str = string.format("SimplooObject: %s <%s> {%s}", self:get_name(), not instancer:classIsGlobal(self) and "instance" or "class", tostring(self):sub(8))
+        
+        -- Enable our metamethod again.
+        mt.__tostring = fn
+        
+        -- Return string.
+        return str
     end
 
     -- Add support for meta methods as class members.
