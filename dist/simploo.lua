@@ -128,8 +128,7 @@ parser = {}
 simploo.parser = parser
 
 parser.instance = false
-parser.namespace = ""
-parser.usings = {}
+parser.hooks = {}
 parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract"}
 
 -- Parses the simploo class syntax into the following table format:
@@ -176,8 +175,6 @@ function parser:new()
                 error("unknown class operation " .. k)
             end
         end
-
-        return self
     end
 
     function object:extends(parentsString)
@@ -185,22 +182,12 @@ function parser:new()
             -- Update class cache
             table.insert(self.classparents, className)
         end
-
-        return self
     end
 
     -- This method compiles all gathered data and passes it through to the finaliser method.
     function object:register(classContent)
         if classContent then
             self:addMemberRecursive(classContent)
-        end
-
-        if parser.namespace ~= "" then
-            self.className = parser.namespace .. "." .. self.className
-        end
-
-        if parser.usings then
-            self.classUsings = parser.usings
         end
 
         local output = {}
@@ -210,10 +197,6 @@ function parser:new()
         output.usings = self.classUsings
         
         self:onFinished(output)
-    end
-
-    function object:namespace(namespace)
-        parser.namespace = namespace
     end
 
     -- Recursively compile and pass through all members and modifiers found in a tree like structured table.
@@ -247,6 +230,14 @@ function parser:new()
         end
     end
 
+    function object:appendNamespace(namespace)
+        self.className = namespace .. "." .. self.className
+    end
+
+    function object:addUsing(using)
+        table.insert(self.classUsings, using)
+    end
+
     local meta = {}
     local modifierStack = {}
 
@@ -273,6 +264,23 @@ function parser:new()
     return setmetatable(object, meta)
 end
 
+function parser:addHook(hookName, callbackFn)
+    table.insert(self.hooks, {hookName, callbackFn})
+end
+
+function parser:fireHook(hookName, ...)
+    for _, v in pairs(self.hooks) do
+        if v[1] == hookName then
+            local ret = {v[2](...)}
+
+            -- Return data if there was a return value
+            if ret[0] then
+                return unpack(ret)
+            end
+        end
+    end
+end
+
 
 -- Add modifiers as global functions
 for _, modifierName in pairs(parser.modifiers) do
@@ -289,15 +297,27 @@ function class(className, classOperation)
     if not parser.instance then
         parser.instance = parser:new(onFinished)
         parser.instance:setOnFinished(function(self, output)
+            parser.instance = nil -- Set to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old parser again
+
             if simploo.instancer then
                 simploo.instancer:initClass(output)
             end
-
-            parser.instance = nil
         end)
     end
 
-    return parser.instance:class(className, classOperation)
+    parser.instance:class(className, classOperation)
+
+    if parser.activeNamespace then
+        parser.instance:appendNamespace(parser.activeNamespace)
+    end
+
+    if parser.activeUsings then
+        for _, v in pairs(parser.activeUsings) do
+            parser.instance:addUsing(v)
+        end
+    end
+
+    return parser.instance
 end
 
 function extends(parents)
@@ -305,26 +325,43 @@ function extends(parents)
         error("calling extends without calling class first")
     end
 
-    return parser.instance:extends(parents)
+    parser.instance:extends(parents)
+
+    return parser.instance
 end
 
-function namespace(namespaceName)
-    parser.namespace = namespaceName
+parser.activeNamespace = ""
+parser.activeUsings = {}
 
-    parser.usings = {}
+function namespace(namespaceName)
+    parser.activeNamespace = namespaceName
+    parser.activeUsings = {}
+
+    parser:fireHook("onNamespace", namespaceName)
 end
 
 function using(namespaceName)
-    for _, v in pairs(parser.usings) do
-        if v == parser.usings then
-            return
-        end
-    end
+    -- Save our previous namespace and usings, incase our callback loads new classes in other namespaces
+    local previousNamespace = parser.activeNamespace
+    local previousUsings = parser.activeUsings
 
-    table.insert(parser.usings, namespaceName)
+    parser.activeNamespace = ""
+    parser.activeUsings = {}
+
+    -- Fire the hook
+    local returnNamespace = parser:fireHook("onUsing", namespaceName)
+
+    -- Restore the previous namespace and usings
+    parser.activeNamespace = previousNamespace
+    parser.activeUsings = previousUsings
+
+    -- Add the new using to our table
+    table.insert(parser.activeUsings, returnNamespace or namespaceName)
 end
 
 null = "NullVariable_WgVtlrvpP194T7wUWDWv2mjB" -- Parsed into nil value when assigned to member variables
+
+
 
 ----
 ---- instancer.lua
@@ -404,9 +441,28 @@ function instancer:initClass(classFormat)
         return self.className == className
     end
 
+    -- Setup an environment for all usings
+    local global = _G
+    local usingsEnv = setmetatable({}, {
+        __index = function(self, key) return global[key] end,
+        __newindex = function(self, key, value) global[key] = value end
+    })
+
+    -- Assign all usings to the environment
+    for _, using in pairs(classFormat.usings) do
+        instancer:usingsToTable(using, usingsEnv, _G)
+    end
+
     -- Setup members based on parent members
     for _, parentName in pairs(classFormat.parents) do
-        local parentInstance = _G[parentName]
+        local parentInstance = _G[parentName] or usingsEnv[parentName]
+
+        if not parentInstance then
+            error(string.format("class %s: could not find parent %s", instance.className, parentName))
+        else
+            -- Get the full parent name, because for usings it might not be complete
+            parentName = parentInstance.className
+        end
 
         -- Add parent instance to child
         local newMember = {}
@@ -451,43 +507,27 @@ function instancer:initClass(classFormat)
         instance.members[memberName] = newMember
     end
 
+    -- Assign the usings environment to all members
+    for memberName, memberData in pairs(instance.members) do
+        if type(memberData.value) == "function" then
+            if setfenv then -- Lua 5.1
+                setfenv(memberData.value, usingsEnv)
+            else -- Lua 5.2
+                if debug then
+                    -- Lookup the _ENV local inside the function
+                    local localId = 0
+                    local localName, localValue
 
-    -- Add used namespace classes to the environment of all function members
-    do
-        -- Create our new environment
-        local global = _G
-        local env = setmetatable({}, {
-            __index = function(self, key) return global[key] end,
-            __newindex = function(self, key, value) global[key] = value end
-        })
+                    repeat
+                        localId = localId + 1
+                        localName, localValue = debug.getupvalue(memberData.value, localId)
 
-        -- Assign all usings to the environment
-        for _, using in pairs(classFormat.usings) do
-            instancer:usingsToTable(using, env, _G)
-        end
-
-        -- Assign the environment to all members
-        for memberName, memberData in pairs(instance.members) do
-            if type(memberData.value) == "function" then
-                if setfenv then -- Lua 5.1
-                    setfenv(memberData.value, env)
-                else -- Lua 5.2
-                    if debug then
-                        -- Lookup the _ENV local inside the function
-                        local localId = 0
-                        local localName, localValue
-
-                        repeat
-                            localId = localId + 1
-                            localName, localValue = debug.getupvalue(memberData.value, localId)
-
-                            if localName == "_ENV" then
-                                -- Assign the new environment to the _ENV local
-                                debug.setupvalue(memberData.value, localId, env)
-                                break
-                            end
-                        until localName == nil
-                    end
+                        if localName == "_ENV" then
+                            -- Assign the new environment to the _ENV local
+                            debug.setupvalue(memberData.value, localId, usingsEnv)
+                            break
+                        end
+                    until localName == nil
                 end
             end
         end
@@ -618,7 +658,7 @@ function instancer:usingsToTable(name, targetTable, searchTable)
         self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk])
     else
         if not searchTable[name] then
-            error("something went horribly wrong")
+            error(string.format("failed to resolve using %s", name))
         end
 
         if searchTable[name].className then

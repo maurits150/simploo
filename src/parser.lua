@@ -2,8 +2,7 @@ parser = {}
 simploo.parser = parser
 
 parser.instance = false
-parser.namespace = ""
-parser.usings = {}
+parser.hooks = {}
 parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract"}
 
 -- Parses the simploo class syntax into the following table format:
@@ -50,8 +49,6 @@ function parser:new()
                 error("unknown class operation " .. k)
             end
         end
-
-        return self
     end
 
     function object:extends(parentsString)
@@ -59,22 +56,12 @@ function parser:new()
             -- Update class cache
             table.insert(self.classparents, className)
         end
-
-        return self
     end
 
     -- This method compiles all gathered data and passes it through to the finaliser method.
     function object:register(classContent)
         if classContent then
             self:addMemberRecursive(classContent)
-        end
-
-        if parser.namespace ~= "" then
-            self.className = parser.namespace .. "." .. self.className
-        end
-
-        if parser.usings then
-            self.classUsings = parser.usings
         end
 
         local output = {}
@@ -84,10 +71,6 @@ function parser:new()
         output.usings = self.classUsings
         
         self:onFinished(output)
-    end
-
-    function object:namespace(namespace)
-        parser.namespace = namespace
     end
 
     -- Recursively compile and pass through all members and modifiers found in a tree like structured table.
@@ -121,6 +104,14 @@ function parser:new()
         end
     end
 
+    function object:appendNamespace(namespace)
+        self.className = namespace .. "." .. self.className
+    end
+
+    function object:addUsing(using)
+        table.insert(self.classUsings, using)
+    end
+
     local meta = {}
     local modifierStack = {}
 
@@ -147,6 +138,23 @@ function parser:new()
     return setmetatable(object, meta)
 end
 
+function parser:addHook(hookName, callbackFn)
+    table.insert(self.hooks, {hookName, callbackFn})
+end
+
+function parser:fireHook(hookName, ...)
+    for _, v in pairs(self.hooks) do
+        if v[1] == hookName then
+            local ret = {v[2](...)}
+
+            -- Return data if there was a return value
+            if ret[0] then
+                return unpack(ret)
+            end
+        end
+    end
+end
+
 
 -- Add modifiers as global functions
 for _, modifierName in pairs(parser.modifiers) do
@@ -163,15 +171,27 @@ function class(className, classOperation)
     if not parser.instance then
         parser.instance = parser:new(onFinished)
         parser.instance:setOnFinished(function(self, output)
+            parser.instance = nil -- Set to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old parser again
+
             if simploo.instancer then
                 simploo.instancer:initClass(output)
             end
-
-            parser.instance = nil
         end)
     end
 
-    return parser.instance:class(className, classOperation)
+    parser.instance:class(className, classOperation)
+
+    if parser.activeNamespace then
+        parser.instance:appendNamespace(parser.activeNamespace)
+    end
+
+    if parser.activeUsings then
+        for _, v in pairs(parser.activeUsings) do
+            parser.instance:addUsing(v)
+        end
+    end
+
+    return parser.instance
 end
 
 function extends(parents)
@@ -179,23 +199,39 @@ function extends(parents)
         error("calling extends without calling class first")
     end
 
-    return parser.instance:extends(parents)
+    parser.instance:extends(parents)
+
+    return parser.instance
 end
 
-function namespace(namespaceName)
-    parser.namespace = namespaceName
+parser.activeNamespace = ""
+parser.activeUsings = {}
 
-    parser.usings = {}
+function namespace(namespaceName)
+    parser.activeNamespace = namespaceName
+    parser.activeUsings = {}
+
+    parser:fireHook("onNamespace", namespaceName)
 end
 
 function using(namespaceName)
-    for _, v in pairs(parser.usings) do
-        if v == parser.usings then
-            return
-        end
-    end
+    -- Save our previous namespace and usings, incase our callback loads new classes in other namespaces
+    local previousNamespace = parser.activeNamespace
+    local previousUsings = parser.activeUsings
 
-    table.insert(parser.usings, namespaceName)
+    parser.activeNamespace = ""
+    parser.activeUsings = {}
+
+    -- Fire the hook
+    local returnNamespace = parser:fireHook("onUsing", namespaceName)
+
+    -- Restore the previous namespace and usings
+    parser.activeNamespace = previousNamespace
+    parser.activeUsings = previousUsings
+
+    -- Add the new using to our table
+    table.insert(parser.activeUsings, returnNamespace or namespaceName)
 end
 
 null = "NullVariable_WgVtlrvpP194T7wUWDWv2mjB" -- Parsed into nil value when assigned to member variables
+

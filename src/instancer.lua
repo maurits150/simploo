@@ -72,9 +72,28 @@ function instancer:initClass(classFormat)
         return self.className == className
     end
 
+    -- Setup an environment for all usings
+    local global = _G
+    local usingsEnv = setmetatable({}, {
+        __index = function(self, key) return global[key] end,
+        __newindex = function(self, key, value) global[key] = value end
+    })
+
+    -- Assign all usings to the environment
+    for _, using in pairs(classFormat.usings) do
+        instancer:usingsToTable(using, usingsEnv, _G)
+    end
+
     -- Setup members based on parent members
     for _, parentName in pairs(classFormat.parents) do
-        local parentInstance = _G[parentName]
+        local parentInstance = _G[parentName] or usingsEnv[parentName]
+
+        if not parentInstance then
+            error(string.format("class %s: could not find parent %s", instance.className, parentName))
+        else
+            -- Get the full parent name, because for usings it might not be complete
+            parentName = parentInstance.className
+        end
 
         -- Add parent instance to child
         local newMember = {}
@@ -119,43 +138,27 @@ function instancer:initClass(classFormat)
         instance.members[memberName] = newMember
     end
 
+    -- Assign the usings environment to all members
+    for memberName, memberData in pairs(instance.members) do
+        if type(memberData.value) == "function" then
+            if setfenv then -- Lua 5.1
+                setfenv(memberData.value, usingsEnv)
+            else -- Lua 5.2
+                if debug then
+                    -- Lookup the _ENV local inside the function
+                    local localId = 0
+                    local localName, localValue
 
-    -- Add used namespace classes to the environment of all function members
-    do
-        -- Create our new environment
-        local global = _G
-        local env = setmetatable({}, {
-            __index = function(self, key) return global[key] end,
-            __newindex = function(self, key, value) global[key] = value end
-        })
+                    repeat
+                        localId = localId + 1
+                        localName, localValue = debug.getupvalue(memberData.value, localId)
 
-        -- Assign all usings to the environment
-        for _, using in pairs(classFormat.usings) do
-            instancer:usingsToTable(using, env, _G)
-        end
-
-        -- Assign the environment to all members
-        for memberName, memberData in pairs(instance.members) do
-            if type(memberData.value) == "function" then
-                if setfenv then -- Lua 5.1
-                    setfenv(memberData.value, env)
-                else -- Lua 5.2
-                    if debug then
-                        -- Lookup the _ENV local inside the function
-                        local localId = 0
-                        local localName, localValue
-
-                        repeat
-                            localId = localId + 1
-                            localName, localValue = debug.getupvalue(memberData.value, localId)
-
-                            if localName == "_ENV" then
-                                -- Assign the new environment to the _ENV local
-                                debug.setupvalue(memberData.value, localId, env)
-                                break
-                            end
-                        until localName == nil
-                    end
+                        if localName == "_ENV" then
+                            -- Assign the new environment to the _ENV local
+                            debug.setupvalue(memberData.value, localId, usingsEnv)
+                            break
+                        end
+                    until localName == nil
                 end
             end
         end
@@ -286,7 +289,7 @@ function instancer:usingsToTable(name, targetTable, searchTable)
         self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk])
     else
         if not searchTable[name] then
-            error("something went horribly wrong")
+            error(string.format("failed to resolve using %s", name))
         end
 
         if searchTable[name].className then
