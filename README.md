@@ -25,11 +25,12 @@ This library is designed to help with this process by using the freedom of Lua t
 * The availability of the debug library (specifically debug.getupvalue and debug.setupvalue) is only required for Lua 5.2, in order to support the 'using' keyword. 
 
 ### Expectations
-This library attempts to emulate classes as closely as possible and it's pretty fast doing so. Regardless, it's code is still interpreted in real-time and instantiating a new instance still takes a little bit of time to complete- most of it spend on deep copying data.
-It's best to use this library to keep track of longer lived objects- for example entities in a game world. It's not going to perform in an environment where you require thousands of new objects every seconds- for example to store data from network packets. We've benchmarked SIMPLOO on an i7 920 processor clocked to 4 GHz. In this benchmark we've defined a class with 5 public functions, 5 public variables, 5 private functions and 5 private variables and measures how long it took to create 10k instances.
+This library attempts to emulate classes as closely as possible and it's pretty fast doing so. Regardless, its code is still interpreted in real-time and instantiating a new instance still takes a little bit of time to complete- most of it spend on deep copying data.
+
+It's best to use this library to keep track of longer lived objects- for example entities in a game world. It's not going to perform in an environment where you require thousands of new objects every seconds- for example to store data from network packets. Also, instantiation time scales linearly with the amount of members that a class has. This includes members that are present in parent classes.
+
+We've benchmarked SIMPLOO on an i7 920 processor clocked to 4 GHz. In this benchmark we've defined a class with 5 public functions, 5 public variables, 5 private functions and 5 private variables and measured how long it took to create 10k instances. Keep in mind that Lua is single threaded.
 
 * 10k instances in Lua 5.1: ~0.72 seconds
 * 10k instances in Lua 5.2: ~0.82 seconds
 * 10k instances in LuaJIT: ~0.26 seconds
-
-Instantiation time scales linearly with the amount of members that a class has. This includes members that are present in parent classes.
