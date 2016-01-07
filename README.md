@@ -15,6 +15,13 @@ The general workaround for these limitations is to modify the behavior of the ob
 
 This library is designed to help with this process by using the freedom of Lua to emulate the same class-based programming syntax that's so often seen in other languages. After you've provided a class definition you can easily derive new objects from it, and SIMPLOO will handle everything that's required to make your objects behave appropriately.
 
+### Features
+
+* Define classes using a familiar syntax, including all the expected keywords such as `private`, `public`, `abstract`, `static` and `const`.
+* Supports multiple inheritance to define complex relational trees between classes.
+* Supports constructor and *finalizer* methods.
+* Allows you to define metamethods for your classes.
+
 ### Changes compared to `1.0`
 * The library has been rewritten in order to be more maintainable.
 * New syntax features have been added to make classes even more organisable.
@@ -34,3 +41,7 @@ We've benchmarked SIMPLOO on an i7 920 processor clocked to 4 GHz. In this bench
 * 10k instances in Lua 5.1: ~0.72 seconds
 * 10k instances in Lua 5.2: ~0.82 seconds
 * 10k instances in LuaJIT: ~0.26 seconds
+
+### Feedback
+
+You can submit an issue, create a pull request or contact me directly using the email listed on my profile page.
