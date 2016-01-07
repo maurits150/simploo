@@ -22,7 +22,7 @@ function TestInstancerNamespaces:testInstantiation()
     -----
 
     namespace ""
-
+    
     using "testsimple.Foo"
     using "testwhole"
     using "testsub"

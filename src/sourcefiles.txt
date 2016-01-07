@@ -1,5 +1,6 @@
 init.lua
 config.lua
 util.lua
-parser.lua
 instancer.lua
+parser.lua
+syntax.lua
