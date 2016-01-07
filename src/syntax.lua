@@ -70,14 +70,14 @@ function syntax.using(namespaceName)
     table.insert(activeUsings, returnNamespace or namespaceName)
 end
 
-local existingValues = {}
+local existingGlobals = {}
 
 function syntax.init()
     -- Add syntax things
     for k, v in pairs(simploo.syntax) do
         if k ~= "init" and k ~= "destroy" then
             if _G[k] then
-                existingValues[k] = _G[k]
+                existingGlobals[k] = _G[k]
             end
 
             _G[k] = v
@@ -90,8 +90,8 @@ function syntax.destroy()
         if k ~= "init" and k ~= "destroy" then
             _G[k] = nil
 
-            if existingValues[k] then
-                _G[k] = existingValues[k]
+            if existingGlobals[k] then
+                _G[k] = existingGlobals[k]
             end
         end
     end

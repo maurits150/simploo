@@ -14,6 +14,7 @@ simploo.config['production'] = false
 -- Expose Syntax
 --
 -- Description: Expose all syntax related functions as globals instead of having to call simploo.syntax.<fn> explicitly.
+-- You can also manually enable or disable the simploo syntax globals in sections of your code by calling simploo.syntax.init() and simploo.syntax.destroy().
 -- Default: true
 --
 
