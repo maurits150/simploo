@@ -1,5 +1,5 @@
 --[[
-	SIMPLOO - The simple lua object-oriented programming library!
+	SIMPLOO - Simple Lua Object Orientation
 
 	The MIT License (MIT)
 	Copyright (c) 2014 maurits.tv
@@ -65,7 +65,7 @@ function util.duplicateTable(tbl, lookup)
     local copy = {}
     
     for k, v in pairs(tbl) do
-        if k ~= "classFormat" and type(v) == "table" then
+        if type(v) == "table" then
             lookup = lookup or {}
             lookup[tbl] = copy
 
@@ -153,7 +153,6 @@ function instancer:initClass(classFormat)
     -- Base variables
     instance.className = classFormat.name
     instance.members = {}
-    instance.callStack = {}
 
     -- Base methods
     function instance:clone()
@@ -678,6 +677,33 @@ function syntax.using(namespaceName)
     table.insert(activeUsings, returnNamespace or namespaceName)
 end
 
+local existingValues = {}
+
+function syntax.init()
+    -- Add syntax things
+    for k, v in pairs(simploo.syntax) do
+        if k ~= "init" and k ~= "destroy" then
+            if _G[k] then
+                existingValues[k] = _G[k]
+            end
+
+            _G[k] = v
+        end
+    end
+end
+
+function syntax.destroy()
+    for k, v in pairs(simploo.syntax) do
+        if k ~= "init" and k ~= "destroy" then
+            _G[k] = nil
+
+            if existingValues[k] then
+                _G[k] = existingValues[k]
+            end
+        end
+    end
+end
+
 -- Add modifiers as global functions
 for _, modifierName in pairs(simploo.parser.modifiers) do
     simploo.syntax[modifierName] = function(body)
@@ -689,7 +715,5 @@ for _, modifierName in pairs(simploo.parser.modifiers) do
 end
 
 if simploo.config['exposeSyntax'] then
-    for k, v in pairs(simploo.syntax) do
-        _G[k] = v
-    end
+    syntax.init()
 end

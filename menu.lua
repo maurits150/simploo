@@ -9,7 +9,7 @@ dofile("util/misc.lua")
 --
 
 BUILD_HEADER = [[
-	SIMPLOO - The simple lua object-oriented programming library!
+	SIMPLOO - Simple Lua Object Orientation
 
 	The MIT License (MIT)
 	Copyright (c) 2014 maurits.tv
