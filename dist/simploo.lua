@@ -627,7 +627,7 @@ function syntax.class(className, classOperation)
 
     simploo.parser.instance:class(className, classOperation)
 
-    if activeNamespace then
+    if activeNamespace and activeNamespace ~= "" then
         simploo.parser.instance:appendNamespace(activeNamespace)
     end
 
@@ -653,7 +653,7 @@ end
 
 function syntax.namespace(namespaceName)
     activeNamespace = namespaceName
-    print(">!!!!!!!!!!!!!!", namespaceName)
+
     activeUsings = {}
 
     simploo.parser:fireHook("onNamespace", namespaceName)
