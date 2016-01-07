@@ -1,46 +1,47 @@
-SIMPLOO - The simple lua object-oriented programming library!
-=====
+# SIMPLOO `2.0` - Simple Lua Object Orientation
+---
 
-### This library is a work in progress. There are no guarantees that it's bug free.
+### Status
+This version is still a work in progress but is expected to be fully backwards compatible with `1.0`.
 
-#### Introduction
+Notably, this version has not been broadly tested yet so unexpected errors may occur. Due to its numerous improvements it's still highly recommended to use this version instead of the previous one however.
 
-SIMPLOO is a library designed to simplify object-oriented programming in lua.
+### Introduction
+SIMPLOO is a library for the Lua programming language. Its goal is to simplify class based object-oriented programming inside Lua. 
 
-#### Features
+Lua is generally considered to be prototype-based language, which means that it's possible to define individual objects with their own states and behaviors. However, more advanced concepts such as inheritance and encapsulations are harder to achieve because Lua lacks the syntax to formally express these concepts.
 
-** Quick Feature Overview **
+The general workaround for these limitations is to modify the behavior of the object itself to include these concepts instead of relying on the language. Unfortunately this is often challenging and time consuming, especially when you have many different types of objects and behaviors.
 
-* public/protected/private access modifiers
-* abstract/static/constant class members
-* constructors/finalizers
-* multiple inheritance
-* common OOP functions such as get\_name(), is\_a(), instance\_of() and child\_of()
-* build in registry that ensures iteration free member access.
-* metamethod support
+This library is designed to help with this process by using the freedom of Lua to emulate the same class-based programming syntax that's so often seen in other languages. After you've provided a class definition you can easily derive new objects from it, and SIMPLOO will handle everything that's required to make your objects behave appropriately.
 
-#### Additional Notes
+### Features
 
-* This library uses the following globals: SIMPLOO, null, class, extends, options, public, protected, private, static, abstract, meta, const, isclass
-* There are no guarantees that this library behaves exactly like other object oriented programming languages.
-* Features that are not documented on the wiki may be added or removed at any time.
+* Define classes using a familiar syntax, including all the expected keywords such as `private`, `public`, `abstract`, `static` and `const`.
+* Supports multiple inheritance to define complex relational trees between classes.
+* Supports constructor and *finalizer* methods.
+* Allows you to define metamethods for your classes.
 
-#### Requirements
+### Changes compared to `1.0`
+* The library has been rewritten in order to be more maintainable.
+* New syntax features have been added to make classes even more organisable.
+* Performance has been increased by lowering internal overhead.
 
-This library is being developed and tested on LuaJIT 2.1.0 (Lua 5.1) and Lua 5.2.
-For the best performance I recommend using a LuaJIT environment.
+### Requirements
+* This library has been developed and tested on Lua 5.1, Lua 5.2 and LuaJIT.
+* The availability of the debug library (specifically debug.getupvalue and debug.setupvalue) is only required for Lua 5.2, in order to support the 'using' keyword. 
 
-#### Installation
+### Expectations
+This library attempts to emulate classes as closely as possible and it's pretty fast doing so. Regardless, its code is still interpreted in real-time and instantiating a new instance still takes a little bit of time to complete- most of it spend on deep copying data.
 
-Simply include the simploo.lua file in the beginning of your code and you're ready to go!
+It's best to use this library to keep track of longer lived objects- for example entities in a game world. It's not going to perform in an environment where you require thousands of new objects every seconds- for example to store data from network packets. Also, instantiation time scales linearly with the amount of members that a class has. This includes members that are present in parent classes.
 
-#### Usage
+We've benchmarked SIMPLOO on an i7 920 processor clocked to 4 GHz. In this benchmark we've defined a class with 5 public functions, 5 public variables, 5 private functions and 5 private variables and measured how long it took to create 10k instances. Keep in mind that Lua is single threaded.
 
-Please refer to the wiki!
+* 10k instances in Lua 5.1: ~0.72 seconds
+* 10k instances in Lua 5.2: ~0.82 seconds
+* 10k instances in LuaJIT: ~0.26 seconds
 
-https://github.com/maurits150/simploo/wiki
+### Feedback
 
-#### Feedback
-
-Any feedback will be appreciated.
-You can post an issue or pull request on github, or contact me using the information on my profile page.
+You can submit an issue, create a pull request or contact me directly using the email listed on my profile page.
