@@ -17,7 +17,6 @@ function instancer:initClass(classFormat)
     -- Base variables
     instance.className = classFormat.name
     instance.members = {}
-    instance.callStack = {}
 
     -- Base methods
     function instance:clone()

@@ -5,7 +5,7 @@ function util.duplicateTable(tbl, lookup)
     local copy = {}
     
     for k, v in pairs(tbl) do
-        if k ~= "classFormat" and type(v) == "table" then
+        if type(v) == "table" then
             lookup = lookup or {}
             lookup[tbl] = copy
 

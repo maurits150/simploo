@@ -70,6 +70,33 @@ function syntax.using(namespaceName)
     table.insert(activeUsings, returnNamespace or namespaceName)
 end
 
+local existingValues = {}
+
+function syntax.init()
+    -- Add syntax things
+    for k, v in pairs(simploo.syntax) do
+        if k ~= "init" and k ~= "destroy" then
+            if _G[k] then
+                existingValues[k] = _G[k]
+            end
+
+            _G[k] = v
+        end
+    end
+end
+
+function syntax.destroy()
+    for k, v in pairs(simploo.syntax) do
+        if k ~= "init" and k ~= "destroy" then
+            _G[k] = nil
+
+            if existingValues[k] then
+                _G[k] = existingValues[k]
+            end
+        end
+    end
+end
+
 -- Add modifiers as global functions
 for _, modifierName in pairs(simploo.parser.modifiers) do
     simploo.syntax[modifierName] = function(body)
@@ -81,7 +108,5 @@ for _, modifierName in pairs(simploo.parser.modifiers) do
 end
 
 if simploo.config['exposeSyntax'] then
-    for k, v in pairs(simploo.syntax) do
-        _G[k] = v
-    end
+    syntax.init()
 end
