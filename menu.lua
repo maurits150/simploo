@@ -12,7 +12,7 @@ BUILD_HEADER = [[
 	SIMPLOO - Simple Lua Object Orientation
 
 	The MIT License (MIT)
-	Copyright (c) 2014 maurits.tv
+	Copyright (c) 2016 maurits.tv
 	
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the \"Software\"), to deal
@@ -113,29 +113,6 @@ function menu:watch()
 				file:close()
 			end
 		end
-
-		--[[
-		-- Do watch
-		local fileContent, err = build:mergeTargetFiles()
-
-		if not fileContent then
-			print("[watch] failed: " .. tostring(err))
-		end
-		
-		if fileContent ~= lastContent then
-			-- Execute simploo!
-			local status, err = pcall(function()
-				print("[watch] reloading!")
-				loadstring(fileContent)()
-			end)
-
-			if not status then
-				print("[watch] failed: " .. tostring(err))
-			end
-		end
-
-		lastContent = fileContent
-		]]
 
 		-- Force all discarded instances to be finalized constantly
         if collectgarbage then

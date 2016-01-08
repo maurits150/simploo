@@ -2,7 +2,7 @@
 	SIMPLOO - Simple Lua Object Orientation
 
 	The MIT License (MIT)
-	Copyright (c) 2014 maurits.tv
+	Copyright (c) 2016 maurits.tv
 	
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the \"Software\"), to deal
@@ -112,6 +112,8 @@ function util.addGcCallback(object, callback)
                 print(string.format("ERROR: class %s: error __gc function: %s", object, error))
             end
         end
+
+        rawset(object, "__gc", proxy)
     else
         local mt = getmetatable(object)
         mt.__gc = function(self)
@@ -141,7 +143,7 @@ simploo.instancer = instancer
 instancer.classFormats = {}
 
 function instancer:classIsGlobal(obj)
-    return obj and obj.className and obj == _G[obj.className]
+    return obj and type(obj) == "table" and obj.className and obj == _G[obj.className]
 end
 
 function instancer:initClass(classFormat)

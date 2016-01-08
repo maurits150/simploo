@@ -4,7 +4,7 @@ simploo.instancer = instancer
 instancer.classFormats = {}
 
 function instancer:classIsGlobal(obj)
-    return obj and obj.className and obj == _G[obj.className]
+    return obj and type(obj) == "table" and obj.className and obj == _G[obj.className]
 end
 
 function instancer:initClass(classFormat)
