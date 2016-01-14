@@ -1,4 +1,5 @@
 parser_all.lua
 instancer_namespaces.lua
 instancer_constructor_arg_pass.lua
+object_permissions.lua
 benchmark.lua

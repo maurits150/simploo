@@ -104,11 +104,11 @@ function parser:new()
         end
     end
 
-    function object:appendNamespace(namespace)
+    function object:namespace(namespace)
         self.className = namespace .. "." .. self.className
     end
 
-    function object:addUsing(using)
+    function object:using(using)
         table.insert(self.classUsings, using)
     end
 

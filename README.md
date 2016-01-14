@@ -79,7 +79,7 @@ print(square:getDiameter()) -- 11.18034
 
 ### Features
 
-* Define classes using a familiar syntax, including keywords such as `private`, `public`, `abstract`, `static` and `const`.
+* Define classes using a familiar syntax, including keywords such as `private` (partially), `public`, `abstract`, `static`, `const` and `meta` for metamethods.
 * Supports multiple inheritance to define complex relational trees between classes.
 * Supports constructor and *finalizer* methods.
 * Allows you to define metamethods for your classes.

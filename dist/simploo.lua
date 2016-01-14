@@ -553,11 +553,11 @@ function parser:new()
         end
     end
 
-    function object:appendNamespace(namespace)
+    function object:namespace(namespace)
         self.className = namespace .. "." .. self.className
     end
 
-    function object:addUsing(using)
+    function object:using(using)
         table.insert(self.classUsings, using)
     end
 
@@ -616,26 +616,28 @@ local activeNamespace = false
 local activeUsings = {}
 
 function syntax.class(className, classOperation)
-    if not simploo.parser.instance then
-        simploo.parser.instance = simploo.parser:new(onFinished)
-        simploo.parser.instance:setOnFinished(function(self, output)
-            simploo.parser.instance = nil -- Set to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
-            
-            if simploo.instancer then
-                simploo.instancer:initClass(output)
-            end
-        end)
+    if simploo.parser.instance then
+        error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance.className))
     end
+
+    simploo.parser.instance = simploo.parser:new(onFinished)
+    simploo.parser.instance:setOnFinished(function(self, output)
+        simploo.parser.instance = nil -- Set to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
+        
+        if simploo.instancer then
+            simploo.instancer:initClass(output)
+        end
+    end)
 
     simploo.parser.instance:class(className, classOperation)
 
     if activeNamespace and activeNamespace ~= "" then
-        simploo.parser.instance:appendNamespace(activeNamespace)
+        simploo.parser.instance:namespace(activeNamespace)
     end
 
     if activeUsings then
         for _, v in pairs(activeUsings) do
-            simploo.parser.instance:addUsing(v)
+            simploo.parser.instance:using(v)
         end
     end
 
