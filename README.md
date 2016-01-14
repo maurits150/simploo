@@ -83,6 +83,7 @@ print(square:getDiameter()) -- 11.18034
 * Supports multiple inheritance to define complex relational trees between classes.
 * Supports constructor and *finalizer* methods.
 * Allows you to define metamethods for your classes.
+* Support for namespaces.
 * Supports 2 different syntaxes.
 
 ### Changes compared to `1.0`
