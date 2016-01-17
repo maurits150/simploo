@@ -12,7 +12,7 @@ function syntax.class(className, classOperation)
 
     simploo.parser.instance = simploo.parser:new(onFinished)
     simploo.parser.instance:setOnFinished(function(self, output)
-        simploo.parser.instance = nil -- Set to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
+        simploo.parser.instance = nil -- Set parser instance to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
         
         if simploo.instancer then
             simploo.instancer:initClass(output)

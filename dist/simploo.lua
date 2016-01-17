@@ -211,16 +211,19 @@ function instancer:initClass(classFormat)
     end
 
     -- Setup an environment for all usings
-    local global = _G
-    local usingsEnv = setmetatable({}, {
-        __index = function(self, key) return global[key] end,
-        __newindex = function(self, key, value) global[key] = value end
-    })
+    local usingsEnv = {}
 
     -- Assign all usings to the environment
     for _, using in pairs(classFormat.usings) do
         instancer:usingsToTable(using, usingsEnv, _G)
     end
+
+    -- Assign the metatable. Doing this after usingsToTable so it doesn't write to _G
+    local global = _G
+    setmetatable(usingsEnv, {
+        __index = function(self, key) return global[key] end,
+        __newindex = function(self, key, value) global[key] = value end
+    })
 
     -- Setup members based on parent members
     for _, parentName in pairs(classFormat.parents) do
@@ -622,7 +625,7 @@ function syntax.class(className, classOperation)
 
     simploo.parser.instance = simploo.parser:new(onFinished)
     simploo.parser.instance:setOnFinished(function(self, output)
-        simploo.parser.instance = nil -- Set to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
+        simploo.parser.instance = nil -- Set parser instance to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
         
         if simploo.instancer then
             simploo.instancer:initClass(output)
