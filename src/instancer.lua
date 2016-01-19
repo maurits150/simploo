@@ -36,12 +36,12 @@ function instancer:initClass(classFormat)
         end
 
         simploo.util.addGcCallback(copy, function()
-            if copy.members['__finalize'] and copy.members['__finalize'].owner == copy then
+            if copy.members['__finalize'].owner == copy then
                 copy:__finalize()
             end
         end)
 
-        if copy.members['__construct'] and copy.members['__construct'].owner == copy then
+        if copy.members['__construct'].owner == copy then
             if instancer:classIsGlobal(self) then
                 copy:__construct(...)
             else
@@ -92,10 +92,9 @@ function instancer:initClass(classFormat)
 
         if not parentInstance then
             error(string.format("class %s: could not find parent %s", instance.className, parentName))
-        else
-            -- Get the full parent name, because for usings it might not be complete
-            parentName = parentInstance.className
         end
+        -- Get the full parent name, because for usings it might not be complete
+        local fullParentName = parentInstance.className
 
         -- Add parent instance to child
         local newMember = {}
@@ -105,7 +104,7 @@ function instancer:initClass(classFormat)
         instance.members[parentName] = newMember
 
         -- Add variables from parents to child
-        for memberName, _ in pairs(instancer.classFormats[parentName].members) do
+        for memberName, _ in pairs(instancer.classFormats[fullParentName].members) do
             local parentMember = parentInstance.members[memberName]
             parentMember.ambigious = instance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
 
@@ -138,6 +137,18 @@ function instancer:initClass(classFormat)
         newMember.modifiers = memberData.modifiers
 
         instance.members[memberName] = newMember
+    end
+
+    -- Add constructor, finalizer and declarer methods if not yet exists
+    for _, memberName in pairs({"__construct", "__finalize", "__declare"}) do
+        if not instance.members[memberName] then
+            local newMember = {}
+            newMember.owner = instance
+            newMember.value = function() end
+            newMember.modifiers = {}
+
+            instance.members[memberName] = newMember
+        end
     end
 
     -- Assign the usings environment to all members
@@ -240,7 +251,7 @@ function instancer:initClass(classFormat)
 
         if instance.members[metaName] then
             meta[metaName] = function(self, ...)
-                return self[metaName](self, ...) or (fnOriginal and fnOriginal(self, ...)) or nil -- 'or nil' because we will return false on the end otherwise
+                return (fnOriginal and fnOriginal(instance, ...)) or instance.members[metaName].value(instance, ...) or nil -- 'or nil' because else it will return false
             end
         end
     end
