@@ -389,17 +389,15 @@ function instancer:initClass(classFormat)
         local fnOriginal = meta[metaName]
 
         if instance.members[metaName] then
-            if metaName == "__index" or metaName == "__newindex" then
-                meta[metaName] = function(self, key, value)
-                    return (fnOriginal and fnOriginal(instance, key, value)) or (
-                        (instance.members[key] and instance.members[key].value) and -- check if the member we want to reach even exists, or else we get an infinite loop if trying to reach non existing member in __index class method
-                        (instance.members[metaName] and instance.members[metaName].value and instance.members[metaName].value(instance, key, value))
-                    ) or nil
-                end
-            else
-                meta[metaName] = function(self, ...)
-                    return (fnOriginal and fnOriginal(instance, ...)) or (instance.members[metaName] and instance.members[metaName].value and instance.members[metaName].value(instance, ...)) or nil
-                end
+            meta[metaName] = function(self, ...)
+                local fnTmp = meta[metaName]
+                meta[metaName] = nil
+
+                local ret = {(fnOriginal and fnOriginal(self, ...)) or (self.members[metaName] and self.members[metaName].value and self.members[metaName].value(self, ...)) or nil}
+
+                meta[metaName] = fnTmp
+                
+                return unpack(ret)
             end
         end
     end
