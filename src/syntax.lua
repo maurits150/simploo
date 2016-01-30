@@ -69,7 +69,16 @@ function syntax.using(namespaceName)
     activeUsings = previousUsings
 
     -- Add the new using to our table
-    table.insert(activeUsings, returnNamespace or namespaceName)
+    table.insert(activeUsings, {
+        path = returnNamespace or namespaceName,
+        alias = nil
+    })
+end
+
+function syntax.as(newPath)
+    if activeUsings[#activeUsings] then
+        activeUsings[#activeUsings]['alias'] = newPath
+    end
 end
 
 local existingGlobals = {}

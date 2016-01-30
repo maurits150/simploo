@@ -75,8 +75,8 @@ function instancer:initClass(classFormat)
     local usingsEnv = {}
 
     -- Assign all usings to the environment
-    for _, using in pairs(classFormat.usings) do
-        instancer:usingsToTable(using, usingsEnv, _G)
+    for _, usingData in pairs(classFormat.usings) do
+        instancer:usingsToTable(usingData['path'], usingsEnv, _G, usingData['alias'])
     end
 
     -- Assign the metatable. Doing this after usingsToTable so it doesn't write to _G
@@ -252,7 +252,8 @@ function instancer:initClass(classFormat)
         if instance.members[metaName] then
             meta[metaName] = function(self, ...)
                 local fnTmp = meta[metaName]
-                meta[metaName] = nil
+                
+                meta[metaName] = fnOriginal
 
                 local ret = {(fnOriginal and fnOriginal(self, ...)) or (self.members[metaName] and self.members[metaName].value and self.members[metaName].value(self, ...)) or nil}
 
@@ -302,11 +303,11 @@ end
 -- Supports the following formats:
 -- > a.b.c -- Everything inside that namespace
 -- > a.b.c.Foo -- Specific class inside namespace 
-function instancer:usingsToTable(name, targetTable, searchTable)
+function instancer:usingsToTable(name, targetTable, searchTable, alias)
     local firstchunk, remainingchunks = string.match(name, "(%w+)%.(.+)")
-
+ 
     if searchTable[firstchunk] then
-        self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk])
+        self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk], alias)
     else
         if not searchTable[name] then
             error(string.format("failed to resolve using %s", name))
@@ -314,11 +315,17 @@ function instancer:usingsToTable(name, targetTable, searchTable)
 
         if searchTable[name].className then
             -- Assign a single class
-            targetTable[name] = searchTable[name]
+            targetTable[alias or name] = searchTable[name]
         else
             -- Assign everything found in the table
             for k, v in pairs(searchTable[name]) do
-                targetTable[k] = v
+                if alias then
+                    -- Resolve the namespace in the alias, and store the class inside this
+                    self:namespaceToTable(alias, targetTable, {[k] = v})
+                else
+                    -- Just assign the class directly
+                    targetTable[k] = v
+                end
             end
         end
     end
