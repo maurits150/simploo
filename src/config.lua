@@ -19,3 +19,13 @@ simploo.config['production'] = false
 --
 
 simploo.config['exposeSyntax'] = true
+
+--
+-- Global Namespace Table
+--
+-- Description: the global table in which simploo writes away all classes
+-- Default: _G
+--
+
+-- TODO
+-- simploo.config['globalNamespaceTable'] = _G

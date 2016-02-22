@@ -32,7 +32,7 @@ function TestInstancerNamespaces:testInstantiation()
     class "SameClassName" {}
 
     -----
-
+ 
     namespace ""
     
     using "testsimple.Foo"

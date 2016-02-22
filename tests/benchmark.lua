@@ -1,6 +1,8 @@
 print("-----------------")
 print("--- benchmark ---")
 print("-----------------")
+namespace "Benchmark"
+
 class "Simple" {
     private {
         privateMember1 = function() end;
@@ -32,7 +34,7 @@ class "Simple" {
 local startTime = os.clock()
 
 for i=1, 10000 do
-    Simple.new()
+    Benchmark.Simple.new()
 end
 
 

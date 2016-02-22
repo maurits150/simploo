@@ -12,10 +12,15 @@ function syntax.class(className, classOperation)
 
     simploo.parser.instance = simploo.parser:new(onFinished)
     simploo.parser.instance:setOnFinished(function(self, output)
-        simploo.parser.instance = nil -- Set parser instance to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
+        -- Set parser instance to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
+        simploo.parser.instance = nil
         
+        -- Create a class instance
         if simploo.instancer then
-            simploo.instancer:initClass(output)
+            local instance = simploo.instancer:initClass(output)
+
+            -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it using the full path.
+            syntax.using(instance:get_name())
         end
     end)
 
@@ -46,11 +51,11 @@ end
 
 
 function syntax.namespace(namespaceName)
-    activeNamespace = namespaceName
+    local returnNamespace = simploo.hook:fire("onSyntaxNamespace", namespaceName)
+
+    activeNamespace = returnNamespace or namespaceName
 
     activeUsings = {}
-
-    simploo.parser:fireHook("onNamespace", namespaceName)
 end
 
 function syntax.using(namespaceName)
@@ -62,7 +67,7 @@ function syntax.using(namespaceName)
     activeUsings = {}
 
     -- Fire the hook
-    local returnNamespace = simploo.parser:fireHook("onUsing", namespaceName)
+    local returnNamespace = simploo.hook:fire("onSyntaxUsing", namespaceName)
 
     -- Restore the previous namespace and usings
     activeNamespace = previousNamespace

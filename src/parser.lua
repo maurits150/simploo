@@ -2,7 +2,6 @@ parser = {}
 simploo.parser = parser
 
 parser.instance = false
-parser.hooks = {}
 parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract"}
 
 -- Parses the simploo class syntax into the following table format:
@@ -138,19 +137,3 @@ function parser:new()
     return setmetatable(object, meta)
 end
 
-function parser:addHook(hookName, callbackFn)
-    table.insert(self.hooks, {hookName, callbackFn})
-end
-
-function parser:fireHook(hookName, ...)
-    for _, v in pairs(self.hooks) do
-        if v[1] == hookName then
-            local ret = {v[2](...)}
-
-            -- Return data if there was a return value
-            if ret[0] then
-                return unpack(ret)
-            end
-        end
-    end
-end

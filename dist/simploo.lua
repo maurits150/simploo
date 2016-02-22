@@ -55,6 +55,16 @@ simploo.config['production'] = false
 
 simploo.config['exposeSyntax'] = true
 
+--
+-- Global Namespace Table
+--
+-- Description: the global table in which simploo writes away all classes
+-- Default: _G
+--
+
+-- TODO
+-- simploo.config['globalNamespaceTable'] = _G
+
 ----
 ---- util.lua
 ----
@@ -132,6 +142,32 @@ function util.addGcCallback(object, callback)
     end
 end
 
+
+----
+---- hooks.lua
+----
+
+local hook = {}
+hook.hooks = {}
+
+simploo.hook = hook
+
+function hook:add(hookName, callbackFn)
+    table.insert(self.hooks, {hookName, callbackFn})
+end
+
+function hook:fire(hookName, ...)
+    for _, v in pairs(self.hooks) do
+        if v[1] == hookName then
+            local ret = {v[2](...)}
+
+            -- Return data if there was a return value
+            if ret[0] then
+                return unpack(ret)
+            end
+        end
+    end
+end
 
 ----
 ---- instancer.lua
@@ -241,6 +277,7 @@ function instancer:initClass(classFormat)
         newMember.value = parentInstance
         newMember.modifiers = {}
         instance.members[parentName] = newMember
+        instance.members[self:classNameFromFullPath(parentName)] = newMember
 
         -- Add variables from parents to child
         for memberName, _ in pairs(instancer.classFormats[fullParentName].members) do
@@ -382,6 +419,12 @@ function instancer:initClass(classFormat)
         return str
     end
 
+    function meta:__call(self, ...)
+        if self.__construct then
+            return self:__construct(...)
+        end
+    end
+
     -- Add support for meta methods as class members.
     local metaFunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
 
@@ -407,6 +450,8 @@ function instancer:initClass(classFormat)
 
     -- Initialize the instance for use
     self:initInstance(instance)
+
+    return instance
 end
 
 -- Sets up a global instance of a class instance in which static member values are stored
@@ -470,6 +515,10 @@ function instancer:usingsToTable(name, targetTable, searchTable, alias)
     end
 end
 
+-- Get the class name from a full path
+function instancer:classNameFromFullPath(fullPath)
+    return string.match(fullPath, ".*(.+)")
+end
 
 ----
 ---- parser.lua
@@ -479,7 +528,6 @@ parser = {}
 simploo.parser = parser
 
 parser.instance = false
-parser.hooks = {}
 parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract"}
 
 -- Parses the simploo class syntax into the following table format:
@@ -615,22 +663,7 @@ function parser:new()
     return setmetatable(object, meta)
 end
 
-function parser:addHook(hookName, callbackFn)
-    table.insert(self.hooks, {hookName, callbackFn})
-end
 
-function parser:fireHook(hookName, ...)
-    for _, v in pairs(self.hooks) do
-        if v[1] == hookName then
-            local ret = {v[2](...)}
-
-            -- Return data if there was a return value
-            if ret[0] then
-                return unpack(ret)
-            end
-        end
-    end
-end
 
 ----
 ---- syntax.lua
@@ -650,10 +683,15 @@ function syntax.class(className, classOperation)
 
     simploo.parser.instance = simploo.parser:new(onFinished)
     simploo.parser.instance:setOnFinished(function(self, output)
-        simploo.parser.instance = nil -- Set parser instance to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
+        -- Set parser instance to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
+        simploo.parser.instance = nil
         
+        -- Create a class instance
         if simploo.instancer then
-            simploo.instancer:initClass(output)
+            local instance = simploo.instancer:initClass(output)
+
+            -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it using the full path.
+            syntax.using(instance:get_name())
         end
     end)
 
@@ -684,11 +722,11 @@ end
 
 
 function syntax.namespace(namespaceName)
-    activeNamespace = namespaceName
+    local returnNamespace = simploo.hook:fire("onSyntaxNamespace", namespaceName)
+
+    activeNamespace = returnNamespace or namespaceName
 
     activeUsings = {}
-
-    simploo.parser:fireHook("onNamespace", namespaceName)
 end
 
 function syntax.using(namespaceName)
@@ -700,7 +738,7 @@ function syntax.using(namespaceName)
     activeUsings = {}
 
     -- Fire the hook
-    local returnNamespace = simploo.parser:fireHook("onUsing", namespaceName)
+    local returnNamespace = simploo.hook:fire("onSyntaxUsing", namespaceName)
 
     -- Restore the previous namespace and usings
     activeNamespace = previousNamespace

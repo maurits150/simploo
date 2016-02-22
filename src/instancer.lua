@@ -102,6 +102,7 @@ function instancer:initClass(classFormat)
         newMember.value = parentInstance
         newMember.modifiers = {}
         instance.members[parentName] = newMember
+        instance.members[self:classNameFromFullPath(parentName)] = newMember
 
         -- Add variables from parents to child
         for memberName, _ in pairs(instancer.classFormats[fullParentName].members) do
@@ -243,6 +244,12 @@ function instancer:initClass(classFormat)
         return str
     end
 
+    function meta:__call(self, ...)
+        if self.__construct then
+            return self:__construct(...)
+        end
+    end
+
     -- Add support for meta methods as class members.
     local metaFunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
 
@@ -268,6 +275,8 @@ function instancer:initClass(classFormat)
 
     -- Initialize the instance for use
     self:initInstance(instance)
+
+    return instance
 end
 
 -- Sets up a global instance of a class instance in which static member values are stored
@@ -329,4 +338,9 @@ function instancer:usingsToTable(name, targetTable, searchTable, alias)
             end
         end
     end
+end
+
+-- Get the class name from a full path
+function instancer:classNameFromFullPath(fullPath)
+    return string.match(fullPath, ".*(.+)")
 end

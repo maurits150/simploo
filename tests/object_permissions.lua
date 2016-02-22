@@ -1,3 +1,5 @@
+namespace "ObjectPermissions"
+
 ObjectPermissions = {}
 
 function ObjectPermissions:testInstantiation()
@@ -13,7 +15,7 @@ function ObjectPermissions:testInstantiation()
 
     -----
 
-    local instance = Classy.new()
+    local instance = ObjectPermissions.Classy.new()
     
     local success, err = pcall(function()
         local _ = instance.publicVar

@@ -1,0 +1,2 @@
+- PERFORMANCE: Do not deep copy table members that are static, because they will not be used anyway
+- FEATURE: Add 'as' keyword for usings, like using "namespace.Class" as "Class2" so you can use classes with the same name but in different namespaces by renaming them
