@@ -280,7 +280,7 @@ function instancer:initClass(classFormat)
         instance.members[self:classNameFromFullPath(parentName)] = newMember
 
         -- Add variables from parents to child
-        for memberName, _ in pairs(instancer.classFormats[fullParentName].members) do
+        for memberName, _ in pairs(parentInstance.members) do
             local parentMember = parentInstance.members[memberName]
             parentMember.ambigious = instance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
 
@@ -419,7 +419,7 @@ function instancer:initClass(classFormat)
         return str
     end
 
-    function meta:__call(self, ...)
+    function meta:__call(...)
         if self.__construct then
             return self:__construct(...)
         end

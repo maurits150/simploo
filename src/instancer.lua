@@ -105,7 +105,7 @@ function instancer:initClass(classFormat)
         instance.members[self:classNameFromFullPath(parentName)] = newMember
 
         -- Add variables from parents to child
-        for memberName, _ in pairs(instancer.classFormats[fullParentName].members) do
+        for memberName, _ in pairs(parentInstance.members) do
             local parentMember = parentInstance.members[memberName]
             parentMember.ambigious = instance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
 
