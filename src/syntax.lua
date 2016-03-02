@@ -11,13 +11,13 @@ function syntax.class(className, classOperation)
     end
 
     simploo.parser.instance = simploo.parser:new(onFinished)
-    simploo.parser.instance:setOnFinished(function(self, output)
+    simploo.parser.instance:setOnFinished(function(self, parserOutput)
         -- Set parser instance to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
         simploo.parser.instance = nil
         
         -- Create a class instance
         if simploo.instancer then
-            local instance = simploo.instancer:initClass(output)
+            local instance = simploo.instancer:initClass(parserOutput)
 
             -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it using the full path.
             syntax.using(instance:get_name())

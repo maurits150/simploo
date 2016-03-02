@@ -8,13 +8,14 @@ function hook:add(hookName, callbackFn)
 end
 
 function hook:fire(hookName, ...)
+    local args = {...}
     for _, v in pairs(self.hooks) do
         if v[1] == hookName then
-            local ret = {v[2](...)}
+            local ret = {v[2](unpack(args))}
 
-            -- Return data if there was a return value
+            -- Overwrite the original value, but do pass it on to the next hook if any
             if ret[0] then
-                return unpack(ret)
+                args = ret
             end
         end
     end

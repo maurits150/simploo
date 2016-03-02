@@ -8,6 +8,9 @@ function instancer:classIsGlobal(obj)
 end
 
 function instancer:initClass(classFormat)
+    -- Call the beforeInitClass hook
+    local classFormat = simploo.hook:fire("beforeInitClass", classFormat) or classFormat
+
     -- Store class format
     instancer.classFormats[classFormat.name] = classFormat
 
@@ -276,9 +279,10 @@ function instancer:initClass(classFormat)
     end
 
     setmetatable(instance, meta)
-
+    
     -- Initialize the instance for use
     self:initInstance(instance)
+
 
     return instance
 end
