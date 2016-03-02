@@ -423,7 +423,7 @@ function instancer:initClass(classFormat)
         return str
     end
 
-    function meta:__call(self, ...)
+    function meta:__call(...)
         if self.__construct then
             return self:__construct(...)
         end
