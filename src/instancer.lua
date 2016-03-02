@@ -236,6 +236,10 @@ function instancer:initClass(classFormat)
         
         -- Grap the definition string.
         local str = string.format("SimplooObject: %s <%s> {%s}", self:get_name(), not instancer:classIsGlobal(self) and "instance" or "class", tostring(self):sub(8))
+
+        if self.__tostring then
+            str = self:__tostring() or str
+        end
         
         -- Enable our metamethod again.
         mt.__tostring = fn
