@@ -168,6 +168,8 @@ function hook:fire(hookName, ...)
             end
         end
     end
+
+    return unpack(args)
 end
 
 ----
