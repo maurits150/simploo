@@ -34,7 +34,7 @@ function instancer:initClass(classFormat)
 
         for memberName, memberData in pairs(copy.members) do
             if memberData.modifiers.abstract then
-                error("class %s: can not instantiate because it has unimplemented abstract members")
+                error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
             end
         end
 
