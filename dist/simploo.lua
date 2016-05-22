@@ -176,7 +176,7 @@ end
 ---- instancer.lua
 ----
 
-instancer = {}
+local instancer = {}
 simploo.instancer = instancer
 
 instancer.classFormats = {}
@@ -339,7 +339,7 @@ function instancer:initClass(classFormat)
             if setfenv then -- Lua 5.1
                 setfenv(memberData.value, usingsEnv)
             else -- Lua 5.2
-                if debug then
+                if debug and debug.getupvalue and debug.setupvalue then
                     -- Lookup the _ENV local inside the function
                     local localId = 0
                     local localName, localValue
@@ -354,6 +354,8 @@ function instancer:initClass(classFormat)
                             break
                         end
                     until localName == nil
+                else
+                    error(string.format("error: the debug.setupvalue and debug.getupvalue functions are required in Lua 5.2 in order to support the 'using' keyword", object, error))
                 end
             end
         end
@@ -410,7 +412,7 @@ function instancer:initClass(classFormat)
 
     function meta:__tostring()
         -- We disable the metamethod on ourselfs, so we can tostring ourselves without getting into an infinite loop.
-        -- And no, rawget doesn't work because we want to call a metamethod on ourself: __tostring
+        -- And rawget doesn't work because we want to call a metamethod on ourself, not a normal method.
         local mt = getmetatable(self)
         local fn = mt.__tostring
         mt.__tostring = nil
@@ -535,7 +537,7 @@ end
 ---- parser.lua
 ----
 
-parser = {}
+local parser = {}
 simploo.parser = parser
 
 parser.instance = false

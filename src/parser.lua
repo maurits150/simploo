@@ -1,4 +1,4 @@
-parser = {}
+local parser = {}
 simploo.parser = parser
 
 parser.instance = false
