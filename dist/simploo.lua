@@ -288,7 +288,7 @@ function instancer:initClass(classFormat)
         -- Add variables from parents to child
         for memberName, _ in pairs(parentInstance.members) do
             local parentMember = parentInstance.members[memberName]
-            parentMember.ambigious = instance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
+            parentMember.ambiguous = instance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
 
             if not simploo.config['production'] then
                 if type(parentMember.value) == "function" then
@@ -369,7 +369,7 @@ function instancer:initClass(classFormat)
 
         if not simploo.config['production'] then
             if self.members[key].ambiguous then
-                error(string.format("class %s: call to member %s is ambigious as it is present in both parents", tostring(self), key))
+                error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
             end
 
             if self.members[key].modifiers.private and self.members[key].owner ~= self then
