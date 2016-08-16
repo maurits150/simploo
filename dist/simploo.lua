@@ -201,6 +201,7 @@ function instancer:initClass(classFormat)
 
     -- Base methods
     function instance:clone()
+		-- TODO: Do not deep copy  members that are static, because they will not be used anyway
         local clone = simploo.util.duplicateTable(self)
         return clone
     end
