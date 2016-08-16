@@ -1,11 +1,6 @@
 # SIMPLOO `2.0` - Simple Lua Object Orientation
 ---
 
-### Status
-This version is still a work in progress but is expected to be fully backwards compatible with `1.0`.
-
-Notably, this version has not been broadly tested yet so unexpected errors may occur. Due to its numerous improvements it's still highly recommended to use this version instead of the previous one however.
-
 ### Introduction
 SIMPLOO is a library for the Lua programming language. Its goal is to simplify class based object-oriented programming inside Lua. 
 
