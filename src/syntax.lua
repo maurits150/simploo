@@ -12,11 +12,12 @@ function syntax.class(className, classOperation)
 
     simploo.parser.instance = simploo.parser:new(onFinished)
     simploo.parser.instance:setOnFinished(function(self, parserOutput)
-        -- Set parser instance to nil first, before calling the instancer, so that if the instancer errors out it's not going to reuse the old simploo.parser again
+        -- Set parser instance to nil first, before calling the instancer
+		-- That means that if the instancer errors out, at least the bugging instance is cleared and not gonna be used again.
         simploo.parser.instance = nil
         
-        -- Create a class instance
         if simploo.instancer then
+			-- Create a class instance
             local instance = simploo.instancer:initClass(parserOutput)
 
             -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it using the full path.
@@ -51,6 +52,10 @@ end
 
 
 function syntax.namespace(namespaceName)
+	if not namespaceName then
+        return activeNamespace
+    end
+	
     local returnNamespace = simploo.hook:fire("onSyntaxNamespace", namespaceName)
 
     activeNamespace = returnNamespace or namespaceName
@@ -59,14 +64,15 @@ function syntax.namespace(namespaceName)
 end
 
 function syntax.using(namespaceName)
-    -- Save our previous namespace and usings, incase our callback loads new classes in other namespaces
+    -- Save our previous namespace and usings, incase our hook call loads new classes in other namespaces
     local previousNamespace = activeNamespace
     local previousUsings = activeUsings
 
+    -- Clear active namespace and usings
     activeNamespace = false
     activeUsings = {}
 
-    -- Fire the hook
+    -- Fire the hook, you can load other namespaces or classes in this hook because we saved ours above.
     local returnNamespace = simploo.hook:fire("onSyntaxUsing", namespaceName)
 
     -- Restore the previous namespace and usings
@@ -92,6 +98,7 @@ function syntax.init()
     -- Add syntax things
     for k, v in pairs(simploo.syntax) do
         if k ~= "init" and k ~= "destroy" then
+			-- Backup existing globals that we may overwrite
             if _G[k] then
                 existingGlobals[k] = _G[k]
             end
@@ -105,7 +112,8 @@ function syntax.destroy()
     for k, v in pairs(simploo.syntax) do
         if k ~= "init" and k ~= "destroy" then
             _G[k] = nil
-
+			
+			-- Restore existing globals
             if existingGlobals[k] then
                 _G[k] = existingGlobals[k]
             end

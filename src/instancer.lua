@@ -91,11 +91,13 @@ function instancer:initClass(classFormat)
 
     -- Setup members based on parent members
     for _, parentName in pairs(classFormat.parents) do
+		-- Retrieve parent from an earlier defined class that's global, or from the usings table.
         local parentInstance = _G[parentName] or usingsEnv[parentName]
 
         if not parentInstance then
             error(string.format("class %s: could not find parent %s", instance.className, parentName))
         end
+		
         -- Get the full parent name, because for usings it might not be complete
         local fullParentName = parentInstance.className
 
