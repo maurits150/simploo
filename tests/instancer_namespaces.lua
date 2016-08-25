@@ -36,8 +36,8 @@ function TestInstancerNamespaces:testInstantiation()
     namespace ""
     
     using "testsimple.Foo"
-    using "testwhole"
-    using "testsub"
+    using "testwhole.*"
+    using "testsub.*"
     using "testdupe.1.SameClassName" as "SameClassName1"
     using "testdupe.2.SameClassName" as "SameClassName2"
 

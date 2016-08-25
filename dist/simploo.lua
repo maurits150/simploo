@@ -505,20 +505,14 @@ end
 -- > a.b.c.Foo -- Specific class inside namespace 
 function instancer:usingsToTable(name, targetTable, searchTable, alias)
     local firstchunk, remainingchunks = string.match(name, "(%w+)%.(.+)")
- 
+	
     if searchTable[firstchunk] then
         self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk], alias)
     else
-        if not searchTable[name] then
-            error(string.format("failed to resolve using %s", name))
-        end
-
-        if searchTable[name].className then
-            -- Assign a single class
-            targetTable[alias or name] = searchTable[name]
-        else
+		-- Wildcard add all from this namespace
+		if name == "*" then
             -- Assign everything found in the table
-            for k, v in pairs(searchTable[name]) do
+            for k, v in pairs(searchTable) do
                 if alias then
                     -- Resolve the namespace in the alias, and store the class inside this
                     self:namespaceToTable(alias, targetTable, {[k] = v})
@@ -527,8 +521,21 @@ function instancer:usingsToTable(name, targetTable, searchTable, alias)
                     targetTable[k] = v
                 end
             end
-        end
-    end
+        else -- Add single class
+			if not searchTable[name] then
+				error(string.format("failed to resolve using %s", name))
+			end
+			
+			if not searchTable[name].className then
+				error(string.format("resolved %s, but the table found is not a class", name))
+			end
+			
+			if searchTable[name].className then
+				-- Assign a single class
+				targetTable[alias or name] = searchTable[name]
+			end
+		end
+	end
 end
 
 -- Get the class name from a full path
@@ -635,8 +642,12 @@ function parser:new()
 
     -- Adds a member to the class definition
     function object:addMember(memberName, memberValue, modifiers)
+	    if memberValue == simploo.syntax.null then
+            memberValue = nil
+        end
+		
         self['classMembers'][memberName] = {
-            value = memberValue == simploo.syntax.null and nil or memberValue,
+            value = memberValue,
             modifiers = {}
         }
 

@@ -93,8 +93,12 @@ function parser:new()
 
     -- Adds a member to the class definition
     function object:addMember(memberName, memberValue, modifiers)
+	    if memberValue == simploo.syntax.null then
+            memberValue = nil
+        end
+		
         self['classMembers'][memberName] = {
-            value = memberValue == simploo.syntax.null and nil or memberValue,
+            value = memberValue,
             modifiers = {}
         }
 
