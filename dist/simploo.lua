@@ -190,7 +190,7 @@ simploo.instancer = instancer
 instancer.classFormats = {}
 
 function instancer:classIsGlobal(obj)
-    return obj and obj.className and obj == _G[obj.className]
+    return obj and string.sub(tostring(obj), 0, 7 + 6) == "SimplooObject" and obj.className and obj == _G[obj.className]
 end
 
 function instancer:initClass(classFormat)
