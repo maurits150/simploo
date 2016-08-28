@@ -4,6 +4,7 @@ simploo.hotswap = hotswap
 -- Separate global to prevent simploo reloading from cleaning the instances list.
 -- Using a weak table so that we don't prevent all instances from being garbage collected.
 local activeInstances = _G["simploo.instances"] or setmetatable({}, {__mode = "v"})
+_G["simploo.instances"] = activeInstances
 
 function hotswap:init()
     simploo.hook:add("afterInstancerInitClass", function(classFormat, globalInstance)
