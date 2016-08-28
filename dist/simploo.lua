@@ -43,7 +43,7 @@ simploo.config = {}
 -- Default: false
 --
 
-simploo.config['production'] = false
+simploo.config["production"] = false
 
 --
 -- Expose Syntax
@@ -53,7 +53,7 @@ simploo.config['production'] = false
 -- Default: true
 --
 
-simploo.config['exposeSyntax'] = true
+simploo.config["exposeSyntax"] = true
 
 --
 -- Class Hotswapping
@@ -61,7 +61,7 @@ simploo.config['exposeSyntax'] = true
 -- Description: When defining a class a 2nd time, automatically update all the earlier instances of a class with newly added members. Will slightly increase class instantiation time and memory consumption.
 -- Default: false
 --
-simploo.config['classHotswap'] = true
+simploo.config["classHotswap"] = true
 
 --
 -- Global Namespace Table
@@ -71,7 +71,7 @@ simploo.config['classHotswap'] = true
 --
 
 -- TODO
--- simploo.config['globalNamespaceTable'] = _G
+-- simploo.config["globalNamespaceTable"] = _G
 
 ----
 ---- util.lua
@@ -226,12 +226,12 @@ function instancer:initClass(classFormat)
         end
 
         simploo.util.addGcCallback(copy, function()
-            if copy.members['__finalize'].owner == copy then
+            if copy.members["__finalize"].owner == copy then
                 copy:__finalize()
             end
         end)
 
-        if copy.members['__construct'].owner == copy then
+        if copy.members["__construct"].owner == copy then
             if arg1 and instancer:classIsGlobal(self) then -- Why did we check for global here again? Something will calling parent constructors?
                 copy:__construct(...)
             else
@@ -266,7 +266,7 @@ function instancer:initClass(classFormat)
 
     -- Assign all usings to the environment
     for _, usingData in pairs(classFormat.usings) do
-        instancer:usingsToTable(usingData['path'], usingsEnv, _G, usingData['alias'])
+        instancer:usingsToTable(usingData["path"], usingsEnv, _G, usingData["alias"])
     end
 
     -- Assign the metatable. Doing this after usingsToTable so it doesn't write to _G
@@ -301,7 +301,7 @@ function instancer:initClass(classFormat)
             local parentMember = parentInstance.members[memberName]
             parentMember.ambiguous = classInstance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
 
-            if not simploo.config['production'] then
+            if not simploo.config["production"] then
                 if type(parentMember.value) == "function" then
                     -- When not in production, we add a wrapper around each member function that handles access
                     -- To do this we pass the parent object as 'self', instead of the child object
@@ -380,7 +380,7 @@ function instancer:initClass(classFormat)
             return
         end
 
-        if not simploo.config['production'] then
+        if not simploo.config["production"] then
             if self.members[key].ambiguous then
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
             end
@@ -402,7 +402,7 @@ function instancer:initClass(classFormat)
             return
         end
 
-        if not simploo.config['production'] then
+        if not simploo.config["production"] then
 
             if self.members[key].modifiers.const then
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
@@ -485,7 +485,7 @@ function instancer:registerClassInstance(classInstance)
 
     self:namespaceToTable(classInstance.className, _G, classInstance)
         
-    if classInstance.members['__declare'] and classInstance.members['__declare'].owner == classInstance then
+    if classInstance.members["__declare"] and classInstance.members["__declare"].owner == classInstance then
         classInstance:__declare()
     end
 end
@@ -635,7 +635,7 @@ function parser:new()
 
         for memberName, memberValue in pairs(memberTable) do
             local isModifierMember = memberName == "__modifiers"
-            local containsModifierMember = (type(memberValue) == "table" and memberValue['__modifiers'])
+            local containsModifierMember = (type(memberValue) == "table" and memberValue["__modifiers"])
 
             if not isModifierMember and not containsModifierMember then
                 self:addMember(memberName, memberValue, memberTable["__modifiers"])
@@ -651,13 +651,13 @@ function parser:new()
             memberValue = nil
         end
 		
-        self['classMembers'][memberName] = {
+        self["classMembers"][memberName] = {
             value = memberValue,
             modifiers = {}
         }
 
         for _, modifier in pairs(modifiers or {}) do
-            self['classMembers'][memberName].modifiers[modifier] = true
+            self["classMembers"][memberName].modifiers[modifier] = true
         end
     end
 
@@ -791,7 +791,7 @@ end
 
 function syntax.as(newPath)
     if activeUsings[#activeUsings] then
-        activeUsings[#activeUsings]['alias'] = newPath
+        activeUsings[#activeUsings]["alias"] = newPath
     end
 end
 
@@ -835,7 +835,7 @@ do
         end
     end
 
-    if simploo.config['exposeSyntax'] then
+    if simploo.config["exposeSyntax"] then
         syntax.init()
     end
 end
@@ -850,7 +850,7 @@ simploo.hotswap = hotswap
 
 -- Separate global to prevent simploo reloading from cleaning the instances list.
 -- Using a weak table so that we don't prevent all instances from being garbage collected.
-local activeInstances = _G['simploo.instances'] or setmetatable({}, {__mode = 'v'})
+local activeInstances = _G["simploo.instances"] or setmetatable({}, {__mode = "v"})
 
 function hotswap:init()
     simploo.hook:add("afterInstancerInitClass", function(classFormat, globalInstance)
@@ -905,6 +905,6 @@ function hotswap:syncMembers(currentInstance, newInstance)
     end
 end
 
-if simploo.config['classHotswap'] then
+if simploo.config["classHotswap"] then
     hotswap:init()
 end
