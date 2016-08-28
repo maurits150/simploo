@@ -79,7 +79,7 @@ function parser:new()
 
         for memberName, memberValue in pairs(memberTable) do
             local isModifierMember = memberName == "__modifiers"
-            local containsModifierMember = (type(memberValue) == "table" and memberValue['__modifiers'])
+            local containsModifierMember = (type(memberValue) == "table" and memberValue["__modifiers"])
 
             if not isModifierMember and not containsModifierMember then
                 self:addMember(memberName, memberValue, memberTable["__modifiers"])
@@ -95,13 +95,13 @@ function parser:new()
             memberValue = nil
         end
 		
-        self['classMembers'][memberName] = {
+        self["classMembers"][memberName] = {
             value = memberValue,
             modifiers = {}
         }
 
         for _, modifier in pairs(modifiers or {}) do
-            self['classMembers'][memberName].modifiers[modifier] = true
+            self["classMembers"][memberName].modifiers[modifier] = true
         end
     end
 
