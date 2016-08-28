@@ -1,4 +1,4 @@
-# SIMPLOO `2.0` - Simple Lua Object Orientation
+# SIMPLOO `2.1.0` - Simple Lua Object Orientation
 ---
 
 ### Introduction
