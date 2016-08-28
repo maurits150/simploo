@@ -4,7 +4,7 @@ simploo.instancer = instancer
 instancer.classFormats = {}
 
 function instancer:classIsGlobal(obj)
-    return obj and type(obj) == "table" and obj.className and obj == _G[obj.className]
+    return obj and obj.className and obj == _G[obj.className]
 end
 
 function instancer:initClass(classFormat)
@@ -46,7 +46,7 @@ function instancer:initClass(classFormat)
         end)
 
         if copy.members['__construct'].owner == copy then
-            if instancer:classIsGlobal(self) then
+            if arg1 and instancer:classIsGlobal(self) then
                 copy:__construct(...)
             else
                 -- Append self when its a dotnew call
