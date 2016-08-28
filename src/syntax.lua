@@ -18,13 +18,13 @@ function syntax.class(className, classOperation)
         
         if simploo.instancer then
 			-- Create a class instance
-            local instance = simploo.instancer:initClass(parserOutput)
+            local newClass = simploo.instancer:initClass(parserOutput)
 
             -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it using the full path.
-            syntax.using(instance:get_name())
+            syntax.using(newClass:get_name())
         end
     end)
-
+    
     simploo.parser.instance:class(className, classOperation)
 
     if activeNamespace and activeNamespace ~= "" then
@@ -88,49 +88,51 @@ end
 
 function syntax.as(newPath)
     if activeUsings[#activeUsings] then
-        activeUsings[#activeUsings]['alias'] = newPath
+        activeUsings[#activeUsings]["alias"] = newPath
     end
 end
 
-local existingGlobals = {}
+do
+    local overwrittenGlobals = {}
 
-function syntax.init()
-    -- Add syntax things
-    for k, v in pairs(simploo.syntax) do
-        if k ~= "init" and k ~= "destroy" then
-			-- Backup existing globals that we may overwrite
-            if _G[k] then
-                existingGlobals[k] = _G[k]
-            end
+    function syntax.init()
+        -- Add syntax things
+        for k, v in pairs(syntax) do
+            if k ~= "init" and k ~= "destroy" then
+    			-- Backup existing globals that we may overwrite
+                if _G[k] then
+                    overwrittenGlobals[k] = _G[k]
+                end
 
-            _G[k] = v
-        end
-    end
-end
-
-function syntax.destroy()
-    for k, v in pairs(simploo.syntax) do
-        if k ~= "init" and k ~= "destroy" then
-            _G[k] = nil
-			
-			-- Restore existing globals
-            if existingGlobals[k] then
-                _G[k] = existingGlobals[k]
+                _G[k] = v
             end
         end
     end
-end
 
--- Add modifiers as global functions
-for _, modifierName in pairs(simploo.parser.modifiers) do
-    simploo.syntax[modifierName] = function(body)
-        body["__modifiers"] = body["__modifiers"] or {}
-        table.insert(body["__modifiers"], modifierName)
-
-        return body
+    function syntax.destroy()
+        for k, v in pairs(syntax) do
+            if k ~= "init" and k ~= "destroy" then
+                _G[k] = nil
+    			
+    			-- Restore existing globals
+                if overwrittenGlobals[k] then
+                    _G[k] = overwrittenGlobals[k]
+                end
+            end
+        end
     end
-end
 
-if simploo.config['exposeSyntax'] then
-    syntax.init()
+    -- Add modifiers as global functions
+    for _, modifierName in pairs(simploo.parser.modifiers) do
+        syntax[modifierName] = function(body)
+            body["__modifiers"] = body["__modifiers"] or {}
+            table.insert(body["__modifiers"], modifierName)
+
+            return body
+        end
+    end
+
+    if simploo.config["exposeSyntax"] then
+        syntax.init()
+    end
 end

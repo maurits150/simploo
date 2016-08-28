@@ -2,7 +2,7 @@ TestHooks = {}
 
 function TestHooks:testBeforeInitClass()
     -- Automatically create getters and setters
-    simploo.hook:add("beforeInitClass", function(parserOutput)
+    simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
         -- Create new members based on existing ones
         local newMembers = {}
         for memberName, memberData in pairs(parserOutput.members) do
@@ -33,12 +33,11 @@ function TestHooks:testBeforeInitClass()
         return parserOutput
     end)
 
-
     class "A" {
         name = "";
         age = 0;
     };
-
+    
     local instance = A.new()
     instance:setAge(10)
     instance:setName("Lisa")
@@ -47,5 +46,11 @@ function TestHooks:testBeforeInitClass()
     assertEquals(instance:getName(), "Lisa")
 end
 
+function TestHooks:testAfterNewInstance()
+    -- Test when instance is made
+    simploo.hook:add("afterNewInstance", function(instance)
+		print(instance)
+	end)
+end
 
 LuaUnit:run("TestHooks")

@@ -56,6 +56,14 @@ simploo.config['production'] = false
 simploo.config['exposeSyntax'] = true
 
 --
+-- Class Hotswapping
+--
+-- Description: When defining a class a 2nd time, automatically update all the earlier instances of a class with newly added members. Will slightly increase class instantiation time and memory consumption.
+-- Default: false
+--
+simploo.config['classHotswap'] = true
+
+--
 -- Global Namespace Table
 --
 -- Description: the global table in which simploo writes away all classes
@@ -187,29 +195,29 @@ end
 
 function instancer:initClass(classFormat)
     -- Call the beforeInitClass hook
-    local classFormat = simploo.hook:fire("beforeInitClass", classFormat) or classFormat
+    local classFormat = simploo.hook:fire("beforeInstancerInitClass", classFormat) or classFormat
 
     -- Store class format
     instancer.classFormats[classFormat.name] = classFormat
 
     -- Create instance
-    local instance = {}
+    local classInstance = {}
 
     -- Base variables
-    instance.className = classFormat.name
-    instance.members = {}
+    classInstance.className = classFormat.name
+    classInstance.members = {}
 
     -- Base methods
-    function instance:clone()
+    function classInstance:clone()
 		-- TODO: Do not deep copy  members that are static, because they will not be used anyway
         local clone = simploo.util.duplicateTable(self)
         return clone
     end
 
-    function instance:new(...)
+    function classInstance:new(...)
         -- Clone and construct new instance
         local arg1 = self
-        local copy = instance:clone()
+        local copy = classInstance:clone()
 
         for memberName, memberData in pairs(copy.members) do
             if memberData.modifiers.abstract then
@@ -224,26 +232,26 @@ function instancer:initClass(classFormat)
         end)
 
         if copy.members['__construct'].owner == copy then
-            if arg1 and instancer:classIsGlobal(self) then
+            if arg1 and instancer:classIsGlobal(self) then -- Why did we check for global here again? Something will calling parent constructors?
                 copy:__construct(...)
             else
                 -- Append self when its a dotnew call
                 copy:__construct(arg1, ...)
             end
         end
-
-        return copy
+		
+        return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
     end
 
-    function instance:get_name()
+    function classInstance:get_name()
         return self.className
     end
 
-    function instance:get_class()
+    function classInstance:get_class()
         return _G[self.className]
     end
 
-    function instance:instance_of(className)
+    function classInstance:instance_of(className)
         for _, parentName in pairs(classFormat.parents) do
             if self[parentName]:instance_of(className) then
                 return true
@@ -274,24 +282,24 @@ function instancer:initClass(classFormat)
         local parentInstance = _G[parentName] or usingsEnv[parentName]
 
         if not parentInstance then
-            error(string.format("class %s: could not find parent %s", instance.className, parentName))
+            error(string.format("class %s: could not find parent %s", classInstance.className, parentName))
         end
 		
         -- Get the full parent name, because for usings it might not be complete
         local fullParentName = parentInstance.className
 
-        -- Add parent instance to child
+        -- Add parent classInstance to child
         local newMember = {}
-        newMember.owner = instance
+        newMember.owner = classInstance
         newMember.value = parentInstance
         newMember.modifiers = {}
-        instance.members[parentName] = newMember
-        instance.members[self:classNameFromFullPath(parentName)] = newMember
+        classInstance.members[parentName] = newMember
+        classInstance.members[self:classNameFromFullPath(parentName)] = newMember
 
         -- Add variables from parents to child
         for memberName, _ in pairs(parentInstance.members) do
             local parentMember = parentInstance.members[memberName]
-            parentMember.ambiguous = instance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
+            parentMember.ambiguous = classInstance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
 
             if not simploo.config['production'] then
                 if type(parentMember.value) == "function" then
@@ -302,14 +310,14 @@ function instancer:initClass(classFormat)
                         return parentMember.value(_.members[memberName].owner, ...)
                     end
 
-                    instance.members[memberName] = newMember
+                    classInstance.members[memberName] = newMember
                 else
                     -- Assign the member by reference
-                    instance.members[memberName] = parentMember
+                    classInstance.members[memberName] = parentMember
                 end
             else
                 -- Assign the member by reference, always
-                instance.members[memberName] = parentMember
+                classInstance.members[memberName] = parentMember
             end
         end
     end
@@ -317,27 +325,27 @@ function instancer:initClass(classFormat)
     -- Set own members
     for memberName, memberData in pairs(classFormat.members) do
         local newMember = {}
-        newMember.owner = instance
+        newMember.owner = classInstance
         newMember.value = memberData.value
         newMember.modifiers = memberData.modifiers
 
-        instance.members[memberName] = newMember
+        classInstance.members[memberName] = newMember
     end
 
     -- Add constructor, finalizer and declarer methods if not yet exists
     for _, memberName in pairs({"__construct", "__finalize", "__declare"}) do
-        if not instance.members[memberName] then
+        if not classInstance.members[memberName] then
             local newMember = {}
-            newMember.owner = instance
+            newMember.owner = classInstance
             newMember.value = function() end
             newMember.modifiers = {}
 
-            instance.members[memberName] = newMember
+            classInstance.members[memberName] = newMember
         end
     end
 
     -- Assign the usings environment to all members
-    for memberName, memberData in pairs(instance.members) do
+    for memberName, memberData in pairs(classInstance.members) do
         if type(memberData.value) == "function" then
             if setfenv then -- Lua 5.1
                 setfenv(memberData.value, usingsEnv)
@@ -446,7 +454,7 @@ function instancer:initClass(classFormat)
     for _, metaName in pairs(metaFunctions) do
         local fnOriginal = meta[metaName]
 
-        if instance.members[metaName] then
+        if classInstance.members[metaName] then
             meta[metaName] = function(self, ...)
                 local fnTmp = meta[metaName]
                 
@@ -461,25 +469,24 @@ function instancer:initClass(classFormat)
         end
     end
 
-    setmetatable(instance, meta)
+    setmetatable(classInstance, meta)
     
-    -- Initialize the instance for use
-    self:initInstance(instance)
+    -- Initialize the instance for use as a class
+    self:registerClassInstance(classInstance)
 
+    simploo.hook:fire("afterInstancerInitClass", classFormat, classInstance)
 
-    return instance
+    return classInstance
 end
 
 -- Sets up a global instance of a class instance in which static member values are stored
-function instancer:initInstance(instance)
-    instance = instance:clone()
+function instancer:registerClassInstance(classInstance)
+    _G[classInstance.className] = classInstance
 
-    _G[instance.className] = instance
-
-    self:namespaceToTable(instance.className, _G, instance)
+    self:namespaceToTable(classInstance.className, _G, classInstance)
         
-    if instance.members['__declare'] and instance.members['__declare'].owner == instance then
-        instance:__declare()
+    if classInstance.members['__declare'] and classInstance.members['__declare'].owner == classInstance then
+        classInstance:__declare()
     end
 end
 
@@ -569,7 +576,7 @@ parser.modifiers = {"public", "private", "protected", "static", "const", "meta",
 function parser:new()
     local object = {}
     object.className = ""
-    object.classparents = {}
+    object.classParents = {}
     object.classMembers = {}
     object.classUsings = {}
 
@@ -601,12 +608,10 @@ function parser:new()
 
     function object:extends(parentsString)
         for className in string.gmatch(parentsString, "([^,^%s*]+)") do
-            -- Update class cache
-            table.insert(self.classparents, className)
+            table.insert(self.classParents, className)
         end
     end
 
-    -- This method compiles all gathered data and passes it through to the finaliser method.
     function object:register(classContent)
         if classContent then
             self:addMemberRecursive(classContent)
@@ -614,7 +619,7 @@ function parser:new()
 
         local output = {}
         output.name = self.className
-        output.parents = self.classparents
+        output.parents = self.classParents
         output.members = self.classMembers
         output.usings = self.classUsings
         
@@ -667,14 +672,14 @@ function parser:new()
     local meta = {}
     local modifierStack = {}
 
-    -- This method catches and stacks modifier definition when using alternative syntax.
+    -- This method catches and stacks modifier definition when using native lua syntax.
     function meta:__index(key)
         table.insert(modifierStack, key)
 
         return self
     end
 
-    -- This method catches assignments of members using alternative syntax.
+    -- This method catches assignments of members using native lua syntax.
     function meta:__newindex(key, value)
         self:addMember(key, value, modifierStack)
 
@@ -716,13 +721,13 @@ function syntax.class(className, classOperation)
         
         if simploo.instancer then
 			-- Create a class instance
-            local instance = simploo.instancer:initClass(parserOutput)
+            local newClass = simploo.instancer:initClass(parserOutput)
 
             -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it using the full path.
-            syntax.using(instance:get_name())
+            syntax.using(newClass:get_name())
         end
     end)
-
+    
     simploo.parser.instance:class(className, classOperation)
 
     if activeNamespace and activeNamespace ~= "" then
@@ -790,45 +795,116 @@ function syntax.as(newPath)
     end
 end
 
-local existingGlobals = {}
+do
+    local overwrittenGlobals = {}
 
-function syntax.init()
-    -- Add syntax things
-    for k, v in pairs(simploo.syntax) do
-        if k ~= "init" and k ~= "destroy" then
-			-- Backup existing globals that we may overwrite
-            if _G[k] then
-                existingGlobals[k] = _G[k]
+    function syntax.init()
+        -- Add syntax things
+        for k, v in pairs(syntax) do
+            if k ~= "init" and k ~= "destroy" then
+    			-- Backup existing globals that we may overwrite
+                if _G[k] then
+                    overwrittenGlobals[k] = _G[k]
+                end
+
+                _G[k] = v
             end
+        end
+    end
 
-            _G[k] = v
+    function syntax.destroy()
+        for k, v in pairs(syntax) do
+            if k ~= "init" and k ~= "destroy" then
+                _G[k] = nil
+    			
+    			-- Restore existing globals
+                if overwrittenGlobals[k] then
+                    _G[k] = overwrittenGlobals[k]
+                end
+            end
+        end
+    end
+
+    -- Add modifiers as global functions
+    for _, modifierName in pairs(simploo.parser.modifiers) do
+        syntax[modifierName] = function(body)
+            body["__modifiers"] = body["__modifiers"] or {}
+            table.insert(body["__modifiers"], modifierName)
+
+            return body
+        end
+    end
+
+    if simploo.config['exposeSyntax'] then
+        syntax.init()
+    end
+end
+
+----
+---- hotswap.lua
+----
+
+local hotswap = {}
+hotswap.null = "NullVariable_WgVtlrvpP194T7wUWDWv2mjB" -- Parsed into nil value when assigned to member variables
+simploo.hotswap = hotswap
+
+-- Separate global to prevent simploo reloading from cleaning the instances list.
+-- Using a weak table so that we don't prevent all instances from being garbage collected.
+local activeInstances = _G['simploo.instances'] or setmetatable({}, {__mode = 'v'})
+
+function hotswap:init()
+    simploo.hook:add("afterInstancerInitClass", function(classFormat, globalInstance)
+        hotswap:swap(globalInstance:get_class(), globalInstance)
+    end)
+
+    simploo.hook:add("afterInstancerInstanceNew", function(instance)
+        table.insert(activeInstances, instance)
+    end)
+end
+
+function hotswap:swap(newInstance)
+    for _, instance in pairs(activeInstances) do
+        if instance.className == newInstance.className then
+            hotswap:syncMembers(instance, newInstance)
         end
     end
 end
 
-function syntax.destroy()
-    for k, v in pairs(simploo.syntax) do
-        if k ~= "init" and k ~= "destroy" then
-            _G[k] = nil
-			
-			-- Restore existing globals
-            if existingGlobals[k] then
-                _G[k] = existingGlobals[k]
+function hotswap:syncMembers(currentInstance, newInstance)
+    -- Add members that do not exist in the current instance.
+    for newMemberName, newMember in pairs(newInstance.members) do
+        local contains = false
+
+        for prevMemberName, prevMember in pairs(currentInstance.members) do
+            if prevMemberName == newMemberName then
+                contains = true
             end
+        end
+
+        if not contains then
+            local newMember = simploo.util.duplicateTable(newMember)
+            newMember.owner = currentInstance
+
+            currentInstance.members[newMemberName] = newMember
+        end
+    end
+
+    -- Remove members from the current instance that are not in the new instance.
+    for prevMemberName, prevMember in pairs(currentInstance.members) do
+        local exists = false
+
+        for newMemberName, newMember in pairs(newInstance.members) do
+            if prevMemberName == newMemberName then
+                exists = true
+            end
+        end
+
+        if not exists then
+            currentInstance.members[prevMemberName] = nil
         end
     end
 end
 
--- Add modifiers as global functions
-for _, modifierName in pairs(simploo.parser.modifiers) do
-    simploo.syntax[modifierName] = function(body)
-        body["__modifiers"] = body["__modifiers"] or {}
-        table.insert(body["__modifiers"], modifierName)
-
-        return body
-    end
-end
-
-if simploo.config['exposeSyntax'] then
-    syntax.init()
+if simploo.config['classHotswap'] then
+    hotswap:init()
 end

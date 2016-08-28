@@ -8,7 +8,7 @@ simploo.config = {}
 -- Default: false
 --
 
-simploo.config['production'] = false
+simploo.config["production"] = false
 
 --
 -- Expose Syntax
@@ -18,7 +18,15 @@ simploo.config['production'] = false
 -- Default: true
 --
 
-simploo.config['exposeSyntax'] = true
+simploo.config["exposeSyntax"] = true
+
+--
+-- Class Hotswapping
+--
+-- Description: When defining a class a 2nd time, automatically update all the earlier instances of a class with newly added members. Will slightly increase class instantiation time and memory consumption.
+-- Default: false
+--
+simploo.config["classHotswap"] = true
 
 --
 -- Global Namespace Table
@@ -28,4 +36,4 @@ simploo.config['exposeSyntax'] = true
 --
 
 -- TODO
--- simploo.config['globalNamespaceTable'] = _G
+-- simploo.config["globalNamespaceTable"] = _G

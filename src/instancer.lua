@@ -9,29 +9,29 @@ end
 
 function instancer:initClass(classFormat)
     -- Call the beforeInitClass hook
-    local classFormat = simploo.hook:fire("beforeInitClass", classFormat) or classFormat
+    local classFormat = simploo.hook:fire("beforeInstancerInitClass", classFormat) or classFormat
 
     -- Store class format
     instancer.classFormats[classFormat.name] = classFormat
 
     -- Create instance
-    local instance = {}
+    local classInstance = {}
 
     -- Base variables
-    instance.className = classFormat.name
-    instance.members = {}
+    classInstance.className = classFormat.name
+    classInstance.members = {}
 
     -- Base methods
-    function instance:clone()
+    function classInstance:clone()
 		-- TODO: Do not deep copy  members that are static, because they will not be used anyway
         local clone = simploo.util.duplicateTable(self)
         return clone
     end
 
-    function instance:new(...)
+    function classInstance:new(...)
         -- Clone and construct new instance
         local arg1 = self
-        local copy = instance:clone()
+        local copy = classInstance:clone()
 
         for memberName, memberData in pairs(copy.members) do
             if memberData.modifiers.abstract then
@@ -40,32 +40,32 @@ function instancer:initClass(classFormat)
         end
 
         simploo.util.addGcCallback(copy, function()
-            if copy.members['__finalize'].owner == copy then
+            if copy.members["__finalize"].owner == copy then
                 copy:__finalize()
             end
         end)
 
-        if copy.members['__construct'].owner == copy then
-            if arg1 and instancer:classIsGlobal(self) then
+        if copy.members["__construct"].owner == copy then
+            if arg1 and instancer:classIsGlobal(self) then -- Why did we check for global here again? Something will calling parent constructors?
                 copy:__construct(...)
             else
                 -- Append self when its a dotnew call
                 copy:__construct(arg1, ...)
             end
         end
-
-        return copy
+		
+        return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
     end
 
-    function instance:get_name()
+    function classInstance:get_name()
         return self.className
     end
 
-    function instance:get_class()
+    function classInstance:get_class()
         return _G[self.className]
     end
 
-    function instance:instance_of(className)
+    function classInstance:instance_of(className)
         for _, parentName in pairs(classFormat.parents) do
             if self[parentName]:instance_of(className) then
                 return true
@@ -80,7 +80,7 @@ function instancer:initClass(classFormat)
 
     -- Assign all usings to the environment
     for _, usingData in pairs(classFormat.usings) do
-        instancer:usingsToTable(usingData['path'], usingsEnv, _G, usingData['alias'])
+        instancer:usingsToTable(usingData["path"], usingsEnv, _G, usingData["alias"])
     end
 
     -- Assign the metatable. Doing this after usingsToTable so it doesn't write to _G
@@ -96,26 +96,26 @@ function instancer:initClass(classFormat)
         local parentInstance = _G[parentName] or usingsEnv[parentName]
 
         if not parentInstance then
-            error(string.format("class %s: could not find parent %s", instance.className, parentName))
+            error(string.format("class %s: could not find parent %s", classInstance.className, parentName))
         end
 		
         -- Get the full parent name, because for usings it might not be complete
         local fullParentName = parentInstance.className
 
-        -- Add parent instance to child
+        -- Add parent classInstance to child
         local newMember = {}
-        newMember.owner = instance
+        newMember.owner = classInstance
         newMember.value = parentInstance
         newMember.modifiers = {}
-        instance.members[parentName] = newMember
-        instance.members[self:classNameFromFullPath(parentName)] = newMember
+        classInstance.members[parentName] = newMember
+        classInstance.members[self:classNameFromFullPath(parentName)] = newMember
 
         -- Add variables from parents to child
         for memberName, _ in pairs(parentInstance.members) do
             local parentMember = parentInstance.members[memberName]
-            parentMember.ambiguous = instance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
+            parentMember.ambiguous = classInstance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
 
-            if not simploo.config['production'] then
+            if not simploo.config["production"] then
                 if type(parentMember.value) == "function" then
                     -- When not in production, we add a wrapper around each member function that handles access
                     -- To do this we pass the parent object as 'self', instead of the child object
@@ -124,14 +124,14 @@ function instancer:initClass(classFormat)
                         return parentMember.value(_.members[memberName].owner, ...)
                     end
 
-                    instance.members[memberName] = newMember
+                    classInstance.members[memberName] = newMember
                 else
                     -- Assign the member by reference
-                    instance.members[memberName] = parentMember
+                    classInstance.members[memberName] = parentMember
                 end
             else
                 -- Assign the member by reference, always
-                instance.members[memberName] = parentMember
+                classInstance.members[memberName] = parentMember
             end
         end
     end
@@ -139,27 +139,27 @@ function instancer:initClass(classFormat)
     -- Set own members
     for memberName, memberData in pairs(classFormat.members) do
         local newMember = {}
-        newMember.owner = instance
+        newMember.owner = classInstance
         newMember.value = memberData.value
         newMember.modifiers = memberData.modifiers
 
-        instance.members[memberName] = newMember
+        classInstance.members[memberName] = newMember
     end
 
     -- Add constructor, finalizer and declarer methods if not yet exists
     for _, memberName in pairs({"__construct", "__finalize", "__declare"}) do
-        if not instance.members[memberName] then
+        if not classInstance.members[memberName] then
             local newMember = {}
-            newMember.owner = instance
+            newMember.owner = classInstance
             newMember.value = function() end
             newMember.modifiers = {}
 
-            instance.members[memberName] = newMember
+            classInstance.members[memberName] = newMember
         end
     end
 
     -- Assign the usings environment to all members
-    for memberName, memberData in pairs(instance.members) do
+    for memberName, memberData in pairs(classInstance.members) do
         if type(memberData.value) == "function" then
             if setfenv then -- Lua 5.1
                 setfenv(memberData.value, usingsEnv)
@@ -194,7 +194,7 @@ function instancer:initClass(classFormat)
             return
         end
 
-        if not simploo.config['production'] then
+        if not simploo.config["production"] then
             if self.members[key].ambiguous then
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
             end
@@ -216,7 +216,7 @@ function instancer:initClass(classFormat)
             return
         end
 
-        if not simploo.config['production'] then
+        if not simploo.config["production"] then
 
             if self.members[key].modifiers.const then
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
@@ -268,7 +268,7 @@ function instancer:initClass(classFormat)
     for _, metaName in pairs(metaFunctions) do
         local fnOriginal = meta[metaName]
 
-        if instance.members[metaName] then
+        if classInstance.members[metaName] then
             meta[metaName] = function(self, ...)
                 local fnTmp = meta[metaName]
                 
@@ -283,25 +283,24 @@ function instancer:initClass(classFormat)
         end
     end
 
-    setmetatable(instance, meta)
+    setmetatable(classInstance, meta)
     
-    -- Initialize the instance for use
-    self:initInstance(instance)
+    -- Initialize the instance for use as a class
+    self:registerClassInstance(classInstance)
 
+    simploo.hook:fire("afterInstancerInitClass", classFormat, classInstance)
 
-    return instance
+    return classInstance
 end
 
 -- Sets up a global instance of a class instance in which static member values are stored
-function instancer:initInstance(instance)
-    instance = instance:clone()
+function instancer:registerClassInstance(classInstance)
+    _G[classInstance.className] = classInstance
 
-    _G[instance.className] = instance
-
-    self:namespaceToTable(instance.className, _G, instance)
+    self:namespaceToTable(classInstance.className, _G, classInstance)
         
-    if instance.members['__declare'] and instance.members['__declare'].owner == instance then
-        instance:__declare()
+    if classInstance.members["__declare"] and classInstance.members["__declare"].owner == classInstance then
+        classInstance:__declare()
     end
 end
 

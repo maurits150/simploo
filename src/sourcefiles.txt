@@ -5,3 +5,4 @@ hooks.lua
 instancer.lua
 parser.lua
 syntax.lua
+hotswap.lua

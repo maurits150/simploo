@@ -5,3 +5,4 @@ instancer_constructor_arg_pass.lua
 instancer_ambiguous.lua
 object_permissions.lua
 benchmark.lua
+testhotswap.lua

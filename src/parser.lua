@@ -20,7 +20,7 @@ parser.modifiers = {"public", "private", "protected", "static", "const", "meta",
 function parser:new()
     local object = {}
     object.className = ""
-    object.classparents = {}
+    object.classParents = {}
     object.classMembers = {}
     object.classUsings = {}
 
@@ -52,12 +52,10 @@ function parser:new()
 
     function object:extends(parentsString)
         for className in string.gmatch(parentsString, "([^,^%s*]+)") do
-            -- Update class cache
-            table.insert(self.classparents, className)
+            table.insert(self.classParents, className)
         end
     end
 
-    -- This method compiles all gathered data and passes it through to the finaliser method.
     function object:register(classContent)
         if classContent then
             self:addMemberRecursive(classContent)
@@ -65,7 +63,7 @@ function parser:new()
 
         local output = {}
         output.name = self.className
-        output.parents = self.classparents
+        output.parents = self.classParents
         output.members = self.classMembers
         output.usings = self.classUsings
         
@@ -118,14 +116,14 @@ function parser:new()
     local meta = {}
     local modifierStack = {}
 
-    -- This method catches and stacks modifier definition when using alternative syntax.
+    -- This method catches and stacks modifier definition when using native lua syntax.
     function meta:__index(key)
         table.insert(modifierStack, key)
 
         return self
     end
 
-    -- This method catches assignments of members using alternative syntax.
+    -- This method catches assignments of members using native lua syntax.
     function meta:__newindex(key, value)
         self:addMember(key, value, modifierStack)
 
