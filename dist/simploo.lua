@@ -845,7 +845,6 @@ end
 ----
 
 local hotswap = {}
-hotswap.null = "NullVariable_WgVtlrvpP194T7wUWDWv2mjB" -- Parsed into nil value when assigned to member variables
 simploo.hotswap = hotswap
 
 -- Separate global to prevent simploo reloading from cleaning the instances list.
