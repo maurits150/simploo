@@ -26,7 +26,7 @@ simploo.config["exposeSyntax"] = true
 -- Description: When defining a class a 2nd time, automatically update all the earlier instances of a class with newly added members. Will slightly increase class instantiation time and memory consumption.
 -- Default: false
 --
-simploo.config["classHotswap"] = true
+simploo.config["classHotswap"] = false
 
 --
 -- Global Namespace Table
