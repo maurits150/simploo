@@ -150,6 +150,30 @@ function util.addGcCallback(object, callback)
     end
 end
 
+function util.setFunctionEnvironment(fn, env)
+    if setfenv then -- Lua 5.1
+        setfenv(fn, env)
+    else -- Lua 5.2
+        if debug and debug.getupvalue and debug.setupvalue then
+            -- Lookup the _ENV local inside the function
+            local localId = 0
+            local localName, localValue
+
+            repeat
+                localId = localId + 1
+                localName, localValue = debug.getupvalue(fn, localId)
+
+                if localName == "_ENV" then
+                    -- Assign the new environment to the _ENV local
+                    debug.setupvalue(fn, localId, env)
+                    break
+                end
+            until localName == nil
+        else
+            error("error: the debug.setupvalue and debug.getupvalue functions are required in Lua 5.2 in order to support the 'using' keyword")
+        end
+    end
+end
 
 ----
 ---- hooks.lua
@@ -188,6 +212,7 @@ local instancer = {}
 simploo.instancer = instancer
 
 instancer.classFormats = {}
+instancer.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
 
 function instancer:classIsGlobal(obj)
     return obj and string.sub(tostring(obj), 0, 7 + 6) == "SimplooObject" and obj.className and obj == _G[obj.className]
@@ -206,77 +231,26 @@ function instancer:initClass(classFormat)
     -- Base variables
     classInstance.className = classFormat.name
     classInstance.members = {}
+    classInstance.instance = false
+    classInstance.callDepth = 0
 
-    -- Base methods
-    function classInstance:clone()
-		-- TODO: Do not deep copy  members that are static, because they will not be used anyway
-        local clone = simploo.util.duplicateTable(self)
-        return clone
-    end
-
-    function classInstance:new(...)
-        -- Clone and construct new instance
-        local arg1 = self
-        local copy = classInstance:clone()
-
-        for memberName, memberData in pairs(copy.members) do
-            if memberData.modifiers.abstract then
-                error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
-            end
-        end
-
-        simploo.util.addGcCallback(copy, function()
-            if copy.members["__finalize"].owner == copy then
-                copy:__finalize()
-            end
-        end)
-
-        if copy.members["__construct"].owner == copy then
-            if arg1 and instancer:classIsGlobal(self) then -- Why did we check for global here again? Something will calling parent constructors?
-                copy:__construct(...)
-            else
-                -- Append self when its a dotnew call
-                copy:__construct(arg1, ...)
-            end
-        end
-		
-        return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
-    end
-
-    function classInstance:get_name()
-        return self.className
-    end
-
-    function classInstance:get_class()
-        return _G[self.className]
-    end
-
-    function classInstance:instance_of(className)
-        for _, parentName in pairs(classFormat.parents) do
-            if self[parentName]:instance_of(className) then
-                return true
-            end
-        end
-
-        return self.className == className
-    end
-
-    -- Setup an environment for all usings
+    -- Setup a lua environment for all usings, which we can apply to all members later
     local usingsEnv = {}
+    do
+        -- Assign all usings to the environment
+        for _, usingData in pairs(classFormat.usings) do
+            instancer:usingsToTable(usingData["path"], usingsEnv, _G, usingData["alias"])
+        end
 
-    -- Assign all usings to the environment
-    for _, usingData in pairs(classFormat.usings) do
-        instancer:usingsToTable(usingData["path"], usingsEnv, _G, usingData["alias"])
+        -- Assign the metatable. Doing this after usingsToTable so it doesn't write to _G
+        local global = _G
+        setmetatable(usingsEnv, {
+            __index = function(self, key) return global[key] end,
+            __newindex = function(self, key, value) global[key] = value end
+        })
     end
 
-    -- Assign the metatable. Doing this after usingsToTable so it doesn't write to _G
-    local global = _G
-    setmetatable(usingsEnv, {
-        __index = function(self, key) return global[key] end,
-        __newindex = function(self, key, value) global[key] = value end
-    })
-
-    -- Setup members based on parent members
+    -- Copy members from provided parents in the class format
     for _, parentName in pairs(classFormat.parents) do
 		-- Retrieve parent from an earlier defined class that's global, or from the usings table.
         local parentInstance = _G[parentName] or usingsEnv[parentName]
@@ -293,41 +267,60 @@ function instancer:initClass(classFormat)
         newMember.owner = classInstance
         newMember.value = parentInstance
         newMember.modifiers = {}
+
         classInstance.members[parentName] = newMember
         classInstance.members[self:classNameFromFullPath(parentName)] = newMember
 
         -- Add variables from parents to child
-        for memberName, _ in pairs(parentInstance.members) do
-            local parentMember = parentInstance.members[memberName]
-            parentMember.ambiguous = classInstance.members[memberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
+        for parentMemberName, _ in pairs(parentInstance.members) do
+            local parentMember = parentInstance.members[parentMemberName]
+            parentMember.ambiguous = classInstance.members[parentMemberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
 
             if not simploo.config["production"] then
                 if type(parentMember.value) == "function" then
+                    local newMember = simploo.util.duplicateTable(parentMember)
+
                     -- When not in production, we add a wrapper around each member function that handles access
                     -- To do this we pass the parent object as 'self', instead of the child object
-                    local newMember = simploo.util.duplicateTable(parentMember)
-                    newMember.value = function(_, ...)
-                        return parentMember.value(_.members[memberName].owner, ...)
+                    newMember.value = function(caller, ...)
+                        return parentMember.value(caller.members[parentMemberName].owner, ...)
                     end
 
-                    classInstance.members[memberName] = newMember
+                    classInstance.members[parentMemberName] = newMember
                 else
                     -- Assign the member by reference
-                    classInstance.members[memberName] = parentMember
+                    classInstance.members[parentMemberName] = parentMember
                 end
             else
                 -- Assign the member by reference, always
-                classInstance.members[memberName] = parentMember
+                classInstance.members[parentMemberName] = parentMember
             end
         end
     end
 
-    -- Set own members
+    -- Init own members from class format
     for memberName, memberData in pairs(classFormat.members) do
         local newMember = {}
         newMember.owner = classInstance
-        newMember.value = memberData.value
         newMember.modifiers = memberData.modifiers
+        newMember.value = memberData.value
+
+        -- When not in production, add code that tracks invocation depth from the root instance
+        -- This allows us to detect when you try to access private variables directly from an instance.
+        if not simploo.config["production"] then
+            if type(newMember.value) == "function" then
+                newMember.valueOriginal = newMember.value
+                newMember.value = function(self, ...)
+                    self.callDepth = self.callDepth + 1
+                    
+                    local ret = {newMember.valueOriginal(self, ...)}
+
+                    self.callDepth = self.callDepth - 1
+
+                    return unpack(ret) 
+                end
+            end
+        end
 
         classInstance.members[memberName] = newMember
     end
@@ -341,117 +334,177 @@ function instancer:initClass(classFormat)
             newMember.modifiers = {}
 
             classInstance.members[memberName] = newMember
+        else
+            -- Already exists, but remove all modifiers just in case
+            classInstance.members[memberName].modifiers = {}
         end
     end
 
     -- Assign the usings environment to all members
     for memberName, memberData in pairs(classInstance.members) do
         if type(memberData.value) == "function" then
-            if setfenv then -- Lua 5.1
-                setfenv(memberData.value, usingsEnv)
-            else -- Lua 5.2
-                if debug and debug.getupvalue and debug.setupvalue then
-                    -- Lookup the _ENV local inside the function
-                    local localId = 0
-                    local localName, localValue
+            simploo.util.setFunctionEnvironment(memberData.value, usingsEnv)
+            if memberData.valueOriginal then
+                simploo.util.setFunctionEnvironment(memberData.valueOriginal, usingsEnv)
+            end
+        end
+    end
 
-                    repeat
-                        localId = localId + 1
-                        localName, localValue = debug.getupvalue(memberData.value, localId)
+    -- Add base methods
+    do
+        function classInstance:clone()
+            -- TODO: Do not deep copy  members that are static, because they will not be used anyway
+            local clone = simploo.util.duplicateTable(self)
+            return clone
+        end
 
-                        if localName == "_ENV" then
-                            -- Assign the new environment to the _ENV local
-                            debug.setupvalue(memberData.value, localId, usingsEnv)
-                            break
-                        end
-                    until localName == nil
-                else
-                    error("error: the debug.setupvalue and debug.getupvalue functions are required in Lua 5.2 in order to support the 'using' keyword")
+        function classInstance:new(...)
+            -- Clone and construct new instance
+            local arg1 = self
+            local copy = classInstance:clone()
+            copy.instance = true
+
+            for memberName, memberData in pairs(copy.members) do
+                if memberData.modifiers.abstract then
+                    error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
                 end
             end
+
+            simploo.util.addGcCallback(copy, function()
+                if copy.members["__finalize"].owner == copy then
+                    copy:__finalize()
+                end
+            end)
+
+            if copy.members["__construct"].owner == copy then
+                if arg1 and instancer:classIsGlobal(self) then -- Why did we check for global here again? Something with calling parent constructors?
+                    copy:__construct(...)
+                else
+                    -- Append self when its a dotnew call
+                    copy:__construct(arg1, ...)
+                end
+            end
+            
+            -- If our hook returns a different object, use that instead.
+            local copy = simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
+
+            -- Encapsulate the instance with a wrapper object to prevent private vars from being accessable.
+            return copy
+        end
+
+        function classInstance:get_name()
+            return self.className
+        end
+
+        function classInstance:get_class()
+            return _G[self.className]
+        end
+
+        function classInstance:instance_of(className)
+            for _, parentName in pairs(classFormat.parents) do
+                if self[parentName]:instance_of(className) then
+                    return true
+                end
+            end
+
+            return self.className == className
         end
     end
+    
 
-    -- Meta methods
+    -- Add meta ethods
     local meta = {}
 
-    function meta:__index(key)
-        if not self.members[key] then
-            return
-        end
-
-        if not simploo.config["production"] then
-            if self.members[key].ambiguous then
-                error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
+    do
+        function meta:__index(key)
+            if not self.members[key] then
+                return
             end
 
-            if self.members[key].modifiers.private and self.members[key].owner ~= self then
-                error(string.format("class %s: accessing private member %s", tostring(self), key))
-            end
-        end
+            if not simploo.config["production"] then
+                if self.members[key].ambiguous then
+                    error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
+                end
 
-        if self.members[key].modifiers.static and not instancer:classIsGlobal(self) then
-            return _G[self.className][key]
-        end
+                if self.members[key].modifiers.private and self.members[key].owner ~= self then
+                    error(string.format("class %s: accessing private member %s", tostring(self), key))
+                end
 
-        return self.members[key].value
-    end
-
-    function meta:__newindex(key, value)
-        if not self.members[key] then
-            return
-        end
-
-        if not simploo.config["production"] then
-
-            if self.members[key].modifiers.const then
-                error(string.format("class %s: can not modify const variable %s", tostring(self), key))
+                if self.members[key].modifiers.private and self.callDepth == 0 then
+                    error(string.format("class %s: accessing private member from outside %s", tostring(self), key))
+                end
             end
 
-            if self.members[key].modifiers.private and self.members[key].owner ~= self then
-                error(string.format("class %s: accessing private member %s", tostring(self), key))
+            if self.members[key].modifiers.static and not instancer:classIsGlobal(self) then
+                return _G[self.className][key]
             end
+
+            return self.members[key].value
         end
 
-        if self.members[key].modifiers.static and not instancer:classIsGlobal(self) then
-            _G[self.className][key] = value
-            return
+        function meta:__newindex(key, value)
+            if not self.members[key] then
+                return
+            end
+
+            if not simploo.config["production"] then
+                if self.members[key].modifiers.const then
+                    error(string.format("class %s: can not modify const variable %s", tostring(self), key))
+                end
+
+                if self.members[key].modifiers.private and self.members[key].owner ~= self then
+                    error(string.format("class %s: accessing private member %s", tostring(self), key))
+                end
+
+                if self.members[key].modifiers.private and self.callDepth == 0 then
+                    error(string.format("class %s: accessing private member from outside %s", tostring(self), key))
+                end
+            end
+
+            if self.members[key].modifiers.static and not instancer:classIsGlobal(self) then
+                _G[self.className][key] = value
+                return
+            end
+
+            self.members[key].value = value
         end
 
-        self.members[key].value = value
-    end
+        function meta:__tostring()
+            -- We disable the metamethod on ourselfs, so we can tostring ourselves without getting into an infinite loop.
+            -- And rawget doesn't work because we want to call a metamethod on ourself, not a normal method.
+            local mt = getmetatable(self)
+            local fn = mt.__tostring
+            mt.__tostring = nil
+            
+            -- Grap the definition string.
+            local str = string.format("SimplooObject: %s <%s> {%s}", self:get_name(), not instancer:classIsGlobal(self) and "instance" or "class", tostring(self):sub(8))
 
-    function meta:__tostring()
-        -- We disable the metamethod on ourselfs, so we can tostring ourselves without getting into an infinite loop.
-        -- And rawget doesn't work because we want to call a metamethod on ourself, not a normal method.
-        local mt = getmetatable(self)
-        local fn = mt.__tostring
-        mt.__tostring = nil
-        
-        -- Grap the definition string.
-        local str = string.format("SimplooObject: %s <%s> {%s}", self:get_name(), not instancer:classIsGlobal(self) and "instance" or "class", tostring(self):sub(8))
-
-        if self.__tostring then
-            str = self:__tostring() or str
+            if self.__tostring then
+                str = self:__tostring() or str
+            end
+            
+            -- Enable our metamethod again.
+            mt.__tostring = fn
+            
+            -- Return string.
+            return str
         end
-        
-        -- Enable our metamethod again.
-        mt.__tostring = fn
-        
-        -- Return string.
-        return str
-    end
 
-    function meta:__call(...)
-        if self.__construct then
-            return self:__construct(...)
+        function meta:__call(...)
+            if self.instance then
+                -- Call constructor
+                if self.__construct then
+                    return self:__construct(...)
+                end
+            else
+                -- Call :new
+                return self:new(...)
+            end
         end
     end
 
     -- Add support for meta methods as class members.
-    local metaFunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
-
-    for _, metaName in pairs(metaFunctions) do
+    for _, metaName in pairs(instancer.metafunctions) do
         local fnOriginal = meta[metaName]
 
         if classInstance.members[metaName] then
@@ -850,6 +903,7 @@ simploo.hotswap = hotswap
 -- Separate global to prevent simploo reloading from cleaning the instances list.
 -- Using a weak table so that we don't prevent all instances from being garbage collected.
 local activeInstances = _G["simploo.instances"] or setmetatable({}, {__mode = "v"})
+_G["simploo.instances"] = activeInstances
 
 function hotswap:init()
     simploo.hook:add("afterInstancerInitClass", function(classFormat, globalInstance)

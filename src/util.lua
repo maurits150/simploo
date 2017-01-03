@@ -70,3 +70,28 @@ function util.addGcCallback(object, callback)
         return
     end
 end
+
+function util.setFunctionEnvironment(fn, env)
+    if setfenv then -- Lua 5.1
+        setfenv(fn, env)
+    else -- Lua 5.2
+        if debug and debug.getupvalue and debug.setupvalue then
+            -- Lookup the _ENV local inside the function
+            local localId = 0
+            local localName, localValue
+
+            repeat
+                localId = localId + 1
+                localName, localValue = debug.getupvalue(fn, localId)
+
+                if localName == "_ENV" then
+                    -- Assign the new environment to the _ENV local
+                    debug.setupvalue(fn, localId, env)
+                    break
+                end
+            until localName == nil
+        else
+            error("error: the debug.setupvalue and debug.getupvalue functions are required in Lua 5.2 in order to support the 'using' keyword")
+        end
+    end
+end
