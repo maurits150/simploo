@@ -1,7 +1,7 @@
 TestHotswap = {}
 
 function TestHotswap:test()
-    simploo.config["classHotswap"]  = true
+    simploo.hotswap:init()
 
     class "A" {
         a = "I'm old.";
@@ -20,8 +20,6 @@ function TestHotswap:test()
     assertEquals(instanceA.a, "I'm old.")
     assertEquals(instanceA.b, "I'm new.")
     assertEquals(instanceA.c, nil)
-
-    simploo.config["classHotswap"] = false
 end
 
 
