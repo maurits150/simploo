@@ -431,7 +431,7 @@ function instancer:initClass(classFormat)
                 end
 
                 if self.members[key].modifiers.private and self.callDepth == 0 then
-                    error(string.format("class %s: accessing private member from outside %s", tostring(self), key))
+                    error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
                 end
             end
 
@@ -457,7 +457,7 @@ function instancer:initClass(classFormat)
                 end
 
                 if self.members[key].modifiers.private and self.callDepth == 0 then
-                    error(string.format("class %s: accessing private member from outside %s", tostring(self), key))
+                    error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
                 end
             end
 
