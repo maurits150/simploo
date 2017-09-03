@@ -4,10 +4,6 @@ simploo.instancer = instancer
 instancer.classFormats = {}
 instancer.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
 
-function instancer:classIsGlobal(obj)
-    return obj and string.sub(tostring(obj), 0, 7 + 6) == "SimplooObject" and obj.className and obj == _G[obj.className]
-end
-
 function instancer:initClass(classFormat)
     -- Call the beforeInitClass hook
     local classFormat = simploo.hook:fire("beforeInstancerInitClass", classFormat) or classFormat
@@ -18,11 +14,18 @@ function instancer:initClass(classFormat)
     -- Create instance
     local classInstance = {}
 
+    local function classIsGlobal(obj)
+        return obj == classInstance
+
+        -- return obj and string.sub(tostring(obj), 0, 7 + 6) == "SimplooObject" and obj.className and obj == _G[obj.className]
+    end
+
+
     -- Base variables
     classInstance.className = classFormat.name
     classInstance.members = {}
     classInstance.instance = false
-    classInstance.callDepth = 0
+    classInstance.privateCallDepth = 0
 
     -- Setup a lua environment for all usings, which we can apply to all members later
     local usingsEnv = {}
@@ -64,14 +67,15 @@ function instancer:initClass(classFormat)
         -- Add variables from parents to child
         for parentMemberName, _ in pairs(parentInstance.members) do
             local parentMember = parentInstance.members[parentMemberName]
-            parentMember.ambiguous = classInstance.members[parentMemberName] and true or false -- mark as ambiguous when already exists (and thus was found twice)
+            parentMember.ambiguous = classInstance.members[parentMemberName] and true or false -- mark as ambiguous when a member already exists (which means that during inheritance 2 parents had a member with the same name)
 
             if not simploo.config["production"] then
                 if type(parentMember.value) == "function" then
-                    local newMember = simploo.util.duplicateTable(parentMember)
+                    local newMember = simploo.util.duplicateTable(parentMember, {owner = false}) -- Don't copy the owner! that reference should stay the same
 
-                    -- When not in production, we add a wrapper around each member function that handles access
-                    -- To do this we pass the parent object as 'self', instead of the child object
+                    -- When not in production, we have to add a wrapper around each inherited function to fix up private access.
+                    -- This function resolves unjustified private access errors you call a function that uses a parent's private variables, from a child class.
+                    -- It basically passes the parent object as 'self', instead of the child object, so when the __index/__newindex metamethods check access, the member owner == self.
                     newMember.value = function(caller, ...)
                         return parentMember.value(caller.members[parentMemberName].owner, ...)
                     end
@@ -101,11 +105,15 @@ function instancer:initClass(classFormat)
             if type(newMember.value) == "function" then
                 newMember.valueOriginal = newMember.value
                 newMember.value = function(self, ...)
-                    self.callDepth = self.callDepth + 1
+                    if not self or not self.privateCallDepth then
+                        error("Method called incorrectly, 'self' was not passed. https://stackoverflow.com/questions/4911186/difference-between-and-in-lua")
+                    end
+
+                    self.privateCallDepth = self.privateCallDepth + 1
                     
                     local ret = {newMember.valueOriginal(self, ...)}
 
-                    self.callDepth = self.callDepth - 1
+                    self.privateCallDepth = self.privateCallDepth - 1
 
                     return unpack(ret) 
                 end
@@ -115,7 +123,7 @@ function instancer:initClass(classFormat)
         classInstance.members[memberName] = newMember
     end
 
-    -- Add constructor, finalizer and declarer methods if not yet exists
+    -- Add default constructor, finalizer and declarer methods if not yet exists
     for _, memberName in pairs({"__construct", "__finalize", "__declare"}) do
         if not classInstance.members[memberName] then
             local newMember = {}
@@ -148,10 +156,21 @@ function instancer:initClass(classFormat)
             return clone
         end
 
+        local function markAsInstanceRecursively(instance)
+            instance.instance = true
+
+            for parentName, parentInstance in pairs(instance:get_parents()) do
+                parentInstance.instance = true
+
+                markAsInstanceRecursively(parentInstance)
+            end
+        end
+
         function classInstance:new(...)
             -- Clone and construct new instance
             local copy = classInstance:clone()
-            copy.instance = true
+            
+            markAsInstanceRecursively(copy)
 
             for memberName, memberData in pairs(copy.members) do
                 if memberData.modifiers.abstract then
@@ -165,13 +184,11 @@ function instancer:initClass(classFormat)
                 end
             end)
 
-            local arg1 = self
-            if copy.members["__construct"].owner == copy then
-                if arg1 and instancer:classIsGlobal(self) then -- Why did we check for global here again? Something with calling parent constructors?
+            if copy.members["__construct"].owner == copy then -- If the class has a constructor member that it owns (so it is not a reference to the parent constructor)
+                if self and self == classInstance then -- The :new() syntax was used, because 'self' is the same as the original class instance
                     copy:__construct(...)
-                else
-                    -- Append self when its a dotnew call
-                    copy.__construct(arg1, ...)
+                else -- The .new() syntax was used, because 'self' is not a class. 'self' is now actually first argument that was passed, so we need to pass it along
+                    copy:__construct(self, ...)
                 end
             end
             
@@ -199,6 +216,16 @@ function instancer:initClass(classFormat)
 
             return self.className == className
         end
+
+        function classInstance:get_parents()
+            local t = {}
+
+            for _, parentName in pairs(classFormat.parents) do
+                t[parentName] = self[parentName]
+            end
+
+            return t
+        end
     end
     
 
@@ -220,12 +247,12 @@ function instancer:initClass(classFormat)
                     error(string.format("class %s: accessing private member %s", tostring(self), key))
                 end
 
-                if self.members[key].modifiers.private and self.callDepth == 0 then
+                if self.members[key].modifiers.private and self.privateCallDepth == 0 then
                     error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
                 end
             end
 
-            if self.members[key].modifiers.static and not instancer:classIsGlobal(self) then
+            if self.members[key].modifiers.static and not self == classInstance then
                 return _G[self.className][key]
             end
 
@@ -246,12 +273,12 @@ function instancer:initClass(classFormat)
                     error(string.format("class %s: accessing private member %s", tostring(self), key))
                 end
 
-                if self.members[key].modifiers.private and self.callDepth == 0 then
+                if self.members[key].modifiers.private and self.privateCallDepth == 0 then
                     error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
                 end
             end
 
-            if self.members[key].modifiers.static and not instancer:classIsGlobal(self) then
+            if self.members[key].modifiers.static and not self == classInstance then
                 _G[self.className][key] = value
                 return
             end
@@ -267,7 +294,7 @@ function instancer:initClass(classFormat)
             mt.__tostring = nil
             
             -- Grap the definition string.
-            local str = string.format("SimplooObject: %s <%s> {%s}", self:get_name(), not instancer:classIsGlobal(self) and "instance" or "class", tostring(self):sub(8))
+            local str = string.format("SimplooObject: %s <%s> {%s}", self:get_name(), self == classInstance and "class" or "instance", tostring(self):sub(8))
 
             if self.__tostring then
                 str = self:__tostring() or str
@@ -281,14 +308,12 @@ function instancer:initClass(classFormat)
         end
 
         function meta:__call(...)
-            if self.instance then
-                -- Call constructor
-                if self.__construct then
+            if self == classInstance then
+                return self:new(...)
+            elseif self.instance then
+                if self.members["__construct"].owner == self then
                     return self:__construct(...)
                 end
-            else
-                -- Call :new
-                return self:new(...)
             end
         end
     end
