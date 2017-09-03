@@ -1,5 +1,10 @@
 namespace "ObjectPermissions"
 
+if simploo.config["production"] then
+    print("SKIPPING TEST BECAUSE IT WON'T WORK IN PRODUCTION MODE")
+    return
+end
+
 ObjectPermissions = {}
 
 function ObjectPermissions:testInsiderAccess()
