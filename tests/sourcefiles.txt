@@ -1,8 +1,10 @@
-testhooks.lua
 parser_all.lua
 instancer_namespaces.lua
 instancer_constructor_arg_pass.lua
+instancer_multi_inheritance.lua
+instances_hierarchypassthrough.lua
 instancer_ambiguous.lua
 object_permissions.lua
 benchmark.lua
+testhooks.lua
 testhotswap.lua
