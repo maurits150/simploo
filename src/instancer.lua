@@ -150,7 +150,6 @@ function instancer:initClass(classFormat)
 
         function classInstance:new(...)
             -- Clone and construct new instance
-            local arg1 = self
             local copy = classInstance:clone()
             copy.instance = true
 
@@ -166,12 +165,13 @@ function instancer:initClass(classFormat)
                 end
             end)
 
+            local arg1 = self
             if copy.members["__construct"].owner == copy then
                 if arg1 and instancer:classIsGlobal(self) then -- Why did we check for global here again? Something with calling parent constructors?
                     copy:__construct(...)
                 else
                     -- Append self when its a dotnew call
-                    copy:__construct(arg1, ...)
+                    copy.__construct(arg1, ...)
                 end
             end
             
