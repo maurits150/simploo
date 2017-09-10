@@ -1,18 +1,23 @@
 local util = {}
 simploo.util = util
 
-function util.duplicateTable(tbl, lookup)
+function util.duplicateTable(tbl, skipKeys, lookup)
     local copy = {}
-    
+        
+
     for k, v in pairs(tbl) do
         if type(v) == "table" then
-            lookup = lookup or {}
-            lookup[tbl] = copy
-
-            if lookup[v] then
-                copy[k] = lookup[v] -- we already copied this table. reuse the copy.
+            if skipKeys and skipKeys[k] == false then
+                copy[k] = v -- Specified to skip copying explicitly
             else
-                copy[k] = util.duplicateTable(v, lookup) -- not yet copied. copy it.
+                lookup = lookup or {}
+                lookup[tbl] = copy
+
+                if lookup[v] then
+                    copy[k] = lookup[v] -- we already copied this table. reuse the copy.
+                else
+                    copy[k] = util.duplicateTable(v, skipKeys and skipKeys[k] --[[ allows to use a multi-dimentional table so skip keys ]], lookup) -- not yet copied. copy it.
+                end
             end
         else
             copy[k] = rawget(tbl, k)

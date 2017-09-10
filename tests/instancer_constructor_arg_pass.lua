@@ -30,27 +30,45 @@ function TestInstancerConstructorArgPass:test() -- new() called with both . and 
 
     TestInstancerConstructorArgPass.B:new(a1)
     TestInstancerConstructorArgPass.B:new(a2) -- Call with :
+
+    TestInstancerConstructorArgPass.B(a1)
+    TestInstancerConstructorArgPass.B(a2) -- Call with .
+
+    TestInstancerConstructorArgPass.B(a1)
+    TestInstancerConstructorArgPass.B(a2) -- Call with :
 end
 
 function TestInstancerConstructorArgPass:testInheritance() -- Arguments should be passed to child correctly
-    class "A" {
-        __construct = function(self, a)
+    class "C" {
+        __construct = function(self, a, _)
             assertEquals(a, "Value")
         end;
     }
 
-    class "B" extends "A" {
+    class "D" extends "C" {
         __construct = function(self, ...)
-            self.A(...)
-            self.A:__construct(...)
+            self.C(...)
+            self.C:__construct(...)
         end;
     }
 
     -----
 
-    TestInstancerConstructorArgPass.B.new("Value")
-    TestInstancerConstructorArgPass.B:new("Value")
+    TestInstancerConstructorArgPass.D.new("Value")
+    TestInstancerConstructorArgPass.D:new("Value")
 end
 
-
 LuaUnit:run("TestInstancerConstructorArgPass")
+
+-- function TestInstancerConstructorArgPass:testSelf()
+--     class "E" {
+--         __construct = function(self, a, b, c)
+--             print(">>>", self, a, b, c)
+--         end;
+--     }
+    
+--     TestInstancerConstructorArgPass.E.new("Value1", "Value2", "Value3")
+--     TestInstancerConstructorArgPass.E:new("Value1", "Value2", "Value3")
+--     TestInstancerConstructorArgPass.E("Value1", "Value2", "Value3")
+-- end
+

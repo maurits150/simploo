@@ -125,42 +125,57 @@ end
 
 function menu:tests()
 	-- Execute test files
-	local files, err = tests:getSourceFiles()
+	local testfiles, err = tests:getSourceFiles()
 
-	if not files then
+	if not testfiles then
 		print("[tests] no tests ran: " .. tostring(err))
 	end
 
-	for k, v in pairs(files) do
-		-- Execute simploo files
-		simploo = nil
-		
-		local files, err = build:getSourceFiles()
+	for _, testproduction in pairs({false, true}) do -- Test in both production mode and non-production
+		print("--------------------------------")
+		print("--------------------------------")
+		print("--------------------------------")
+		print("--Running test with production mode " .. (testproduction and "ON" or "OFF"))
+		print("--------------------------------")
+		print("--------------------------------")
+		print("--------------------------------")
 
-		if not files then
-			print("[exec] failed: " .. tostring(err))
-		end
 
-		for k, name in pairs(files) do
-			local file, err = io.open("src/" .. name, "r")
+		for k, v in pairs(testfiles) do
+			-- Wipe simploo reference
+			simploo = nil
 
-			if file then
-				local content = file:read("*all")
+			-- Run the simploo files
+			local simploofiles, err = build:getSourceFiles()
 
-				local status, err = pcall(function()
-					dofile("src/" .. name)
-				end)
-
-				if not status then
-					print("[exec] failed: " .. tostring(err))
-				end
-
-				file:close()
+			if not simploofiles then
+				print("[exec] failed: " .. tostring(err))
 			end
-		end
 
-		-- Execute the test file
-		dofile("tests/" .. v)
+			for k, name in pairs(simploofiles) do
+				local file, err = io.open("src/" .. name, "r")
+
+				if file then
+					local content = file:read("*all")
+
+					local status, err = pcall(function()
+						dofile("src/" .. name)
+					end)
+
+					if not status then
+						print("[exec] failed: " .. tostring(err))
+					end
+
+					file:close()
+				end
+			end
+
+			-- Set produciton mode
+			simploo.config["production"] = testproduction
+
+			-- Execute the test file
+			dofile("tests/" .. v)
+		end
 	end
 end
 
