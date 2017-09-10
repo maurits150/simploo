@@ -38,5 +38,57 @@ for i=1, 10000 do
 end
 
 
-print("completed 10k new instances in " .. (os.clock() - startTime))
+print("completed 10k new instances with 20 members in " .. (os.clock() - startTime))
+print("-----------------")
+
+class "Calls1" {
+    public {
+        doCalls1 = function()
+            
+        end
+    };
+};
+
+class "Calls2" extends "Calls1" {
+    public {
+        doCalls2 = function(self)
+            self:doCalls1()
+        end
+    };
+};
+
+class "Calls3" extends "Calls2" {
+    public {
+        doCalls3 = function(self)
+            self:doCalls2()
+        end
+    };
+};
+
+class "Calls4" extends "Calls3" {
+    public {
+        doCalls4 = function(self)
+            self:doCalls3()
+        end
+    };
+};
+
+class "Calls5" extends "Calls4" {
+    public {
+        doCalls5 = function(self)
+            self:doCalls4()
+        end
+    };
+};
+
+local startTime = os.clock()
+
+local instance = Benchmark.Calls5:new()
+
+for i=1, 100000 do
+    instance:doCalls5()    
+end
+
+
+print("completed 100k calls to 5 layer deep class in " .. (os.clock() - startTime))
 print("-----------------")
