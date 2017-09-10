@@ -53,7 +53,7 @@ function util.addGcCallback(object, callback)
             end)
 
             if not success then
-                print(string.format("ERROR: class %s: error __gc function: %s", object, error))
+                print(string.format("ERROR: class %s: error __gc function: %s", tostring(object), tostring(error)))
             end
         end
 
@@ -68,7 +68,7 @@ function util.addGcCallback(object, callback)
             end)
 
             if not success then
-                print(string.format("ERROR: %s: error __gc function: %s", self, error))
+                print(string.format("ERROR: %s: error __gc function: %s", tostring(self), tostring(error)))
             end
         end
         
