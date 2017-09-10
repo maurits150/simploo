@@ -38,5 +38,30 @@ for i=1, 10000 do
 end
 
 
-print("completed 10k new instances in " .. (os.clock() - startTime))
+print("completed 10k new instances with 20 members in " .. (os.clock() - startTime))
+print("-----------------")
+
+class "Calls" {
+    private {
+        doCall2 = function()
+            -- 2nd function call
+        end
+    };
+    public {
+        doCall = function(self)
+            self:doCall2()
+        end
+    };
+};
+
+local startTime = os.clock()
+
+local instance = Benchmark.Calls:new()
+
+for i=1, 1000 * 1000 do
+    instance:doCall()
+end
+
+
+print("completed 100k calls to 5 layer deep class in " .. (os.clock() - startTime))
 print("-----------------")

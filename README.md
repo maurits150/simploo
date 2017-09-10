@@ -12,12 +12,12 @@ This library is designed to help with this process by using the freedom of Lua t
 
 ### Example
 
-Here is a first-hand example of a couple of SIMPLOO classes.
+Here's an initial impression of the library.
 
 ```Lua
 -------------
--- File 1
--- Writting using a Lua'ish syntax
+-- Syntax 1
+-- looks like normal Lua
 -------------
 
 local diagonal = class("Diagonal", {namespace = "math.trigonometry"})
@@ -29,8 +29,8 @@ end
 diagonal:register()
 
 -------------
--- File 2
--- Writting using a more traditional syntax
+-- Syntax 2
+-- looks more like other languages
 -------------
 
 namespace "math.geometry.shapes"
@@ -74,36 +74,44 @@ print(square:getDiameter()) -- 11.18034
 
 ### Features
 
-* Define classes using a familiar syntax, including keywords such as `private` (partially), `public`, `abstract`, `static`, `const` and `meta` for metamethods.
+* Define classes using a familiar syntax, including keywords such as `private`, `public`, `abstract`, `static`, `const` and `meta` for metamethods.
 * Supports multiple inheritance to define complex relational trees between classes.
-* Supports constructor and *finalizer* methods.
-* Allows you to define metamethods for your classes.
+* Supports constructor and *finalizer* methods (using __gc).
+* Allows you to define your own metamethods for your classes.
 * Support for namespaces.
-* Supports 2 different syntaxes.
+* Supports two syntaxes.
 
 ### Changes compared to `1.0`
-* The library has been rewritten in order to be more maintainable.
-* New syntax features have been added to make classes even more organisable.
+* Rewritten and split into multiple files.
+* Support for namespacing to improve your project organisation.
 * Performance has been increased by lowering internal overhead.
 
 ### Requirements
 * This library has been developed and tested on Lua 5.1, Lua 5.2 and LuaJIT.
 * The availability of the debug library (specifically debug.getupvalue and debug.setupvalue) is only required for Lua 5.2, in order to support the 'using' keyword. 
 
-### Full usage
-
-Please see the [Wiki](https://github.com/maurits150/simploo/wiki)
-
 ### Expectations
-This library attempts to emulate classes as closely as possible and it's pretty fast doing so. Regardless, its code is still interpreted in real-time and instantiating a new instance still takes a little bit of time to complete- most of it spend on deep copying data.
+This library attempts to emulate classes as closely as possible. However, code is still interpreted in real-time and instantiating a new instance will take a little bit of time - most of it spend on deep copying data.
 
-It's best to use this library to keep track of longer lived objects- for example entities in a game world. It's not going to perform in an environment where you require thousands of new objects every seconds- for example to store data from network packets. Also, instantiation time scales linearly with the amount of members that a class has. This includes members that are present in parent classes.
+This means that the library is best used to keep track of long lived objects- for example entities in a game world. It is not suitable for a use case that requires thousands of new objects every seconds, such as networking packets.
 
-We've benchmarked SIMPLOO on an i7 920 processor clocked to 2.67 GHz. In this benchmark we've defined a class with 5 public functions, 5 public variables, 5 private functions and 5 private variables and measured how long it took to create 10k instances. Keep in mind that Lua is single threaded.
+Instantiation time scales linearly with the number of attributes, methods and parents that a class has. For function call performance, this library has a 'production mode' setting which makes it bypass all sanity checks. This setting boosts runtime performance significantly.
 
-* 10k instances in Lua 5.1: ~1.378 seconds
-* 10k instances in Lua 5.2: ~1.435 seconds
-* 10k instances in LuaJIT: ~0.505 seconds
+### Benchmarks 
+AMD Ryzen 7 1800X (~3.6GHz), 3200MHz CL14 DDR4 RAM
+
+Mode | Lua 5.1 | Lua 5.2 | Lua JIT
+--- | --- | --- | ---
+Development - 10k instantiations | 0.871 | 1.038 | 0.308
+Production - 10k instantiations | 0.894 | 1.048 | 0.313
+Development - 2M fn calls | 2.129 | 2.647 | 0.547
+Production - 2M fn calls | 0.619 | 0.642 | 0
+
+*Performance is by far superior on LuaJIT based environments.*
+
+### Documentation
+
+ [Wiki](https://github.com/maurits150/simploo/wiki)
 
 ### Feedback
 
