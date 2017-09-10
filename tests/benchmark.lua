@@ -63,5 +63,5 @@ for i=1, 1000 * 1000 do
 end
 
 
-print("completed 100k calls to 5 layer deep class in " .. (os.clock() - startTime))
+print("completed 2M calls in " .. (os.clock() - startTime))
 print("-----------------")
