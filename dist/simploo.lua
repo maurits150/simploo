@@ -260,13 +260,13 @@ function instancer:initClass(classFormat)
 
     -- Copy members from provided parents in the class format
     for _, parentName in pairs(classFormat.parents) do
-		-- Retrieve parent from an earlier defined class that's global, or from the usings table.
+        -- Retrieve parent from an earlier defined class that's global, or from the usings table.
         local parentInstance = _G[parentName] or usingsEnv[parentName]
 
         if not parentInstance then
             error(string.format("class %s: could not find parent %s", classInstance.className, parentName))
         end
-		
+        
         -- Get the full parent name, because for usings it might not be complete
         local fullParentName = parentInstance.className
 
@@ -282,10 +282,17 @@ function instancer:initClass(classFormat)
         -- Add variables from parents to child
         for parentMemberName, _ in pairs(parentInstance.members) do
             local parentMember = parentInstance.members[parentMemberName]
-            parentMember.ambiguous = classInstance.members[parentMemberName] and true or false -- mark as ambiguous when a member already exists (which means that during inheritance 2 parents had a member with the same name)
 
             if not simploo.config["production"] then
-                if type(parentMember.value) == "function" then
+
+                -- make the member ambiguous when a member already exists (which means that during inheritance 2 parents had a member with the same name)
+                if classInstance.members[parentMemberName] then
+                    local newMember = simploo.util.duplicateTable(parentMember, {owner = false}) -- Don't copy the owner! that reference should stay the same
+
+                    newMember.ambiguous = true
+
+                    classInstance.members[parentMemberName] = newMember
+                elseif type(parentMember.value) == "function" then
                     local newMember = simploo.util.duplicateTable(parentMember, {owner = false}) -- Don't copy the owner! that reference should stay the same
 
                     -- When not in production, we have to add a wrapper around each inherited function to fix up private access.
@@ -595,12 +602,12 @@ end
 -- > a.b.c.Foo -- Specific class inside namespace 
 function instancer:usingsToTable(name, targetTable, searchTable, alias)
     local firstchunk, remainingchunks = string.match(name, "(%w+)%.(.+)")
-	
+    
     if searchTable[firstchunk] then
         self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk], alias)
     else
-		-- Wildcard add all from this namespace
-		if name == "*" then
+        -- Wildcard add all from this namespace
+        if name == "*" then
             -- Assign everything found in the table
             for k, v in pairs(searchTable) do
                 if alias then
@@ -612,20 +619,20 @@ function instancer:usingsToTable(name, targetTable, searchTable, alias)
                 end
             end
         else -- Add single class
-			if not searchTable[name] then
-				error(string.format("failed to resolve using %s", name))
-			end
-			
-			if not searchTable[name].className then
-				error(string.format("resolved %s, but the table found is not a class", name))
-			end
-			
-			if searchTable[name].className then
-				-- Assign a single class
-				targetTable[alias or name] = searchTable[name]
-			end
-		end
-	end
+            if not searchTable[name] then
+                error(string.format("failed to resolve using %s", name))
+            end
+            
+            if not searchTable[name].className then
+                error(string.format("resolved %s, but the table found is not a class", name))
+            end
+            
+            if searchTable[name].className then
+                -- Assign a single class
+                targetTable[alias or name] = searchTable[name]
+            end
+        end
+    end
 end
 
 -- Get the class name from a full path
