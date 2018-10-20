@@ -1,7 +1,7 @@
 namespace "ObjectPermissions"
 
 if simploo.config["production"] then
-    print("SKIPPING TEST BECAUSE IT WON'T WORK IN PRODUCTION MODE")
+    print("skipping test because it won't work in production mode")
     return
 end
 

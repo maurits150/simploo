@@ -1,3 +1,7 @@
+--[[
+-- RUN THIS FILE WITH YOUR PREFERRED LUA BINARY TO BUILD SIMPLOO
+--]]
+
 dofile("util/build.lua")
 dofile("util/shell.lua")
 dofile("util/merger.lua")
@@ -34,8 +38,7 @@ BUILD_HEADER = [[
 ]]
 
 DIST_FILE = "dist/simploo.lua"
-
-WATCHER_INTERVAL_MS = 100
+WATCHER_INTERVAL_MS = 300
 
 --
 -- Menu
@@ -87,7 +90,7 @@ function menu:watch()
 
 			if file then
 				local content = file:read("*all")
-
+				
 				if not lastContent[name] then -- First boot
 					lastContent[name] = content
 				elseif lastContent[name] ~= content then
@@ -132,15 +135,14 @@ function menu:tests()
 	end
 
 	for _, testproduction in pairs({false, true}) do -- Test in both production mode and non-production
-		print("--------------------------------")
-		print("--------------------------------")
-		print("--------------------------------")
-		print("--Running test with production mode " .. (testproduction and "ON" or "OFF"))
-		print("--------------------------------")
-		print("--------------------------------")
-		print("--------------------------------")
-
-
+		print("==")
+		print("==")
+		print("==")
+		print("== Running test with production mode " .. (testproduction and "ON" or "OFF"))
+		print("==")
+		print("==")
+		print("==")
+		
 		for k, v in pairs(testfiles) do
 			-- Wipe simploo reference
 			simploo = nil

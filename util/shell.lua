@@ -35,7 +35,7 @@ end
 
 function shell:sleep(miliseconds)
 	-- Sleep
-	local command = build:getOS() == "windows" and ("ping 192.0.2.0 -n 1 -w " .. miliseconds .. " >nul") or ("sleep " .. (miliseconds * 1000))
+	local command = build:getOS() == "windows" and ("ping 192.0.2.0 -n 1 -w " .. miliseconds .. " >nul") or ("sleep " .. (miliseconds / 1000))
 	os.execute(command)
 	--local handle = io.popen(command)
 	--local result = handle:read("*a")
