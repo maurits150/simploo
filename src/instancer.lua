@@ -122,7 +122,7 @@ function instancer:initClass(classFormat)
 
                     self.privateCallDepth = self.privateCallDepth - 1
 
-                    return unpack(ret) 
+                    return (unpack or table.unpack)(ret)
                 end
             end
         end
@@ -339,7 +339,7 @@ function instancer:initClass(classFormat)
 
                 meta[metaName] = fnTmp
                 
-                return unpack(ret)
+                return (unpack or table.unpack)(ret)
             end
         end
     end

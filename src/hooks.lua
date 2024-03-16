@@ -11,7 +11,7 @@ function hook:fire(hookName, ...)
     local args = {...}
     for _, v in pairs(self.hooks) do
         if v[1] == hookName then
-            local ret = {v[2](unpack(args))}
+            local ret = {v[2]((unpack or table.unpack)(args))}
 
             -- Overwrite the original value, but do pass it on to the next hook if any
             if ret[0] then
@@ -20,5 +20,5 @@ function hook:fire(hookName, ...)
         end
     end
 
-    return unpack(args)
+    return (unpack or table.unpack)(args)
 end

@@ -659,7 +659,7 @@ TextOutput_MT = { -- class
     end
 
     function TextOutput:displayOneFailedTest( failure )
-        testName, errorMsg, stackTrace = unpack( failure )
+        testName, errorMsg, stackTrace = (unpack or table.unpack)( failure )
         print(">>> "..testName.." failed")
         print( errorMsg )
         if self.verbosity > VERBOSITY_DEFAULT then
