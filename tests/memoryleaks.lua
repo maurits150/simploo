@@ -1,5 +1,5 @@
-function Test:testBenchmark()
-    namespace "Benchmark"
+function Test:testMemoryLeak()
+    namespace "memoryleak"
 
     class "Simple" {
         private {
@@ -29,43 +29,34 @@ function Test:testBenchmark()
         };
     };
 
-    for i=1, 10 do
-        collectgarbage('collect')
+    for i=1, 3 do
+        collectgarbage("collect")
     end
 
     local startTime = os.clock()
+    local startMemory = collectgarbage("count")
 
-    for i=1, 10000 do
-        Benchmark.Simple.new()
+    local i = 0
+    local r = math.random()
+    while os.clock() - startTime < 1 do
+        i = i + 1
+
+        memoryleak.Simple.new()
+
+        -- uncomment to test failure logic
+        -- _G[r .. "_" .. i] = string.rep("A", i)
     end
 
-
-    print("completed 10k new instances with 20 members in " .. (os.clock() - startTime))
-
-    class "Calls" {
-        private {
-            doCall2 = function()
-                -- 2nd function call
-            end
-        };
-        public {
-            doCall = function(self)
-                self:doCall2()
-            end
-        };
-    };
-
-    for i=1, 10 do
-        collectgarbage('collect')
+    for i=1, 3 do
+        collectgarbage("collect")
     end
 
-    local startTime = os.clock()
+    local endMemory = collectgarbage("count")
 
-    local instance = Benchmark.Calls:new()
-
-    for i=1, 1000 * 1000 do
-        instance:doCall()
+    local memoryFreed = math.abs(startMemory - endMemory) < 0.25 -- 0.25Mb difference max
+    if not memoryFreed then
+        print("START MEMORY", startMemory, "END MEMORY", endMemory)
     end
 
-    print("completed 2M calls in " .. (os.clock() - startTime))
+    assertTrue(memoryFreed) -- less than 0.1 MB difference
 end

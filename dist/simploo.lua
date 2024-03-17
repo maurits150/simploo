@@ -92,7 +92,8 @@ function util.duplicateTable(tbl, lookup)
     local copy = {}
 
     for k, v in pairs(tbl) do
-        if type(v) == "table" then
+        if type(v) == "table"
+                and k ~= "_base" then
             lookup = lookup or {}
             lookup[tbl] = copy
 
@@ -249,24 +250,25 @@ function instancemethods:get_name()
 end
 
 function instancemethods:get_class()
-    return self.base or self
+    return self.__base or self
 end
 
 function instancemethods:instance_of(otherInstance)
-    if not otherInstance.base then
+    -- TODO: write a cache for instance_of?
+    if not otherInstance.className then
         error("passed instance is not a class")
     end
 
-    -- TODO: WRITE TESTS FOR THIS ONE
     for memberName, member in pairs(self.members) do
         if member.modifiers.parent then
-            if member.value.base then
-                if member.value.base == otherInstance.base then
-                    return true
-                end
+            if member.value == otherInstance or
+                    member.value == otherInstance._base or
+                    member.value._base == otherInstance or
+                    member.value._base == otherInstance._base then
+                return true
             end
 
-            return member.value:instance_of(otherInstance)
+            return member.value:instance_of(otherInstance) or member.value:instance_of(otherInstance._base)
         end
     end
 
@@ -311,8 +313,8 @@ function instancemt:__index(key)
             end
         end
 
-        if member.modifiers.static and self.base then
-            return self.base.members[key].value
+        if member.modifiers.static and self._base then
+            return self._base.members[key].value
         end
 
         return member.value
@@ -345,8 +347,8 @@ function instancemt:__newindex(key, value)
             end
         end
 
-        if member.modifiers.static and self.base then
-            self.base.members[key].value = value
+        if member.modifiers.static and self._base then
+            self._base.members[key].value = value
         end
 
         member.value = value
@@ -369,7 +371,7 @@ function instancemt:__tostring()
     mt.__tostring = nil
 
     -- Grap the definition string.
-    local str = string.format("SimplooObject: %s <%s> {%s}", self.className, self.base and "instance" or "class", tostring(self):sub(8))
+    local str = string.format("SimplooObject: %s <%s> {%s}", self.className, self.base == self and "class" or "instance", tostring(self):sub(8))
 
     if self.members["__tostring"] and self.members["__tostring"].value then
         str = self.members["__tostring"].value(self)
@@ -424,12 +426,11 @@ end
 local baseinstancemethods = simploo.util.duplicateTable(simploo.instancemethods)
 simploo.baseinstancemethods = baseinstancemethods
 
-local function makeInstanceRecursively(instance, base)
-    instance.base = base
+local function makeInstanceRecursively(instance)
     setmetatable(instance, simploo.instancemt)
 
     for _, memberData in pairs(instance.members) do
-        if memberData.modifiers.parent and not memberData.value.base then
+        if memberData.modifiers.parent then
             makeInstanceRecursively(memberData.value)
         end
     end
@@ -445,7 +446,7 @@ function baseinstancemethods:new(...)
     -- Clone and construct new instance
     local copy = simploo.util.duplicateTable(self)
 
-    makeInstanceRecursively(copy, self)
+    makeInstanceRecursively(copy)
 
     -- call constructor and create finalizer
     if copy.members["__construct"] then
@@ -524,6 +525,7 @@ function instancer:initClass(class)
     -- Base variables
     baseInstance.className = class.name
     baseInstance.members = {}
+    baseInstance._base = baseInstance
 
     if not simploo.config["production"] then
         baseInstance.privateCallDepth = 0
@@ -881,7 +883,7 @@ local activeNamespace = false
 local activeUsings = {}
 
 function syntax.class(className, classOperation)
-    if simploo.parser.base then
+    if simploo.parser.instance then
         error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance.className))
     end
 

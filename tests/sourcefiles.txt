@@ -13,3 +13,4 @@ parser_all.lua
 serializer.lua
 testhooks.lua
 testhotswap.lua
+memoryleaks.lua
