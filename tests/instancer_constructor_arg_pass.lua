@@ -44,7 +44,7 @@ end
 
 function TestInstancerConstructorArgPass:testInheritance() -- Arguments should be passed to child correctly
     class "C" {
-        __construct = function(self, a, _)
+        __construct = function(self, a)
             assertEquals(a, "Value")
         end;
     }
@@ -58,8 +58,8 @@ function TestInstancerConstructorArgPass:testInheritance() -- Arguments should b
 
     -----
 
-    TestInstancerConstructorArgPass.D.new("Value")
-    TestInstancerConstructorArgPass.D:new("Value")
+    TestInstancerConstructorArgPass.C.new("Value")
+    TestInstancerConstructorArgPass.C:new("Value")
 end
 
 LuaUnit:run("TestInstancerConstructorArgPass")

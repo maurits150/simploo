@@ -50,7 +50,8 @@ function menu:init()
 	while true do
 		local action = shell:createMenu({
 			"Build simpoo",
-			"Start watching monitor (continuous merge and execute on change - io heavy!)",
+			"Start watching monitor + run code on change (io heavy!)",
+			"Start watching monitor + runs tests on change",
 			"Run tests",
 			"Exit"
 		}, "Choose an action")
@@ -58,10 +59,12 @@ function menu:init()
 		if action == 1 then
 			self:build()
 		elseif action == 2 then
-			self:watch()
+			self:watch("run")
 		elseif action == 3 then
-			self:tests()
+			self:watch("test")
 		elseif action == 4 then
+			self:tests()
+		elseif action == 5 then
 			return
 		end
 	end
@@ -73,7 +76,7 @@ function menu:build()
 	print("build successful! See " .. DIST_FILE)
 end
 
-function menu:watch()
+function menu:watch(mode)
 	print("Watching..")
 
 	local lastContent = {}
@@ -90,24 +93,18 @@ function menu:watch()
 
 			if file then
 				local content = file:read("*all")
-				
+
 				if not lastContent[name] then -- First boot
 					lastContent[name] = content
 				elseif lastContent[name] ~= content then
-					for i=0, 10 do
-						print()
+					for i=0, 5 do
+						print("--- RELOADING ---- [@ " .. os.clock() .. "]")
 					end
-					
-					local status, err = pcall(function()
-						local files = build:getSourceFiles()
 
-						for k, v in pairs(files) do
-							dofile("src/" .. v)
-						end
-					end)
-
-					if not status then
-						print("[watch] failed: " .. tostring(err))
+					if mode == "test" then
+						self:tests()
+					elseif mode == "run" then
+						self:run()
 					end
 
 					lastContent[name] = content
@@ -126,6 +123,22 @@ function menu:watch()
 	end
 end
 
+function menu:run()
+	local status, err = pcall(function()
+		local files = build:getSourceFiles()
+
+		for k, v in pairs(files) do
+			dofile("src/" .. v)
+		end
+	end)
+
+	if not status then
+		print("[watch] failed: " .. tostring(err))
+	end
+
+
+end
+
 function menu:tests()
 	-- Execute test files
 	local testfiles, err = tests:getSourceFiles()
@@ -135,13 +148,9 @@ function menu:tests()
 	end
 
 	for _, testproduction in pairs({false, true}) do -- Test in both production mode and non-production
-		print("==")
-		print("==")
-		print("==")
+		print("\n\n\n\n\n===================================================")
 		print("== Running test with production mode " .. (testproduction and "ON" or "OFF"))
-		print("==")
-		print("==")
-		print("==")
+		print("===================================================")
 		
 		for k, v in pairs(testfiles) do
 			-- Wipe simploo reference

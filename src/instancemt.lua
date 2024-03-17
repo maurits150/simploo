@@ -1,47 +1,6 @@
 local instancemethods = {}
 simploo.instancemethods = instancemethods
 
-local function markAsInstanceRecursively(instance)
-    instance.instance = true
-
-    for _, memberData in pairs(instance.members) do
-        if memberData.modifiers.parent and not memberData.value.instance then
-            memberData.value.instance = true
-            markAsInstanceRecursively(memberData.value)
-        end
-    end
-end
-
-function instancemethods:new(...)
-    -- TODO: Do not deep copy  members that are static, because they will not be used anyway
-    -- Clone and construct new instance
-    local copy = simploo.util.duplicateTable(self)
-
-    markAsInstanceRecursively(copy)
-
-    for memberName, memberData in pairs(copy.members) do
-        if memberData.modifiers.abstract then
-            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
-        end
-    end
-
-    simploo.util.addGcCallback(copy, function()
-        if copy.members["__finalize"].owner == copy then
-            copy.members["__finalize"].value(copy)
-        end
-    end)
-
-    if copy.members["__construct"].owner == copy then -- If the class has a constructor member that it owns (so it is not a reference to the parent constructor)
-        copy.members["__construct"].value(copy, ...)
-    end
-
-    -- If our hook returns a different object, use that instead.
-    copy = simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
-
-    -- Encapsulate the instance with a wrapper object to prevent private vars from being accessible.
-    return copy
-end
-
 function instancemethods:get_name()
     return self.className
 end
@@ -78,45 +37,33 @@ instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__
 
 
 function instancemt:__index(key)
-    if key == "new" then
-        -- we need to support x.new(), x:new(), x() and x:() for instantiation... past compatibility..
-        -- so here we have to make an anonymous function, to pass the right reference to self, at the cost of some performance
-        return function(selfMethodCallOp, ...)
-            if self == selfMethodCallOp then
-                return instancemethods.new(self, ...)
-            else
-                return instancemethods.new(self, selfMethodCallOp, ...)
+    local member = self.members[key]
+
+    if member then
+        if not simploo.config["production"] then
+            if member.modifiers.ambiguous then
+                error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
+            end
+
+            if member.modifiers.private and member.owner ~= self then
+                error(string.format("class %s: accessing private member %s", tostring(self), key))
+            end
+
+            if member.modifiers.private and self.privateCallDepth == 0 then
+                error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
             end
         end
-    end
 
-    if not self.members[key] then
-        return
-    end
-
-    if not simploo.config["production"] then
-        if self.members[key].modifiers.ambiguous then
-            error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
+        if member.modifiers.static and self.instance then
+            return _G[self.className][key]
         end
 
-        if self.members[key].modifiers.private and self.members[key].owner ~= self then
-            error(string.format("class %s: accessing private member %s", tostring(self), key))
-        end
-
-        if self.members[key].modifiers.private and self.privateCallDepth == 0 then
-            error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
-        end
-    end
-
-    if self.members[key].modifiers.static and self.instance then
-        return _G[self.className][key]
+        return member.value
     end
 
     if instancemethods[key] then
         return instancemethods[key]
     end
-
-    return self.members[key].value
 end
 
 function instancemt:__newindex(key, value)
@@ -169,11 +116,11 @@ end
 
 function instancemt:__call(...)
     if self.instance then
-        if self.members["__construct"].owner == self then
+        if self.members["__construct"] and self.members["__construct"].owner == self then
             return self.members["__construct"].value(self, ...)
         end
     else
-        return instancemt.__index(self, "new")(...)
+        return self:new(...)
     end
 end
 
