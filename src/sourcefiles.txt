@@ -3,8 +3,8 @@ config.lua
 util.lua
 hooks.lua
 serializer.lua
-baseinstance.lua
 instance.lua
+baseinstance.lua
 instancer.lua
 parser.lua
 syntax.lua

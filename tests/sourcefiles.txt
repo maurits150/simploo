@@ -1,4 +1,6 @@
 benchmark.lua
+correctcopy.lua
+instancemethods.lua
 instancer_ambiguous.lua
 instancer_constructor_arg_pass.lua
 instancer_namespaces.lua

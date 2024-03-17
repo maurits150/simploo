@@ -238,99 +238,8 @@ function simploo.deserialize(data)
 end
 
 ----
----- baseinstance.lua
-----
-
-local baseinstancemethods = {}
-simploo.baseinstancemethods = baseinstancemethods
-
-local function makeInstanceRecursively(instance, base)
-    instance.base = base
-    setmetatable(instance, simploo.instancemt)
-
-    for _, memberData in pairs(instance.members) do
-        if memberData.modifiers.parent and not memberData.value.base then
-            makeInstanceRecursively(memberData.value)
-        end
-    end
-end
-
-function baseinstancemethods:new(...)
-    for memberName, member in pairs(self.members) do
-        if member.modifiers.abstract then
-            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
-        end
-    end
-
-    -- Clone and construct new instance
-    local copy = simploo.util.duplicateTable(self)
-
-    makeInstanceRecursively(copy, self)
-
-    -- call constructor and create finalizer
-    if copy.members["__construct"] then
-        if copy.members["__construct"].owner == copy then -- If the class has a constructor member that it owns (so it is not a reference to the parent constructor)
-            copy.members["__construct"].value(copy, ...)
-            copy.members["__construct"] = nil -- remove __construct.. no longer needed in memory
-        end
-    end
-
-    if copy.members["__finalize"] then
-        simploo.util.addGcCallback(copy, function()
-            if copy.members["__finalize"].owner == copy then
-                copy.members["__finalize"].value(copy)
-            end
-        end)
-    end
-
-    -- If our hook returns a different object, use that instead.
-    return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
-end
-
-local function deserializeIntoMembers(instance, data)
-    for dataKey, dataVal in pairs(data) do
-        local member = instance.members[dataKey]
-        if member and member.modifiers and not member.modifiers.transient then
-            if type(dataVal) == "table" and dataVal.className then
-                member.value = deserializeIntoMembers(member.value, dataVal)
-            else
-                member.value = dataVal
-            end
-        end
-    end
-end
-
-function baseinstancemethods:deserialize(data)
-    for memberName, member in pairs(self.members) do
-        if member.modifiers.abstract then
-            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
-        end
-    end
-
-    -- Clone and construct new instance
-    local copy = simploo.util.duplicateTable(self)
-
-    makeInstanceRecursively(copy, self)
-
-    -- restore serializable data
-    deserializeIntoMembers(copy, data)
-
-    -- If our hook returns a different object, use that instead.
-    return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
-end
-
-local baseinstancemt = {}
-simploo.baseinstancemt = baseinstancemt
-
-function baseinstancemt:__call(...)
-    return self:new(...)
-end
-
-
-----
 ---- instance.lua
 ----
-
 
 local instancemethods = {}
 simploo.instancemethods = instancemethods
@@ -340,17 +249,28 @@ function instancemethods:get_name()
 end
 
 function instancemethods:get_class()
-    return simploo.config["baseInstanceTable"][self.className]
+    return self.base or self
 end
 
-function instancemethods:instance_of(className)
-    for _, parentName in pairs(instance.parents) do
-        if self[parentName]:instance_of(className) then
-            return true
+function instancemethods:instance_of(otherInstance)
+    if not otherInstance.base then
+        error("passed instance is not a class")
+    end
+
+    -- TODO: WRITE TESTS FOR THIS ONE
+    for memberName, member in pairs(self.members) do
+        if member.modifiers.parent then
+            if member.value.base then
+                if member.value.base == otherInstance.base then
+                    return true
+                end
+            end
+
+            return member.value:instance_of(otherInstance)
         end
     end
 
-    return self.className == className
+    return false
 end
 
 function instancemethods:get_parents()
@@ -496,6 +416,96 @@ for _, metaName in pairs(instancemt.metafunctions) do
         end
     end
 end
+
+----
+---- baseinstance.lua
+----
+
+local baseinstancemethods = simploo.util.duplicateTable(simploo.instancemethods)
+simploo.baseinstancemethods = baseinstancemethods
+
+local function makeInstanceRecursively(instance, base)
+    instance.base = base
+    setmetatable(instance, simploo.instancemt)
+
+    for _, memberData in pairs(instance.members) do
+        if memberData.modifiers.parent and not memberData.value.base then
+            makeInstanceRecursively(memberData.value)
+        end
+    end
+end
+
+function baseinstancemethods:new(...)
+    for memberName, member in pairs(self.members) do
+        if member.modifiers.abstract then
+            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
+        end
+    end
+
+    -- Clone and construct new instance
+    local copy = simploo.util.duplicateTable(self)
+
+    makeInstanceRecursively(copy, self)
+
+    -- call constructor and create finalizer
+    if copy.members["__construct"] then
+        if copy.members["__construct"].owner == copy then -- If the class has a constructor member that it owns (so it is not a reference to the parent constructor)
+            copy.members["__construct"].value(copy, ...)
+            copy.members["__construct"] = nil -- remove __construct.. no longer needed in memory
+        end
+    end
+
+    if copy.members["__finalize"] then
+        simploo.util.addGcCallback(copy, function()
+            if copy.members["__finalize"].owner == copy then
+                copy.members["__finalize"].value(copy)
+            end
+        end)
+    end
+
+    -- If our hook returns a different object, use that instead.
+    return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
+end
+
+local function deserializeIntoMembers(instance, data)
+    for dataKey, dataVal in pairs(data) do
+        local member = instance.members[dataKey]
+        if member and member.modifiers and not member.modifiers.transient then
+            if type(dataVal) == "table" and dataVal.className then
+                member.value = deserializeIntoMembers(member.value, dataVal)
+            else
+                member.value = dataVal
+            end
+        end
+    end
+end
+
+function baseinstancemethods:deserialize(data)
+    for memberName, member in pairs(self.members) do
+        if member.modifiers.abstract then
+            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
+        end
+    end
+
+    -- Clone and construct new instance
+    local copy = simploo.util.duplicateTable(self)
+
+    makeInstanceRecursively(copy, self)
+
+    -- restore serializable data
+    deserializeIntoMembers(copy, data)
+
+    -- If our hook returns a different object, use that instead.
+    return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
+end
+
+local baseinstancemt = simploo.util.duplicateTable(simploo.instancemt)
+simploo.baseinstancemt = baseinstancemt
+
+function baseinstancemt:__call(...)
+    return self:new(...)
+end
+
 
 ----
 ---- instancer.lua

@@ -11,6 +11,7 @@ function instancer:initClass(class)
     -- Base variables
     baseInstance.className = class.name
     baseInstance.members = {}
+    baseInstance._base = baseInstance
 
     if not simploo.config["production"] then
         baseInstance.privateCallDepth = 0

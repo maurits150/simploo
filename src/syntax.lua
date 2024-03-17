@@ -6,7 +6,7 @@ local activeNamespace = false
 local activeUsings = {}
 
 function syntax.class(className, classOperation)
-    if simploo.parser.base then
+    if simploo.parser.instance then
         error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance.className))
     end
 

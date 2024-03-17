@@ -1,4 +1,3 @@
-
 local instancemethods = {}
 simploo.instancemethods = instancemethods
 
@@ -7,17 +6,29 @@ function instancemethods:get_name()
 end
 
 function instancemethods:get_class()
-    return simploo.config["baseInstanceTable"][self.className]
+    return self.__base or self
 end
 
-function instancemethods:instance_of(className)
-    for _, parentName in pairs(instance.parents) do
-        if self[parentName]:instance_of(className) then
-            return true
+function instancemethods:instance_of(otherInstance)
+    -- TODO: write a cache for instance_of?
+    if not otherInstance.className then
+        error("passed instance is not a class")
+    end
+
+    for memberName, member in pairs(self.members) do
+        if member.modifiers.parent then
+            if member.value == otherInstance or
+                    member.value == otherInstance._base or
+                    member.value._base == otherInstance or
+                    member.value._base == otherInstance._base then
+                return true
+            end
+
+            return member.value:instance_of(otherInstance) or member.value:instance_of(otherInstance._base)
         end
     end
 
-    return self.className == className
+    return false
 end
 
 function instancemethods:get_parents()
@@ -58,8 +69,8 @@ function instancemt:__index(key)
             end
         end
 
-        if member.modifiers.static and self.base then
-            return self.base.members[key].value
+        if member.modifiers.static and self._base then
+            return self._base.members[key].value
         end
 
         return member.value
@@ -92,8 +103,8 @@ function instancemt:__newindex(key, value)
             end
         end
 
-        if member.modifiers.static and self.base then
-            self.base.members[key].value = value
+        if member.modifiers.static and self._base then
+            self._base.members[key].value = value
         end
 
         member.value = value
@@ -116,7 +127,7 @@ function instancemt:__tostring()
     mt.__tostring = nil
 
     -- Grap the definition string.
-    local str = string.format("SimplooObject: %s <%s> {%s}", self.className, self.base and "instance" or "class", tostring(self):sub(8))
+    local str = string.format("SimplooObject: %s <%s> {%s}", self.className, self.base == self and "class" or "instance", tostring(self):sub(8))
 
     if self.members["__tostring"] and self.members["__tostring"].value then
         str = self.members["__tostring"].value(self)

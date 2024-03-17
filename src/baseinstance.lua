@@ -1,12 +1,11 @@
-local baseinstancemethods = {}
+local baseinstancemethods = simploo.util.duplicateTable(simploo.instancemethods)
 simploo.baseinstancemethods = baseinstancemethods
 
-local function makeInstanceRecursively(instance, base)
-    instance.base = base
+local function makeInstanceRecursively(instance)
     setmetatable(instance, simploo.instancemt)
 
     for _, memberData in pairs(instance.members) do
-        if memberData.modifiers.parent and not memberData.value.base then
+        if memberData.modifiers.parent then
             makeInstanceRecursively(memberData.value)
         end
     end
@@ -22,7 +21,7 @@ function baseinstancemethods:new(...)
     -- Clone and construct new instance
     local copy = simploo.util.duplicateTable(self)
 
-    makeInstanceRecursively(copy, self)
+    makeInstanceRecursively(copy)
 
     -- call constructor and create finalizer
     if copy.members["__construct"] then
@@ -76,7 +75,7 @@ function baseinstancemethods:deserialize(data)
     return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
 end
 
-local baseinstancemt = {}
+local baseinstancemt = simploo.util.duplicateTable(simploo.instancemt)
 simploo.baseinstancemt = baseinstancemt
 
 function baseinstancemt:__call(...)
