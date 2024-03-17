@@ -15,45 +15,45 @@ function hotswap:init()
     end)
 end
 
-function hotswap:swap(newInstance)
-    for _, instance in pairs(simploo_hotswap_instances) do
-        if instance.className == newInstance.className then
-            hotswap:syncMembers(instance, newInstance)
+function hotswap:swap(newBase)
+    for _, hotInstance in pairs(simploo_hotswap_instances) do
+        if hotInstance.className == newBase.className then
+            hotswap:syncMembers(hotInstance, newBase)
         end
     end
 end
 
-function hotswap:syncMembers(currentInstance, newInstance)
+function hotswap:syncMembers(hotInstance, baseInstance)
     -- Add members that do not exist in the current instance.
-    for newMemberName, newMember in pairs(newInstance.members) do
+    for baseMemberName, baseMember in pairs(baseInstance.members) do
         local contains = false
 
-        for prevMemberName, prevMember in pairs(currentInstance.members) do
-            if prevMemberName == newMemberName then
+        for hotMemberName, hotMember in pairs(hotInstance.members) do
+            if hotMemberName == baseMemberName then
                 contains = true
             end
         end
 
         if not contains then
-            local newMember = simploo.util.duplicateTable(newMember)
-            newMember.owner = currentInstance
+            baseMember = simploo.util.duplicateTable(baseMember)
+            baseMember.owner = hotInstance
 
-            currentInstance.members[newMemberName] = newMember
+            hotInstance.members[baseMemberName] = baseMember
         end
     end
 
     -- Remove members from the current instance that are not in the new instance.
-    for prevMemberName, prevMember in pairs(currentInstance.members) do
+    for hotMemberName, hotMember in pairs(hotInstance.members) do
         local exists = false
 
-        for newMemberName, newMember in pairs(newInstance.members) do
-            if prevMemberName == newMemberName then
+        for baseMemberName, baseMember in pairs(baseInstance.members) do
+            if hotMemberName == baseMemberName then
                 exists = true
             end
         end
 
         if not exists then
-            currentInstance.members[prevMemberName] = nil
+            hotInstance.members[hotMemberName] = nil
         end
     end
 end
