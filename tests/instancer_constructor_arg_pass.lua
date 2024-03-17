@@ -1,48 +1,46 @@
-namespace "TestInstancerConstructorArgPass"
+namespace "Test"
 
-TestInstancerConstructorArgPass = {}
-
-function TestInstancerConstructorArgPass:test() -- new() called with both . and : should work fine
+function Test:testConstructorArgsPass() -- new() called with both . and : should work fine
     class "A" {
         __construct = function(self)
-            assertEquals(self.className, "TestInstancerConstructorArgPass.A")
+            assertEquals(self.className, "Test.A")
             assertFalse(self == _G[self.className])
         end;
     }
 
     class "B" {
         __construct = function(self, a, etc)
-            assertEquals(self.className, "TestInstancerConstructorArgPass.B")
+            assertEquals(self.className, "Test.B")
             assertFalse(self == _G[self.className])
 
-            assertEquals(a.className, "TestInstancerConstructorArgPass.A")
+            assertEquals(a.className, "Test.A")
             assertFalse(a == _G[a.className])
         end;
     }
 
     -----
 
-    local a1 = TestInstancerConstructorArgPass.A.new("arg")
-    local a2 = TestInstancerConstructorArgPass.A:new("arg")
+    local a1 = Test.A.new("arg")
+    local a2 = Test.A:new("arg")
 
     -- print("new with .")
-    TestInstancerConstructorArgPass.B.new(a1)
-    TestInstancerConstructorArgPass.B.new(a2) -- Call with .
+    Test.B.new(a1)
+    Test.B.new(a2) -- Call with .
 
     -- print("new with :")
-    TestInstancerConstructorArgPass.B:new(a1)
-    TestInstancerConstructorArgPass.B:new(a2) -- Call with :
+    Test.B:new(a1)
+    Test.B:new(a2) -- Call with :
 
     -- print("__call with .")
-    TestInstancerConstructorArgPass.B(a1)
-    TestInstancerConstructorArgPass.B(a2) -- Call with .
+    Test.B(a1)
+    Test.B(a2) -- Call with .
 
     -- print("__call with :")
-    TestInstancerConstructorArgPass.B(a1)
-    TestInstancerConstructorArgPass.B(a2) -- Call with :
+    Test.B(a1)
+    Test.B(a2) -- Call with :
 end
 
-function TestInstancerConstructorArgPass:testInheritance() -- Arguments should be passed to child correctly
+function Test:testInheritance() -- Arguments should be passed to child correctly
     class "C" {
         __construct = function(self, a)
             assertEquals(a, "Value")
@@ -58,21 +56,20 @@ function TestInstancerConstructorArgPass:testInheritance() -- Arguments should b
 
     -----
 
-    TestInstancerConstructorArgPass.C.new("Value")
-    TestInstancerConstructorArgPass.C:new("Value")
+    Test.C.new("Value")
+    Test.C:new("Value")
 end
 
-LuaUnit:run("TestInstancerConstructorArgPass")
 
--- function TestInstancerConstructorArgPass:testSelf()
+
+-- function Test:testSelf()
 --     class "E" {
 --         __construct = function(self, a, b, c)
 --             print(">>>", self, a, b, c)
 --         end;
 --     }
     
---     TestInstancerConstructorArgPass.E.new("Value1", "Value2", "Value3")
---     TestInstancerConstructorArgPass.E:new("Value1", "Value2", "Value3")
---     TestInstancerConstructorArgPass.E("Value1", "Value2", "Value3")
+--     Test.E.new("Value1", "Value2", "Value3")
+--     Test.E:new("Value1", "Value2", "Value3")
+--     Test.E("Value1", "Value2", "Value3")
 -- end
-

@@ -1,6 +1,4 @@
-TestInstancerAmbiguous = {}
-
-function TestInstancerAmbiguous:testRun()
+function Test:testInstancerAmbiguous()
     namespace "TestAmbiguous"
 
     class "Parent1" {
@@ -30,5 +28,3 @@ function TestInstancerAmbiguous:testRun()
     assertFalse(success)
     assertStrContains(err, "ambiguous")
 end
-
-LuaUnit:run("TestInstancerAmbiguous")

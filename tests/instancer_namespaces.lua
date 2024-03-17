@@ -1,6 +1,4 @@
-TestInstancerNamespaces = {}
-
-function TestInstancerNamespaces:testInstantiation()
+function Test:testNamespaces()
     namespace "testsimple"
 
     class "Foo" {}
@@ -66,5 +64,3 @@ function TestInstancerNamespaces:testInstantiation()
     local instance = Classy.new()
     instance:test()
 end
-
-LuaUnit:run("TestInstancerNamespaces")

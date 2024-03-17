@@ -1,6 +1,4 @@
-TestInstancerMultipleInheritance = {}
-
-function TestInstancerMultipleInheritance:testOverrides()
+function Test:testParentConstructors()
 	A_CALLED = false
 	B_CALLED = false
 	C_CALLED = false
@@ -32,5 +30,3 @@ function TestInstancerMultipleInheritance:testOverrides()
 	assertTrue(B_CALLED)
 	assertTrue(C_CALLED)
 end
-
-LuaUnit:run("TestInstancerMultipleInheritance")

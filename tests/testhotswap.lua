@@ -1,8 +1,7 @@
-TestHotswap = {}
 
-simploo.hotswap:init()
+function Test:testHotswap()
+    simploo.hotswap:init()
 
-function TestHotswap:test()
     class "A" {
         keep_me = "I will not be touched.";
         destroy = "I will be destroyed.";
@@ -22,6 +21,3 @@ function TestHotswap:test()
     assertEquals(instanceA.destroy, nil)
     assertEquals(instanceA.new_item, "I'm new.")
 end
-
-
-LuaUnit:run("TestHotswap")

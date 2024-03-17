@@ -1,9 +1,11 @@
 parser_all.lua
 instancer_namespaces.lua
 instancer_constructor_arg_pass.lua
-instancer_multi_inheritance.lua
+instancer_parent_constructors.lua
 instances_hierarchypassthrough.lua
 instancer_ambiguous.lua
+instancer_testdoubleconstruct.lua
+instancer_staticvariables.lua
 object_permissions.lua
 benchmark.lua
 testhooks.lua

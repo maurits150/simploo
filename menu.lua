@@ -156,6 +156,8 @@ function menu:tests()
 			-- Wipe simploo reference
 			simploo = nil
 
+			Test = {}
+
 			-- Run the simploo files
 			local simploofiles, err = build:getSourceFiles()
 
@@ -184,8 +186,11 @@ function menu:tests()
 			-- Set produciton mode
 			simploo.config["production"] = testproduction
 
-			-- Execute the test file
+			-- Execute the test files
 			dofile("tests/" .. v)
+
+			-- Run luaunit
+			LuaUnit:run("Test")
 		end
 	end
 end

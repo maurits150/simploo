@@ -1,13 +1,11 @@
-namespace "ObjectPermissions"
+namespace "Test"
 
 if simploo.config["production"] then
     print("skipping test because it won't work in production mode")
     return
 end
 
-ObjectPermissions = {}
-
-function ObjectPermissions:testInsiderAccess()
+function Test:testPermissionsInsiderAccess()
     class "Insider" {
         public {
             publicVar = 10;
@@ -43,7 +41,7 @@ function ObjectPermissions:testInsiderAccess()
     }
 
     -----
-     local instance = ObjectPermissions.Insider3.new()
+     local instance = Test.Insider3.new()
 
     local success, err = pcall(function()
         local _ = instance:runPublic()
@@ -74,7 +72,7 @@ function ObjectPermissions:testInsiderAccess()
     assertFalse(success)
 end
 
-function ObjectPermissions:testOutsiderAccess()
+function Test:testPermissionsOutsiderAccess()
     class "Outsider" {
         public {
             publicVar = 5;
@@ -87,7 +85,7 @@ function ObjectPermissions:testOutsiderAccess()
 
     -----
 
-    local instance = ObjectPermissions.Outsider.new()
+    local instance = Test.Outsider.new()
     
     local success, err = pcall(function()
         local _ = instance.publicVar
@@ -102,4 +100,3 @@ function ObjectPermissions:testOutsiderAccess()
     assertFalse(success)
 end
 
-LuaUnit:run("ObjectPermissions")

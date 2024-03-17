@@ -1,8 +1,6 @@
 simploo.instancer = nil -- Disable the instancer for this test
 
-TestParserAll = {}
-
-function TestParserAll:testOutput()
+function Test:testParserOutput()
     function assertParsers(parser, output)
         assertEquals(output.name, "Child")
         assertStrContains(table.concat(output.parentNames, ","), "Parent1")
@@ -50,5 +48,3 @@ function TestParserAll:testOutput()
     parser2:register()
     parser2:setOnFinished(assertParsers) -- Add finished hook (auto called if already finished)
 end
-
-LuaUnit:run("TestParserAll")

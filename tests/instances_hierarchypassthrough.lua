@@ -1,6 +1,4 @@
-TestInstancerHierarchyPassthrough = {}
-
-function TestInstancerHierarchyPassthrough:testInstantiation()
+function Test:testHierarchyMemberPassthrough()
 
     class "A" {
         __construct = function(self, a)
@@ -33,5 +31,3 @@ function TestInstancerHierarchyPassthrough:testInstantiation()
     local i = B("Set")
     assertEquals(i:GetRef(), "Set")
 end
-
-LuaUnit:run("TestInstancerHierarchyPassthrough")
