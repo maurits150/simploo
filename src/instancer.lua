@@ -1,17 +1,6 @@
 local instancer = {}
 simploo.instancer = instancer
 
-local function makeInstanceRecursively(instance, base)
-    instance.base = base
-    setmetatable(instance, simploo.instancemt)
-
-    for _, memberData in pairs(instance.members) do
-        if memberData.modifiers.parent and not memberData.value.base then
-            makeInstanceRecursively(memberData.value)
-        end
-    end
-end
-
 function instancer:initClass(class)
     -- Call the beforeInitClass hook
     class = simploo.hook:fire("beforeInstancerInitClass", class) or class
@@ -100,38 +89,19 @@ function instancer:initClass(class)
     end
 
     function baseInstance.new(selfOrData, ...)
-        for memberName, member in pairs(baseInstance.members) do
-            if member.modifiers.abstract then
-                error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
-            end
+        if selfOrData == baseInstance then
+            return simploo.baseinstancemethods.new(baseInstance, ...)
+        else
+            return simploo.baseinstancemethods.new(baseInstance, selfOrData, ...)
         end
+    end
 
-        -- TODO: Do not deep copy  members that are static, because they will not be used anyway
-        -- Clone and construct new instance
-        local copy = simploo.util.duplicateTable(baseInstance)
-
-        makeInstanceRecursively(copy, baseInstance)
-
-        if copy.members["__construct"] and copy.members["__construct"].owner == copy then -- If the class has a constructor member that it owns (so it is not a reference to the parent constructor)
-            if selfOrData == baseInstance then
-                copy.members["__construct"].value(copy, ...)
-            else
-                copy.members["__construct"].value(copy, selfOrData, ...)
-            end
-
-            copy.members["__construct"] = nil -- remove __construct.. no longer needed in memory
+    function baseInstance.deserialize(selfOrData, ...)
+        if selfOrData == baseInstance then
+            return simploo.baseinstancemethods.deserialize(baseInstance, ...)
+        else
+            return simploo.baseinstancemethods.deserialize(baseInstance, selfOrData, ...)
         end
-
-        if copy.members["__finalize"] then
-            simploo.util.addGcCallback(copy, function()
-                if copy.members["__finalize"].owner == copy then
-                    copy.members["__finalize"].value(copy)
-                end
-            end)
-        end
-
-        -- If our hook returns a different object, use that instead.
-        return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
     end
 
     setmetatable(baseInstance, simploo.baseinstancemt)
@@ -146,6 +116,7 @@ end
 
 -- Sets up a global instance of a class instance in which static member values are stored
 function instancer:registerClassInstance(classInstance)
+    simploo.config["baseInstanceTable"][classInstance.className] = classInstance
     self:namespaceToTable(classInstance.className, simploo.config["baseInstanceTable"], classInstance)
         
     if classInstance.members["__declare"] and classInstance.members["__declare"].owner == classInstance then

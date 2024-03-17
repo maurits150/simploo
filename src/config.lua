@@ -36,3 +36,12 @@ simploo.config["classHotswap"] = false
 --
 
 simploo.config["baseInstanceTable"] = _G
+
+--
+-- Custom modifiers
+--
+-- Description: add custom modifiers so you can make your own methods that manipulate members
+-- Default: {}
+--
+
+simploo.config["customModifiers"] = {}

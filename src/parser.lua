@@ -2,7 +2,7 @@ local parser = {}
 simploo.parser = parser
 
 parser.instance = false
-parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract"}
+parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract", "transient", (unpack or table.unpack)(simploo.config["customModifiers"])}
 
 -- Parses the simploo class syntax into the following table format:
 --

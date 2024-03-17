@@ -1,3 +1,4 @@
+
 local instancemethods = {}
 simploo.instancemethods = instancemethods
 
@@ -29,11 +30,8 @@ function instancemethods:get_parents()
     return t
 end
 
-local baseinstancemt = {}
-simploo.baseinstancemt = baseinstancemt
-
-function baseinstancemt:__call(...)
-    return self:new(...)
+function instancemethods:serialize()
+    return simploo.serialize(self)
 end
 
 ---

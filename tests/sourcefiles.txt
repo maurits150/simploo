@@ -8,5 +8,6 @@ instancer_testdoubleconstruct.lua
 instances_hierarchypassthrough.lua
 object_permissions.lua
 parser_all.lua
+serializer.lua
 testhooks.lua
 testhotswap.lua

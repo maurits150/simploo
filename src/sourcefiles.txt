@@ -2,7 +2,9 @@ init.lua
 config.lua
 util.lua
 hooks.lua
-instancemt.lua
+serializer.lua
+baseinstance.lua
+instance.lua
 instancer.lua
 parser.lua
 syntax.lua
