@@ -169,8 +169,6 @@ function menu:tests()
 				local file, err = io.open("src/" .. name, "r")
 
 				if file then
-					local content = file:read("*all")
-
 					local status, err = pcall(function()
 						dofile("src/" .. name)
 					end)
@@ -183,7 +181,7 @@ function menu:tests()
 				end
 			end
 
-			-- Set produciton mode
+			-- Set production mode
 			simploo.config["production"] = testproduction
 
 			-- Execute the test files
