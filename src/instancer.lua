@@ -13,9 +13,11 @@ function instancer:initClass(class)
     baseInstance._name = class.name
     baseInstance._members = {}
 
+    --------development--------
     if not simploo.config["production"] then
         baseInstance._callDepth = 0
     end
+    --------development--------
 
     -- Copy members from provided parents
     for _, parentName in pairs(class.parents) do
@@ -36,6 +38,8 @@ function instancer:initClass(class)
 
         -- Add variables from parents to child
         for parentMemberName, parentMember in pairs(parentBaseInstance._members) do
+
+            --------development--------
             if not simploo.config["production"] then
                 -- make the member ambiguous when a member already exists (which means that during inheritance 2 parents had a member with the same name)
                 if baseInstance._members[parentMemberName] then
@@ -53,6 +57,7 @@ function instancer:initClass(class)
                     end
                 end
             end
+            --------development--------
 
             baseInstance._members[parentMemberName] = parentMember
         end
@@ -63,13 +68,15 @@ function instancer:initClass(class)
         local baseMember = {}
         baseMember.owner = baseInstance
         baseMember.modifiers = formatMember.modifiers
-        baseMember.value = formatMember.value
+        baseMember.value = not formatMember.modifiers.static and formatMember.value or "STATIC_MEMBER_VARIABLE"
+        baseMember._value_static = formatMember.modifiers and formatMember.value
 
+        --------development--------
         -- When not in production, add code that tracks invocation depth from the root instance
         -- This allows us to detect when you try to access private variables directly from an instance.
         if not simploo.config["production"] then
             if type(baseMember.value) == "function" then
-                baseMember.valueOriginal = baseMember.value
+                local valueOriginal = baseMember.value
                 baseMember.value = function(self, ...)
                     if not self or not self._callDepth then
                         error("Method called incorrectly, 'self' was not passed. https://stackoverflow.com/questions/4911186/difference-between-and-in-lua")
@@ -77,7 +84,7 @@ function instancer:initClass(class)
 
                     self._callDepth = self._callDepth + 1
 
-                    local ret = { baseMember.valueOriginal(self, ...)}
+                    local ret = { valueOriginal(self, ...)}
 
                     self._callDepth = self._callDepth - 1
 
@@ -85,6 +92,7 @@ function instancer:initClass(class)
                 end
             end
         end
+        --------development--------
 
         baseInstance._members[formatMemberName] = baseMember
     end

@@ -53,7 +53,7 @@ function Test:testMemoryLeak()
 
     local endMemory = collectgarbage("count")
 
-    local memoryFreed = math.abs(startMemory - endMemory) < 0.25 -- 0.25Mb difference max
+    local memoryFreed = math.abs(startMemory - endMemory) < 250 -- 250KB difference max
     if not memoryFreed then
         print("START MEMORY", startMemory, "END MEMORY", endMemory)
     end
@@ -70,7 +70,7 @@ function Test:testStaticsNotCopiedToInstances()
         }
     };
 
-    for i=1, 1000 * 10 do
+    for i=1, 1000 * 100 do
         table.insert(memoryleak.BigStaticVariable.lots_of_data, "A")
     end
 
@@ -85,14 +85,16 @@ function Test:testStaticsNotCopiedToInstances()
         table.insert(instances, memoryleak.BigStaticVariable.new())
     end
 
-    collectgarbage("collect")
+    for i=1, 3 do
+        collectgarbage("collect")
+    end
 
     local endMemory = collectgarbage("count")
 
-    local moreThan1MBUsed = (endMemory - startMemory) > 1
-    if moreThan1MBUsed then
+    local above1MBused = (endMemory - startMemory) > 1000
+    if above1MBused then
         print("START MEMORY", startMemory, "END MEMORY", endMemory)
     end
 
-    assertFalse(moreThan1MBUsed)
+    assertFalse(above1MBused)
 end

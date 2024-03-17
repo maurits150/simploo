@@ -55,6 +55,8 @@ function instancemt:__index(key)
     local member = self._members[key]
 
     if member then
+
+        --------development--------
         if not simploo.config["production"] then
             if member.modifiers.ambiguous then
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
@@ -68,9 +70,10 @@ function instancemt:__index(key)
                 error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
             end
         end
+        --------development--------
 
         if member.modifiers.static and self._base then
-            return self._base._members[key].value
+            return self._base._members[key]._value_static
         end
 
         return member.value
@@ -89,6 +92,8 @@ function instancemt:__newindex(key, value)
     local member = self._members[key]
 
     if member then
+
+        --------development--------
         if not simploo.config["production"] then
             if member.modifiers.const then
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
@@ -102,12 +107,13 @@ function instancemt:__newindex(key, value)
                 error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
             end
         end
+        --------development--------
 
         if member.modifiers.static and self._base then
-            self._base._members[key].value = value
+            self._base._members[key]._value_static = value
+        else
+            member.value = value
         end
-
-        member.value = value
     end
 
     if instancemethods[key] then
