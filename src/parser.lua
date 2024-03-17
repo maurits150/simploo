@@ -66,7 +66,7 @@ function parser:new()
         output.parents = self.classParents
         output.members = self.classMembers
         output.usings = self.classUsings
-        
+
         self:onFinished(output)
     end
 

@@ -1,25 +1,26 @@
 TestHotswap = {}
 
-function TestHotswap:test()
-    simploo.hotswap:init()
+simploo.hotswap:init()
 
+function TestHotswap:test()
     class "A" {
-        a = "I'm old.";
-        c = "I will be removed";
+        keep_me = "I will not be touched.";
+        destroy = "I will be destroyed.";
     }
 
     local instanceA = A.new()
-    assertEquals(instanceA.a, "I'm old.")
-    assertEquals(instanceA.c, "I will be removed")
+    assertEquals(instanceA.keep_me, "I will not be touched.")
+    assertEquals(instanceA.destroy, "I will be destroyed.")
 
     class "A" {
-        a = "I should not be there.";
-        b = "I'm new.";
+        keep_me = "I have been touched which is bad!";
+        -- destroy = -> this field no longer exist and should become nil
+        new_item = "I'm new.";
     }
 
-    assertEquals(instanceA.a, "I'm old.")
-    assertEquals(instanceA.b, "I'm new.")
-    assertEquals(instanceA.c, nil)
+    assertEquals(instanceA.keep_me, "I will not be touched.")
+    assertEquals(instanceA.destroy, nil)
+    assertEquals(instanceA.new_item, "I'm new.")
 end
 
 

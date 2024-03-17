@@ -1,23 +1,22 @@
 local hotswap = {}
 simploo.hotswap = hotswap
 
--- Separate global to prevent simploo reloading from cleaning the instances list.
--- Using a weak table so that we don't prevent all instances from being garbage collected.
-local activeInstances = _G["simploo.instances"] or setmetatable({}, {__mode = "v"})
-_G["simploo.instances"] = activeInstances
-
 function hotswap:init()
+    -- This is a separate global variable so we can keep the hotswap list during reloads.
+    -- Using a weak table so that we don't prevent instances from being garbage collected.
+    simploo_hotswap_instances = simploo_hotswap_instances or setmetatable({}, {__mode = "v"})
+
     simploo.hook:add("afterInstancerInitClass", function(classFormat, globalInstance)
-        hotswap:swap(globalInstance:get_class(), globalInstance)
+        hotswap:swap(globalInstance)
     end)
 
     simploo.hook:add("afterInstancerInstanceNew", function(instance)
-        table.insert(activeInstances, instance)
+        table.insert(simploo_hotswap_instances, instance)
     end)
 end
 
 function hotswap:swap(newInstance)
-    for _, instance in pairs(activeInstances) do
+    for _, instance in pairs(simploo_hotswap_instances) do
         if instance.className == newInstance.className then
             hotswap:syncMembers(instance, newInstance)
         end

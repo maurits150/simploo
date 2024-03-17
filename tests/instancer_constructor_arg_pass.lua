@@ -11,7 +11,7 @@ function TestInstancerConstructorArgPass:test() -- new() called with both . and 
     }
 
     class "B" {
-        __construct = function(self, a)
+        __construct = function(self, a, etc)
             assertEquals(self.className, "TestInstancerConstructorArgPass.B")
             assertFalse(self == _G[self.className])
 
@@ -22,18 +22,22 @@ function TestInstancerConstructorArgPass:test() -- new() called with both . and 
 
     -----
 
-    local a1 = TestInstancerConstructorArgPass.A.new()
-    local a2 = TestInstancerConstructorArgPass.A:new()
+    local a1 = TestInstancerConstructorArgPass.A.new("arg")
+    local a2 = TestInstancerConstructorArgPass.A:new("arg")
 
+    -- print("new with .")
     TestInstancerConstructorArgPass.B.new(a1)
     TestInstancerConstructorArgPass.B.new(a2) -- Call with .
 
+    -- print("new with :")
     TestInstancerConstructorArgPass.B:new(a1)
     TestInstancerConstructorArgPass.B:new(a2) -- Call with :
 
+    -- print("__call with .")
     TestInstancerConstructorArgPass.B(a1)
     TestInstancerConstructorArgPass.B(a2) -- Call with .
 
+    -- print("__call with :")
     TestInstancerConstructorArgPass.B(a1)
     TestInstancerConstructorArgPass.B(a2) -- Call with :
 end

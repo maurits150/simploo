@@ -21,7 +21,7 @@ function syntax.class(className, classOperation)
             local newClass = simploo.instancer:initClass(parserOutput)
 
             -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it using the full path.
-            syntax.using(newClass:get_name())
+            syntax.using(newClass.className)
         end
     end)
     

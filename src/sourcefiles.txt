@@ -2,6 +2,7 @@ init.lua
 config.lua
 util.lua
 hooks.lua
+instancemt.lua
 instancer.lua
 parser.lua
 syntax.lua
