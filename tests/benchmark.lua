@@ -31,6 +31,10 @@ class "Simple" {
     };
 };
 
+for i=1, 10 do
+    collectgarbage('collect')
+end
+
 local startTime = os.clock()
 
 for i=1, 10000 do
@@ -53,6 +57,10 @@ class "Calls" {
         end
     };
 };
+
+for i=1, 10 do
+    collectgarbage('collect')
+end
 
 local startTime = os.clock()
 

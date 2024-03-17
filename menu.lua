@@ -151,7 +151,7 @@ function menu:tests()
 		print("\n\n\n\n\n===================================================")
 		print("== Running test with production mode " .. (testproduction and "ON" or "OFF"))
 		print("===================================================")
-		
+
 		for k, v in pairs(testfiles) do
 			-- Wipe simploo reference
 			simploo = nil

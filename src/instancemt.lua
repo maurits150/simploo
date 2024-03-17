@@ -64,33 +64,45 @@ function instancemt:__index(key)
     if instancemethods[key] then
         return instancemethods[key]
     end
+
+    if self.members["__index"] and self.members["__index"].value then
+        return self.members["__index"].value(self, key)
+    end
 end
 
 function instancemt:__newindex(key, value)
-    if not self.members[key] then
-        return
-    end
+    local member = self.members[key]
 
-    if not simploo.config["production"] then
-        if self.members[key].modifiers.const then
-            error(string.format("class %s: can not modify const variable %s", tostring(self), key))
+    if member then
+        if not simploo.config["production"] then
+            if member.modifiers.const then
+                error(string.format("class %s: can not modify const variable %s", tostring(self), key))
+            end
+
+            if member.modifiers.private and member.owner ~= self then
+                error(string.format("class %s: accessing private member %s", tostring(self), key))
+            end
+
+            if member.modifiers.private and self.privateCallDepth == 0 then
+                error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
+            end
         end
 
-        if self.members[key].modifiers.private and self.members[key].owner ~= self then
-            error(string.format("class %s: accessing private member %s", tostring(self), key))
-        end
-
-        if self.members[key].modifiers.private and self.privateCallDepth == 0 then
-            error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
+        if member.modifiers.static and self.instance then
+            simploo.config["baseInstanceTable"][self.className][key] = value
+            return
         end
     end
 
-    if self.members[key].modifiers.static and self.instance then
-        simploo.config["baseInstanceTable"][self.className][key] = value
-        return
+    if instancemethods[key] then
+        error("cannot change instance methods")
     end
 
-    self.members[key].value = value
+    if self.members["__index"] and self.members["__index"].value then
+        return self.members["__index"].value(self, key)
+    end
+
+    member.value = value
 end
 
 function instancemt:__tostring()
@@ -103,8 +115,8 @@ function instancemt:__tostring()
     -- Grap the definition string.
     local str = string.format("SimplooObject: %s <%s> {%s}", self.className, self.instance and "instance" or "class", tostring(self):sub(8))
 
-    if self.members[metaName] and self.members[metaName].value then
-        str = self.members[metaName].value(self)
+    if self.members["__tostring"] and self.members["__tostring"].value then
+        str = self.members["__tostring"].value(self)
     end
 
     -- Enable our metamethod again.
@@ -116,8 +128,14 @@ end
 
 function instancemt:__call(...)
     if self.instance then
-        if self.members["__construct"] and self.members["__construct"].owner == self then
-            return self.members["__construct"].value(self, ...)
+        local member = self.members["__construct"] or self.members["__call"]
+        if member and member.owner == self then
+            -- unset __construct after it has been ran... it should not run twice
+            -- also saves some memory
+            self.members["__construct"] = nil
+
+            -- call the construct fn
+            return member.value(self, ...)
         end
     else
         return self:new(...)
@@ -127,14 +145,13 @@ end
 -- Add support for meta methods as class members.
 for _, metaName in pairs(instancemt.metafunctions) do
     local fnOriginal = instancemt[metaName]
+    if not fnOriginal then
+        instancemt[metaName] = function(self, ...)
+            if fnOriginal then
+                return fnOriginal(self, ...)
+            end
 
-    instancemt[metaName] = function(self, ...)
-        return (unpack or table.unpack)({
-            (fnOriginal and fnOriginal(self, ...))
-                or (self.members[metaName]
-                    and self.members[metaName].value
-                    and self.members[metaName].value(self, ...)
-                )
-        })
+            return self.members[metaName] and self.members[metaName].value(self, ...)
+        end
     end
 end
