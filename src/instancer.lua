@@ -9,12 +9,12 @@ function instancer:initClass(class)
     local baseInstance = {}
 
     -- Base variables
-    baseInstance.className = class.name
-    baseInstance.members = {}
     baseInstance._base = baseInstance
+    baseInstance._name = class.name
+    baseInstance._members = {}
 
     if not simploo.config["production"] then
-        baseInstance.privateCallDepth = 0
+        baseInstance._callDepth = 0
     end
 
     -- Copy members from provided parents
@@ -22,7 +22,7 @@ function instancer:initClass(class)
         -- Retrieve parent from an earlier defined base instance that's global, or from the usings table.
         local parentBaseInstance = simploo.config["baseInstanceTable"][parentName] or class.fenv[parentName]
         if not parentBaseInstance then
-            error(string.format("class %s: could not find parent %s", baseInstance.className, parentName))
+            error(string.format("class %s: could not find parent %s", baseInstance._name, parentName))
         end
 
         -- Add parent members
@@ -31,14 +31,14 @@ function instancer:initClass(class)
         baseMember.value = parentBaseInstance
         baseMember.modifiers = { parent = true}
 
-        baseInstance.members[parentName] = baseMember
-        baseInstance.members[self:classNameFromFullPath(parentName)] = baseMember
+        baseInstance._members[parentName] = baseMember
+        baseInstance._members[self:classNameFromFullPath(parentName)] = baseMember
 
         -- Add variables from parents to child
-        for parentMemberName, parentMember in pairs(parentBaseInstance.members) do
+        for parentMemberName, parentMember in pairs(parentBaseInstance._members) do
             if not simploo.config["production"] then
                 -- make the member ambiguous when a member already exists (which means that during inheritance 2 parents had a member with the same name)
-                if baseInstance.members[parentMemberName] then
+                if baseInstance._members[parentMemberName] then
                     parentMember = simploo.util.duplicateTable(parentMember)
                     parentMember.owner = parentBaseInstance -- Owner is a copy, should be fixed up to the right instance again
                     parentMember.modifiers.ambiguous = true
@@ -49,12 +49,12 @@ function instancer:initClass(class)
                         -- When not in production, we have to add a wrapper around each inherited function to fix up private access.
                         -- This function resolves unjustified private access errors you call a function that uses a parent's private variables, from a child class.
                         -- It basically passes the parent object as 'self', instead of the child object, so when the __index/__newindex metamethods check access, the member owner == self.
-                        return parentBaseInstance.members[parentMemberName].value(caller.members[parentMemberName].owner, ...)
+                        return parentBaseInstance._members[parentMemberName].value(caller._members[parentMemberName].owner, ...)
                     end
                 end
             end
 
-            baseInstance.members[parentMemberName] = parentMember
+            baseInstance._members[parentMemberName] = parentMember
         end
     end
 
@@ -71,36 +71,36 @@ function instancer:initClass(class)
             if type(baseMember.value) == "function" then
                 baseMember.valueOriginal = baseMember.value
                 baseMember.value = function(self, ...)
-                    if not self or not self.privateCallDepth then
+                    if not self or not self._callDepth then
                         error("Method called incorrectly, 'self' was not passed. https://stackoverflow.com/questions/4911186/difference-between-and-in-lua")
                     end
 
-                    self.privateCallDepth = self.privateCallDepth + 1
+                    self._callDepth = self._callDepth + 1
 
                     local ret = { baseMember.valueOriginal(self, ...)}
 
-                    self.privateCallDepth = self.privateCallDepth - 1
+                    self._callDepth = self._callDepth - 1
 
                     return (unpack or table.unpack)(ret)
                 end
             end
         end
 
-        baseInstance.members[formatMemberName] = baseMember
+        baseInstance._members[formatMemberName] = baseMember
     end
 
     function baseInstance.new(selfOrData, ...)
-        if selfOrData == baseInstance then
+        if selfOrData == baseInstance then -- called with :
             return simploo.baseinstancemethods.new(baseInstance, ...)
-        else
+        else -- called with .
             return simploo.baseinstancemethods.new(baseInstance, selfOrData, ...)
         end
     end
 
     function baseInstance.deserialize(selfOrData, ...)
-        if selfOrData == baseInstance then
+        if selfOrData == baseInstance then -- called with :
             return simploo.baseinstancemethods.deserialize(baseInstance, ...)
-        else
+        else -- called with .
             return simploo.baseinstancemethods.deserialize(baseInstance, selfOrData, ...)
         end
     end
@@ -117,11 +117,11 @@ end
 
 -- Sets up a global instance of a class instance in which static member values are stored
 function instancer:registerClassInstance(classInstance)
-    simploo.config["baseInstanceTable"][classInstance.className] = classInstance
-    self:namespaceToTable(classInstance.className, simploo.config["baseInstanceTable"], classInstance)
+    simploo.config["baseInstanceTable"][classInstance._name] = classInstance
+    self:namespaceToTable(classInstance._name, simploo.config["baseInstanceTable"], classInstance)
         
-    if classInstance.members["__declare"] and classInstance.members["__declare"].owner == classInstance then
-        classInstance.members["__declare"].value(classInstance)
+    if classInstance._members["__declare"] and classInstance._members["__declare"].owner == classInstance then
+        classInstance._members["__declare"].value(classInstance)
     end
 end
 
@@ -135,7 +135,7 @@ function instancer:namespaceToTable(namespaceName, targetTable, assignValue)
         targetTable[firstword] = targetTable[firstword] or {}
 
         -- TODO: test if this actually catches what we want
-        if targetTable[firstword].className then
+        if targetTable[firstword]._name then
             error("putting a class inside a class table")
         end
 

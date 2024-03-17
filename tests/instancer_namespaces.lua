@@ -3,6 +3,8 @@ function Test:testNamespaces()
 
     class "Foo" {}
 
+    class "Foo2" extends "Foo" {}
+
     ----
 
     namespace "testwhole"
@@ -63,4 +65,18 @@ function Test:testNamespaces()
 
     local instance = Classy.new()
     instance:test()
+end
+
+function Test:testUsingsForNamespaceTwice()
+    namespace "ns"
+
+    class "A" {}
+
+    namespace "ns"
+
+    class "B" extends "A" {}
+
+    namespace "ns"
+
+    class "C" extends "B" {}
 end

@@ -17,7 +17,7 @@ end
 
 function hotswap:swap(newBase)
     for _, hotInstance in pairs(simploo_hotswap_instances) do
-        if hotInstance.className == newBase.className then
+        if hotInstance._name == newBase._name then
             hotswap:syncMembers(hotInstance, newBase)
         end
     end
@@ -25,10 +25,10 @@ end
 
 function hotswap:syncMembers(hotInstance, baseInstance)
     -- Add members that do not exist in the current instance.
-    for baseMemberName, baseMember in pairs(baseInstance.members) do
+    for baseMemberName, baseMember in pairs(baseInstance._members) do
         local contains = false
 
-        for hotMemberName, hotMember in pairs(hotInstance.members) do
+        for hotMemberName, hotMember in pairs(hotInstance._members) do
             if hotMemberName == baseMemberName then
                 contains = true
             end
@@ -38,22 +38,22 @@ function hotswap:syncMembers(hotInstance, baseInstance)
             baseMember = simploo.util.duplicateTable(baseMember)
             baseMember.owner = hotInstance
 
-            hotInstance.members[baseMemberName] = baseMember
+            hotInstance._members[baseMemberName] = baseMember
         end
     end
 
     -- Remove members from the current instance that are not in the new instance.
-    for hotMemberName, hotMember in pairs(hotInstance.members) do
+    for hotMemberName, hotMember in pairs(hotInstance._members) do
         local exists = false
 
-        for baseMemberName, baseMember in pairs(baseInstance.members) do
+        for baseMemberName, baseMember in pairs(baseInstance._members) do
             if hotMemberName == baseMemberName then
                 exists = true
             end
         end
 
         if not exists then
-            hotInstance.members[hotMemberName] = nil
+            hotInstance._members[hotMemberName] = nil
         end
     end
 end

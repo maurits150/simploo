@@ -7,7 +7,7 @@ local activeUsings = {}
 
 function syntax.class(className, classOperation)
     if simploo.parser.instance then
-        error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance.className))
+        error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance._name))
     end
 
     simploo.parser.instance = simploo.parser:new(onFinished)
@@ -21,7 +21,7 @@ function syntax.class(className, classOperation)
             local newClass = simploo.instancer:initClass(parserOutput)
 
             -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it using the full path.
-            syntax.using(newClass.className)
+            syntax.using(newClass._name)
         end
     end)
     

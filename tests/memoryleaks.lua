@@ -60,3 +60,39 @@ function Test:testMemoryLeak()
 
     assertTrue(memoryFreed) -- less than 0.1 MB difference
 end
+
+function Test:testStaticsNotCopiedToInstances()
+    namespace "memoryleak"
+
+    class "BigStaticVariable" {
+        static {
+            lots_of_data = {}
+        }
+    };
+
+    for i=1, 1000 * 10 do
+        table.insert(memoryleak.BigStaticVariable.lots_of_data, "A")
+    end
+
+    for i=1, 3 do
+        collectgarbage("collect")
+    end
+
+    local startMemory = collectgarbage("count")
+
+    local instances = {}
+    for i=1, 100 do
+        table.insert(instances, memoryleak.BigStaticVariable.new())
+    end
+
+    collectgarbage("collect")
+
+    local endMemory = collectgarbage("count")
+
+    local moreThan1MBUsed = (endMemory - startMemory) > 1
+    if moreThan1MBUsed then
+        print("START MEMORY", startMemory, "END MEMORY", endMemory)
+    end
+
+    assertFalse(moreThan1MBUsed)
+end

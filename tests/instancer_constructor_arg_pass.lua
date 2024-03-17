@@ -3,18 +3,18 @@ namespace "Test"
 function Test:testConstructorArgsPass() -- new() called with both . and : should work fine
     class "A" {
         __construct = function(self)
-            assertEquals(self.className, "Test.A")
-            assertFalse(self == _G[self.className])
+            assertEquals(self:get_name(), "Test.A")
+            assertFalse(self == _G[self:get_name()])
         end;
     }
 
     class "B" {
         __construct = function(self, a, etc)
-            assertEquals(self.className, "Test.B")
-            assertFalse(self == _G[self.className])
+            assertEquals(self:get_name(), "Test.B")
+            assertFalse(self == _G[self:get_name()])
 
-            assertEquals(a.className, "Test.A")
-            assertFalse(a == _G[a.className])
+            assertEquals(a:get_name(), "Test.A")
+            assertFalse(a == _G[a:get_name()])
         end;
     }
 

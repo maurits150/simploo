@@ -19,10 +19,10 @@ parser.modifiers = {"public", "private", "protected", "static", "const", "meta",
 
 function parser:new()
     local object = {}
-    object.className = ""
-    object.classParents = {}
-    object.classMembers = {}
-    object.classUsings = {}
+    object.name = ""
+    object.parents = {}
+    object.members = {}
+    object.usings = {}
 
     object.onFinishedData = false
     object.onFinished = function(self, output)
@@ -38,8 +38,8 @@ function parser:new()
         end
     end
 
-    function object:class(className, classOperation)
-        self.className = className
+    function object:class(name, classOperation)
+        self.name = name
 
         for k, v in pairs(classOperation or {}) do
             if self[k] then
@@ -51,8 +51,8 @@ function parser:new()
     end
 
     function object:extends(parentsString)
-        for className in string.gmatch(parentsString, "([^,^%s*]+)") do
-            table.insert(self.classParents, className)
+        for name in string.gmatch(parentsString, "([^,^%s*]+)") do
+            table.insert(self.parents, name)
         end
     end
 
@@ -62,10 +62,10 @@ function parser:new()
         end
 
         local output = {}
-        output.name = self.className
-        output.parents = self.classParents
-        output.members = self.classMembers
-        output.usings = self.classUsings
+        output.name = self.name
+        output.parents = self.parents
+        output.members = self.members
+        output.usings = self.usings
 
         do
             local env = {}
@@ -115,22 +115,22 @@ function parser:new()
             memberValue = nil
         end
 		
-        self["classMembers"][memberName] = {
+        self["members"][memberName] = {
             value = memberValue,
             modifiers = {}
         }
 
         for _, modifier in pairs(modifiers or {}) do
-            self["classMembers"][memberName].modifiers[modifier] = true
+            self["members"][memberName].modifiers[modifier] = true
         end
     end
 
     function object:namespace(namespace)
-        self.className = namespace .. "." .. self.className
+        self.name = namespace .. "." .. self.name
     end
 
     function object:using(using)
-        table.insert(self.classUsings, using)
+        table.insert(self.usings, using)
     end
 
     local meta = {}
@@ -187,13 +187,11 @@ function parser:usingsToTable(name, targetTable, searchTable, alias)
                 error(string.format("failed to resolve using %s", name))
             end
 
-            if not searchTable[name].className then
-                error(string.format("resolved %s, but the table found is not a class", name))
-            end
-
-            if searchTable[name].className then
+            if searchTable[name]._base then
                 -- Assign a single class
                 targetTable[alias or name] = searchTable[name]
+            else
+                error(string.format("resolved %s, but the table found is not a class", name))
             end
         end
     end
