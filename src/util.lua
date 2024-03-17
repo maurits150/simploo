@@ -19,20 +19,6 @@ function util.duplicateTable(tbl, lookup)
         end
     end
 
-    if tbl.className then
-        if debug then -- bypasses __metatable metamethod if debug library is available
-            local mt = debug.getmetatable(tbl)
-            if mt then
-                debug.setmetatable(copy, mt)
-            end
-        else -- too bad.. gonna try without it
-            local mt = getmetatable(tbl)
-            if mt then
-                setmetatable(copy, mt)
-            end
-        end
-    end
-
     return copy
 end
 

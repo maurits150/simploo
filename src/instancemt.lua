@@ -29,12 +29,18 @@ function instancemethods:get_parents()
     return t
 end
 
+local baseinstancemt = {}
+simploo.baseinstancemt = baseinstancemt
+
+function baseinstancemt:__call(...)
+    return self:new(...)
+end
+
 ---
 
 local instancemt = {}
 simploo.instancemt = instancemt
 instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
-
 
 function instancemt:__index(key)
     local member = self.members[key]
@@ -54,8 +60,8 @@ function instancemt:__index(key)
             end
         end
 
-        if member.modifiers.static and self.instance then
-            return simploo.config["baseInstanceTable"][self.className][key]
+        if member.modifiers.static and self.base then
+            return self.base.members[key].value
         end
 
         return member.value
@@ -88,10 +94,11 @@ function instancemt:__newindex(key, value)
             end
         end
 
-        if member.modifiers.static and self.instance then
-            simploo.config["baseInstanceTable"][self.className][key] = value
-            return
+        if member.modifiers.static and self.base then
+            self.base.members[key].value = value
         end
+
+        member.value = value
     end
 
     if instancemethods[key] then
@@ -101,8 +108,6 @@ function instancemt:__newindex(key, value)
     if self.members["__index"] and self.members["__index"].value then
         return self.members["__index"].value(self, key)
     end
-
-    member.value = value
 end
 
 function instancemt:__tostring()
@@ -113,7 +118,7 @@ function instancemt:__tostring()
     mt.__tostring = nil
 
     -- Grap the definition string.
-    local str = string.format("SimplooObject: %s <%s> {%s}", self.className, self.instance and "instance" or "class", tostring(self):sub(8))
+    local str = string.format("SimplooObject: %s <%s> {%s}", self.className, self.base and "instance" or "class", tostring(self):sub(8))
 
     if self.members["__tostring"] and self.members["__tostring"].value then
         str = self.members["__tostring"].value(self)
@@ -127,18 +132,23 @@ function instancemt:__tostring()
 end
 
 function instancemt:__call(...)
-    if self.instance then
-        local member = self.members["__construct"] or self.members["__call"]
-        if member and member.owner == self then
-            -- unset __construct after it has been ran... it should not run twice
-            -- also saves some memory
-            self.members["__construct"] = nil
+    -- We need this when calling parent constructors from within a child constructor
+    if self.members["__construct"] then
+        -- cache reference because we unassign it before calling it
+        local construct = self.members["__construct"]
 
-            -- call the construct fn
-            return member.value(self, ...)
-        end
-    else
-        return self:new(...)
+        -- unset __construct after it has been ran... it should not run twice
+        -- also saves some memory
+        self.members["__construct"] = nil
+
+        -- call the construct fn
+        return construct.value(self, ...)
+    end
+
+    -- For child instances, we can just redirect to __call, because __construct has already been called from the 'new' method.
+    if self.members["__call"] then
+        -- call the construct fn
+        return self.members["__call"].value(self, ...)
     end
 end
 

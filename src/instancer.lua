@@ -1,13 +1,13 @@
 local instancer = {}
 simploo.instancer = instancer
 
-local function markAsInstanceRecursively(instance)
-    instance.instance = true
+local function makeInstanceRecursively(instance, base)
+    instance.base = base
+    setmetatable(instance, simploo.instancemt)
 
     for _, memberData in pairs(instance.members) do
-        if memberData.modifiers.parent and not memberData.value.instance then
-            memberData.value.instance = true
-            markAsInstanceRecursively(memberData.value)
+        if memberData.modifiers.parent and not memberData.value.base then
+            makeInstanceRecursively(memberData.value)
         end
     end
 end
@@ -22,7 +22,6 @@ function instancer:initClass(class)
     -- Base variables
     baseInstance.className = class.name
     baseInstance.members = {}
-    baseInstance.instance = false
 
     if not simploo.config["production"] then
         baseInstance.privateCallDepth = 0
@@ -111,7 +110,7 @@ function instancer:initClass(class)
         -- Clone and construct new instance
         local copy = simploo.util.duplicateTable(baseInstance)
 
-        markAsInstanceRecursively(copy)
+        makeInstanceRecursively(copy, baseInstance)
 
         if copy.members["__construct"] and copy.members["__construct"].owner == copy then -- If the class has a constructor member that it owns (so it is not a reference to the parent constructor)
             if selfOrData == baseInstance then
@@ -119,6 +118,8 @@ function instancer:initClass(class)
             else
                 copy.members["__construct"].value(copy, selfOrData, ...)
             end
+
+            copy.members["__construct"] = nil -- remove __construct.. no longer needed in memory
         end
 
         if copy.members["__finalize"] then
@@ -133,7 +134,7 @@ function instancer:initClass(class)
         return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
     end
 
-    setmetatable(baseInstance, simploo.instancemt)
+    setmetatable(baseInstance, simploo.baseinstancemt)
 
     -- Initialize the instance for use as a class
     self:registerClassInstance(baseInstance)
