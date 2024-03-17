@@ -6,7 +6,7 @@ function instancemethods:get_name()
 end
 
 function instancemethods:get_class()
-    return _G[self.className]
+    return simploo.config["baseInstanceTable"][self.className]
 end
 
 function instancemethods:instance_of(className)
@@ -55,7 +55,7 @@ function instancemt:__index(key)
         end
 
         if member.modifiers.static and self.instance then
-            return _G[self.className][key]
+            return simploo.config["baseInstanceTable"][self.className][key]
         end
 
         return member.value
@@ -86,7 +86,7 @@ function instancemt:__newindex(key, value)
     end
 
     if self.members[key].modifiers.static and self.instance then
-        _G[self.className][key] = value
+        simploo.config["baseInstanceTable"][self.className][key] = value
         return
     end
 

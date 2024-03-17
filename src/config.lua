@@ -29,11 +29,10 @@ simploo.config["exposeSyntax"] = true
 simploo.config["classHotswap"] = false
 
 --
--- Global Namespace Table
+-- Base instance table
 --
--- Description: the global table in which simploo writes away all classes
+-- Description: the global table in which simploo writes away all classes including namespaces
 -- Default: _G
 --
 
--- TODO
--- simploo.config["globalNamespaceTable"] = _G
+simploo.config["baseInstanceTable"] = _G

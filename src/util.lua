@@ -1,38 +1,35 @@
 local util = {}
 simploo.util = util
 
-function util.duplicateTable(tbl, skipKeys, lookup)
+function util.duplicateTable(tbl, lookup)
     local copy = {}
-        
 
     for k, v in pairs(tbl) do
         if type(v) == "table" then
-            if skipKeys and skipKeys[k] == false then
-                copy[k] = v -- Specified to skip copying explicitly
-            else
-                lookup = lookup or {}
-                lookup[tbl] = copy
+            lookup = lookup or {}
+            lookup[tbl] = copy
 
-                if lookup[v] then
-                    copy[k] = lookup[v] -- we already copied this table. reuse the copy.
-                else
-                    copy[k] = util.duplicateTable(v, skipKeys and skipKeys[k] --[[ allows to use a multi-dimentional table so skip keys ]], lookup) -- not yet copied. copy it.
-                end
+            if lookup[v] then
+                copy[k] = lookup[v] -- we already copied this table. reuse the copy.
+            else
+                copy[k] = util.duplicateTable(v, lookup) -- not yet copied. copy it.
             end
         else
             copy[k] = rawget(tbl, k)
         end
     end
-    
-    if debug then -- bypasses __metatable metamethod if debug library is available
-        local mt = debug.getmetatable(tbl)
-        if mt then
-            debug.setmetatable(copy, mt)
-        end
-    else -- too bad.. gonna try without it
-        local mt = getmetatable(tbl)
-        if mt then
-            setmetatable(copy, mt)
+
+    if tbl.className then
+        if debug then -- bypasses __metatable metamethod if debug library is available
+            local mt = debug.getmetatable(tbl)
+            if mt then
+                debug.setmetatable(copy, mt)
+            end
+        else -- too bad.. gonna try without it
+            local mt = getmetatable(tbl)
+            if mt then
+                setmetatable(copy, mt)
+            end
         end
     end
 
