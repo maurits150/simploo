@@ -928,8 +928,14 @@ function syntax.class(className, classOperation)
 			-- Create a class instance
             local newClass = simploo.instancer:initClass(parserOutput)
 
-            -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it using the full path.
-            syntax.using(newClass._name)
+            -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it will automatically use it.
+            -- This prevents the next class in the namespace from havint to refer to earlier classes by the full path.
+            -- We insert directly into the table, we don't want to call our hook for this, or it may cause a loop.
+            table.insert(activeUsings, {
+                path = newClass._name,
+                alias = nil,
+                errorOnFail = true
+            })
         end
     end)
     
