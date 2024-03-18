@@ -79,8 +79,8 @@ function instancemt:__index(key)
         return instancemethods[key]
     end
 
-    if self._members["__index"] and self._members["__index"].value then
-        return self._members["__index"].value(self, key)
+    if self._members["__index"] then
+        return self:__index(key) -- call via metamethod, because method may be static!
     end
 end
 
@@ -116,8 +116,8 @@ function instancemt:__newindex(key, value)
         error("cannot change instance methods")
     end
 
-    if self._members["__index"] and self._members["__index"].value then
-        return self._members["__index"].value(self, key)
+    if self._members["__newindex"] then -- lookup via members to prevent infinite loop
+        return self:__newindex(key) -- call via metatable, because method may be static
     end
 end
 
@@ -131,8 +131,8 @@ function instancemt:__tostring()
     -- Grap the definition string.
     local str = string.format("SimplooObject: %s <%s> {%s}", self._name, self._base == self and "class" or "instance", tostring(self):sub(8))
 
-    if self._members["__tostring"] and self._members["__tostring"].value then
-        str = self._members["__tostring"].value(self)
+    if self._members["__tostring"] and self._members["__tostring"].modifiers.meta then  -- lookup via members to prevent infinite loop
+        str = self:__tostring()
     end
 
     -- Enable our metamethod again.
@@ -144,22 +144,22 @@ end
 
 function instancemt:__call(...)
     -- We need this when calling parent constructors from within a child constructor
-    if self._members["__construct"] then
+    if self.__construct then
         -- cache reference because we unassign it before calling it
-        local construct = self._members["__construct"]
+        local fn = self.__construct
 
         -- unset __construct after it has been ran... it should not run twice
         -- also saves some memory
         self._members["__construct"] = nil
 
         -- call the construct fn
-        return construct.value(self, ...)
+        return fn(self, ...) -- call via metatable, because method may be static!
     end
 
     -- For child instances, we can just redirect to __call, because __construct has already been called from the 'new' method.
-    if self._members["__call"] then
+    if self._members["__call"] then  -- lookup via members to prevent infinite loop
         -- call the construct fn
-        return self._members["__call"].value(self, ...)
+        return self:__call(...) -- call via metatable, because method may be static!
     end
 end
 

@@ -1,12 +1,74 @@
 local baseinstancemethods = simploo.util.duplicateTable(simploo.instancemethods)
 simploo.baseinstancemethods = baseinstancemethods
 
-local function setMetatableRecursively(instance)
+local function markInstanceRecursively(instance, ogchild)
     setmetatable(instance, simploo.instancemt)
 
     for _, memberData in pairs(instance._members) do
         if memberData.modifiers.parent then
-            setMetatableRecursively(memberData.value)
+            markInstanceRecursively(memberData.value, ogchild)
+        end
+
+
+        -- Assign a wrapper that always corrects 'self' to the local instance.
+        -- This is the only way to make shadowing work correctly (I think).
+        if memberData.value and type(memberData.value) == "function" then
+            local fn = memberData.value
+            memberData.value = function(selfOrData, ...)
+                if selfOrData == ogchild then
+                    return fn(instance, ...)
+                else
+                    return fn(selfOrData, ...)
+                end
+            end
+        elseif memberData._value_static and type(memberData._value_static) == "function" then -- _value_static was a mistake..
+            local fn = memberData._value_static
+            memberData._value_static = function(potentialSelf, ...)
+                if potentialSelf == ogchild then
+                    return fn(instance, ...)
+                else
+                    return fn(...)
+                end
+            end
+        end
+
+        -- When in development mode, add another wrapper layer that checks for private access.
+        if not simploo.config["production"] then
+            if memberData.value and type(memberData.value) == "function" then
+                -- assign a wrapper that always corrects 'self' to the local instance
+                -- this is a somewhat hacky fix for shadowing
+                local fn = memberData.value
+                memberData.value = function(...)
+                    -- TODO: CHECK THE OWNERSHIP STACK
+                    -- use ogchild to keep the state across all parent stuffs
+                    -- maybe make it coroutine compatible somehow?
+
+                    -- TODO: BUILD AN OWNERSHIP STACK
+
+                    local ret = {fn(...)}
+
+                    -- TODO: POP AN OWNERSHIP STACK
+
+                    return (unpack or table.unpack)(ret)
+                end
+            elseif memberData._value_static and type(memberData._value_static) == "function" then -- _value_static was a mistake..
+                -- assign a wrapper that always corrects 'self' to the local instance
+                -- this is a somewhat hacky fix for shadowing
+                local fn = memberData._value_static
+                memberData._value_static = function(potentialSelf, ...)
+                    -- TODO: CHECK THE OWNERSHIP STACK
+                    -- use ogchild to keep the state across all parent stuffs
+                    -- maybe make it coroutine compatible somehow?
+
+                    -- TODO: BUILD AN OWNERSHIP STACK
+
+                    local ret = {fn(...)}
+
+                    -- TODO: POP AN OWNERSHIP STACK
+
+                    return (unpack or table.unpack)(ret)
+                end
+            end
         end
     end
 end
@@ -21,21 +83,17 @@ function baseinstancemethods:new(...)
     -- Clone and construct new instance
     local copy = simploo.util.duplicateTable(self)
 
-    setMetatableRecursively(copy)
+    markInstanceRecursively(copy, copy)
 
     -- call constructor and create finalizer
     if copy._members["__construct"] then
-        if copy._members["__construct"].owner == copy then -- If the class has a constructor member that it owns (so it is not a reference to the parent constructor)
-            copy._members["__construct"].value(copy, ...)
-            copy._members["__construct"] = nil -- remove __construct.. no longer needed in memory
-        end
+        copy:__construct(...) -- call via metamethod, because method may be static!
+        copy._members["__construct"] = nil -- remove __construct.. no longer needed in memory
     end
 
     if copy._members["__finalize"] then
         simploo.util.addGcCallback(copy, function()
-            if copy._members["__finalize"].owner == copy then
-                copy._members["__finalize"].value(copy)
-            end
+            copy:__finalize() -- call via metamethod, because method may be static!
         end)
     end
 
@@ -66,7 +124,7 @@ function baseinstancemethods:deserialize(data)
     -- Clone and construct new instance
     local copy = simploo.util.duplicateTable(self)
 
-    setMetatableRecursively(copy, self)
+    markInstanceRecursively(copy, copy)
 
     -- restore serializable data
     deserializeIntoMembers(copy, data)

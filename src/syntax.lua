@@ -7,7 +7,7 @@ local activeUsings = {}
 
 function syntax.class(className, classOperation)
     if simploo.parser.instance then
-        error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance._name))
+        error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance.name))
     end
 
     simploo.parser.instance = simploo.parser:new(onFinished)
@@ -59,8 +59,16 @@ function syntax.namespace(namespaceName)
     local returnNamespace = simploo.hook:fire("onSyntaxNamespace", namespaceName)
 
     activeNamespace = returnNamespace or namespaceName
-
     activeUsings = {}
+
+    -- Use everything in the current namespace automatically.
+    table.insert(activeUsings, {
+        path = #activeNamespace > 0 and (activeNamespace .. ".*") or "*",
+        alias = nil,
+        -- we may be the first class in the namespace..
+        -- in that case using our own namespace is allowed to fail, because there is no namespace yet..
+        errorOnFail = false
+    })
 end
 
 function syntax.using(namespaceName)
@@ -82,7 +90,8 @@ function syntax.using(namespaceName)
     -- Add the new using to our table
     table.insert(activeUsings, {
         path = returnNamespace or namespaceName,
-        alias = nil
+        alias = nil,
+        errorOnFail = true
     })
 end
 

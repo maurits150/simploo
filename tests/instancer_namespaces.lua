@@ -72,8 +72,6 @@ function Test:testUsingsForNamespaceTwice()
 
     class "A" {}
 
-    namespace "WIPE IT ALL"
-
     namespace "ns"
 
     class "B" extends "A" {}

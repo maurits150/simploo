@@ -92,8 +92,9 @@ function util.duplicateTable(tbl, lookup)
     local copy = {}
 
     for k, v in pairs(tbl) do
-        if type(v) == "table"
-                and k ~= "_base" then
+        if k == "_value_static" then
+            -- do nothing
+        elseif type(v) == "table" and k ~= "_base" then
             lookup = lookup or {}
             lookup[tbl] = copy
 
@@ -207,16 +208,16 @@ end
 
 function simploo.serialize(instance)
     local data = {}
-    data["className"] = instance.className
+    data["_name"] = instance._name
 
-    for k, v in pairs(instance.members) do
+    for k, v in pairs(instance._members) do
         if v.modifiers and v.owner == instance then
             if not v.modifiers.transient and not v.modifiers.parent then
                 if type(v.value) ~= "function" then
                     data[k] = v.value
                 end
             elseif v.modifiers.parent then
-                data[k] = v.value:serialize()
+                data[k] = simploo.serialize(v.value)
             end
         end
     end
@@ -225,14 +226,14 @@ function simploo.serialize(instance)
 end
 
 function simploo.deserialize(data)
-    local className = data["className"]
-    if not className then
-        error("failed to deserialize: className not found in data")
+    local name = data["_name"]
+    if not name then
+        error("failed to deserialize: _name not found in data")
     end
 
-    local class = simploo.config["baseInstanceTable"][className]
+    local class = simploo.config["baseInstanceTable"][name]
     if not class then
-        error("failed to deserialize: class " .. className .. " not found")
+        error("failed to deserialize: class " .. name .. " not found")
     end
 
     return class:deserialize(data)
@@ -246,20 +247,20 @@ local instancemethods = {}
 simploo.instancemethods = instancemethods
 
 function instancemethods:get_name()
-    return self.className
+    return self._name
 end
 
 function instancemethods:get_class()
-    return self.__base or self
+    return self._base or self
 end
 
 function instancemethods:instance_of(otherInstance)
     -- TODO: write a cache for instance_of?
-    if not otherInstance.className then
+    if not otherInstance._name then
         error("passed instance is not a class")
     end
 
-    for memberName, member in pairs(self.members) do
+    for memberName, member in pairs(self._members) do
         if member.modifiers.parent then
             if member.value == otherInstance or
                     member.value == otherInstance._base or
@@ -285,10 +286,6 @@ function instancemethods:get_parents()
     return t
 end
 
-function instancemethods:serialize()
-    return simploo.serialize(self)
-end
-
 ---
 
 local instancemt = {}
@@ -296,9 +293,11 @@ simploo.instancemt = instancemt
 instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
 
 function instancemt:__index(key)
-    local member = self.members[key]
+    local member = self._members[key]
 
     if member then
+
+        --------development--------
         if not simploo.config["production"] then
             if member.modifiers.ambiguous then
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
@@ -308,13 +307,14 @@ function instancemt:__index(key)
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            if member.modifiers.private and self.privateCallDepth == 0 then
+            if member.modifiers.private and self._callDepth == 0 then
                 error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
             end
         end
+        --------development--------
 
         if member.modifiers.static and self._base then
-            return self._base.members[key].value
+            return self._base._members[key]._value_static
         end
 
         return member.value
@@ -324,15 +324,17 @@ function instancemt:__index(key)
         return instancemethods[key]
     end
 
-    if self.members["__index"] and self.members["__index"].value then
-        return self.members["__index"].value(self, key)
+    if self._members["__index"] then
+        return self:__index(key) -- call via metamethod, because method may be static!
     end
 end
 
 function instancemt:__newindex(key, value)
-    local member = self.members[key]
+    local member = self._members[key]
 
     if member then
+
+        --------development--------
         if not simploo.config["production"] then
             if member.modifiers.const then
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
@@ -342,24 +344,25 @@ function instancemt:__newindex(key, value)
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            if member.modifiers.private and self.privateCallDepth == 0 then
+            if member.modifiers.private and self._callDepth == 0 then
                 error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
             end
         end
+        --------development--------
 
         if member.modifiers.static and self._base then
-            self._base.members[key].value = value
+            self._base._members[key]._value_static = value
+        else
+            member.value = value
         end
-
-        member.value = value
     end
 
     if instancemethods[key] then
         error("cannot change instance methods")
     end
 
-    if self.members["__index"] and self.members["__index"].value then
-        return self.members["__index"].value(self, key)
+    if self._members["__newindex"] then -- lookup via members to prevent infinite loop
+        return self:__newindex(key) -- call via metatable, because method may be static
     end
 end
 
@@ -371,10 +374,10 @@ function instancemt:__tostring()
     mt.__tostring = nil
 
     -- Grap the definition string.
-    local str = string.format("SimplooObject: %s <%s> {%s}", self.className, self.base == self and "class" or "instance", tostring(self):sub(8))
+    local str = string.format("SimplooObject: %s <%s> {%s}", self._name, self._base == self and "class" or "instance", tostring(self):sub(8))
 
-    if self.members["__tostring"] and self.members["__tostring"].value then
-        str = self.members["__tostring"].value(self)
+    if self._members["__tostring"] and self._members["__tostring"].modifiers.meta then  -- lookup via members to prevent infinite loop
+        str = self:__tostring()
     end
 
     -- Enable our metamethod again.
@@ -386,22 +389,22 @@ end
 
 function instancemt:__call(...)
     -- We need this when calling parent constructors from within a child constructor
-    if self.members["__construct"] then
+    if self.__construct then
         -- cache reference because we unassign it before calling it
-        local construct = self.members["__construct"]
+        local fn = self.__construct
 
         -- unset __construct after it has been ran... it should not run twice
         -- also saves some memory
-        self.members["__construct"] = nil
+        self._members["__construct"] = nil
 
         -- call the construct fn
-        return construct.value(self, ...)
+        return fn(self, ...) -- call via metatable, because method may be static!
     end
 
     -- For child instances, we can just redirect to __call, because __construct has already been called from the 'new' method.
-    if self.members["__call"] then
+    if self._members["__call"] then  -- lookup via members to prevent infinite loop
         -- call the construct fn
-        return self.members["__call"].value(self, ...)
+        return self:__call(...) -- call via metatable, because method may be static!
     end
 end
 
@@ -414,7 +417,7 @@ for _, metaName in pairs(instancemt.metafunctions) do
                 return fnOriginal(self, ...)
             end
 
-            return self.members[metaName] and self.members[metaName].value(self, ...)
+            return self._members[metaName] and self._members[metaName].value(self, ...)
         end
     end
 end
@@ -426,41 +429,99 @@ end
 local baseinstancemethods = simploo.util.duplicateTable(simploo.instancemethods)
 simploo.baseinstancemethods = baseinstancemethods
 
-local function makeInstanceRecursively(instance)
+local function markInstanceRecursively(instance, ogchild)
     setmetatable(instance, simploo.instancemt)
 
-    for _, memberData in pairs(instance.members) do
+    for _, memberData in pairs(instance._members) do
         if memberData.modifiers.parent then
-            makeInstanceRecursively(memberData.value)
+            markInstanceRecursively(memberData.value, ogchild)
+        end
+
+
+        -- Assign a wrapper that always corrects 'self' to the local instance.
+        -- This is the only way to make shadowing work correctly (I think).
+        if memberData.value and type(memberData.value) == "function" then
+            local fn = memberData.value
+            memberData.value = function(selfOrData, ...)
+                if selfOrData == ogchild then
+                    return fn(instance, ...)
+                else
+                    return fn(selfOrData, ...)
+                end
+            end
+        elseif memberData._value_static and type(memberData._value_static) == "function" then -- _value_static was a mistake..
+            local fn = memberData._value_static
+            memberData._value_static = function(potentialSelf, ...)
+                if potentialSelf == ogchild then
+                    return fn(instance, ...)
+                else
+                    return fn(...)
+                end
+            end
+        end
+
+        -- When in development mode, add another wrapper layer that checks for private access.
+        if not simploo.config["production"] then
+            if memberData.value and type(memberData.value) == "function" then
+                -- assign a wrapper that always corrects 'self' to the local instance
+                -- this is a somewhat hacky fix for shadowing
+                local fn = memberData.value
+                memberData.value = function(...)
+                    -- TODO: CHECK THE OWNERSHIP STACK
+                    -- use ogchild to keep the state across all parent stuffs
+                    -- maybe make it coroutine compatible somehow?
+
+                    -- TODO: BUILD AN OWNERSHIP STACK
+
+                    local ret = {fn(...)}
+
+                    -- TODO: POP AN OWNERSHIP STACK
+
+                    return (unpack or table.unpack)(ret)
+                end
+            elseif memberData._value_static and type(memberData._value_static) == "function" then -- _value_static was a mistake..
+                -- assign a wrapper that always corrects 'self' to the local instance
+                -- this is a somewhat hacky fix for shadowing
+                local fn = memberData._value_static
+                memberData._value_static = function(potentialSelf, ...)
+                    -- TODO: CHECK THE OWNERSHIP STACK
+                    -- use ogchild to keep the state across all parent stuffs
+                    -- maybe make it coroutine compatible somehow?
+
+                    -- TODO: BUILD AN OWNERSHIP STACK
+
+                    local ret = {fn(...)}
+
+                    -- TODO: POP AN OWNERSHIP STACK
+
+                    return (unpack or table.unpack)(ret)
+                end
+            end
         end
     end
 end
 
 function baseinstancemethods:new(...)
-    for memberName, member in pairs(self.members) do
+    for memberName, member in pairs(self._members) do
         if member.modifiers.abstract then
-            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
+            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy._name))
         end
     end
 
     -- Clone and construct new instance
     local copy = simploo.util.duplicateTable(self)
 
-    makeInstanceRecursively(copy)
+    markInstanceRecursively(copy, copy)
 
     -- call constructor and create finalizer
-    if copy.members["__construct"] then
-        if copy.members["__construct"].owner == copy then -- If the class has a constructor member that it owns (so it is not a reference to the parent constructor)
-            copy.members["__construct"].value(copy, ...)
-            copy.members["__construct"] = nil -- remove __construct.. no longer needed in memory
-        end
+    if copy._members["__construct"] then
+        copy:__construct(...) -- call via metamethod, because method may be static!
+        copy._members["__construct"] = nil -- remove __construct.. no longer needed in memory
     end
 
-    if copy.members["__finalize"] then
+    if copy._members["__finalize"] then
         simploo.util.addGcCallback(copy, function()
-            if copy.members["__finalize"].owner == copy then
-                copy.members["__finalize"].value(copy)
-            end
+            copy:__finalize() -- call via metamethod, because method may be static!
         end)
     end
 
@@ -470,9 +531,9 @@ end
 
 local function deserializeIntoMembers(instance, data)
     for dataKey, dataVal in pairs(data) do
-        local member = instance.members[dataKey]
+        local member = instance._members[dataKey]
         if member and member.modifiers and not member.modifiers.transient then
-            if type(dataVal) == "table" and dataVal.className then
+            if type(dataVal) == "table" and dataVal._name then
                 member.value = deserializeIntoMembers(member.value, dataVal)
             else
                 member.value = dataVal
@@ -482,16 +543,16 @@ local function deserializeIntoMembers(instance, data)
 end
 
 function baseinstancemethods:deserialize(data)
-    for memberName, member in pairs(self.members) do
+    for memberName, member in pairs(self._members) do
         if member.modifiers.abstract then
-            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy.className))
+            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy._name))
         end
     end
 
     -- Clone and construct new instance
     local copy = simploo.util.duplicateTable(self)
 
-    makeInstanceRecursively(copy, self)
+    markInstanceRecursively(copy, copy)
 
     -- restore serializable data
     deserializeIntoMembers(copy, data)
@@ -523,20 +584,22 @@ function instancer:initClass(class)
     local baseInstance = {}
 
     -- Base variables
-    baseInstance.className = class.name
-    baseInstance.members = {}
     baseInstance._base = baseInstance
+    baseInstance._name = class.name
+    baseInstance._members = {}
 
+    --------development--------
     if not simploo.config["production"] then
-        baseInstance.privateCallDepth = 0
+        baseInstance._callDepth = 0
     end
+    --------development--------
 
     -- Copy members from provided parents
     for _, parentName in pairs(class.parents) do
         -- Retrieve parent from an earlier defined base instance that's global, or from the usings table.
         local parentBaseInstance = simploo.config["baseInstanceTable"][parentName] or class.fenv[parentName]
         if not parentBaseInstance then
-            error(string.format("class %s: could not find parent %s", baseInstance.className, parentName))
+            error(string.format("class %s: could not find parent %s", baseInstance._name, parentName))
         end
 
         -- Add parent members
@@ -545,30 +608,12 @@ function instancer:initClass(class)
         baseMember.value = parentBaseInstance
         baseMember.modifiers = { parent = true}
 
-        baseInstance.members[parentName] = baseMember
-        baseInstance.members[self:classNameFromFullPath(parentName)] = baseMember
+        baseInstance._members[parentName] = baseMember
+        baseInstance._members[self:classNameFromFullPath(parentName)] = baseMember
 
         -- Add variables from parents to child
-        for parentMemberName, parentMember in pairs(parentBaseInstance.members) do
-            if not simploo.config["production"] then
-                -- make the member ambiguous when a member already exists (which means that during inheritance 2 parents had a member with the same name)
-                if baseInstance.members[parentMemberName] then
-                    parentMember = simploo.util.duplicateTable(parentMember)
-                    parentMember.owner = parentBaseInstance -- Owner is a copy, should be fixed up to the right instance again
-                    parentMember.modifiers.ambiguous = true
-                elseif type(parentMember.value) == "function" then
-                    parentMember = simploo.util.duplicateTable(parentMember)
-                    parentMember.owner = parentBaseInstance -- Owner is a copy now, should be fixed up to the right instance again
-                    parentMember.value = function(caller, ...)
-                        -- When not in production, we have to add a wrapper around each inherited function to fix up private access.
-                        -- This function resolves unjustified private access errors you call a function that uses a parent's private variables, from a child class.
-                        -- It basically passes the parent object as 'self', instead of the child object, so when the __index/__newindex metamethods check access, the member owner == self.
-                        return parentBaseInstance.members[parentMemberName].value(caller.members[parentMemberName].owner, ...)
-                    end
-                end
-            end
-
-            baseInstance.members[parentMemberName] = parentMember
+        for parentMemberName, parentMember in pairs(parentBaseInstance._members) do
+            baseInstance._members[parentMemberName] = parentMember
         end
     end
 
@@ -577,44 +622,29 @@ function instancer:initClass(class)
         local baseMember = {}
         baseMember.owner = baseInstance
         baseMember.modifiers = formatMember.modifiers
-        baseMember.value = formatMember.value
 
-        -- When not in production, add code that tracks invocation depth from the root instance
-        -- This allows us to detect when you try to access private variables directly from an instance.
-        if not simploo.config["production"] then
-            if type(baseMember.value) == "function" then
-                baseMember.valueOriginal = baseMember.value
-                baseMember.value = function(self, ...)
-                    if not self or not self.privateCallDepth then
-                        error("Method called incorrectly, 'self' was not passed. https://stackoverflow.com/questions/4911186/difference-between-and-in-lua")
-                    end
-
-                    self.privateCallDepth = self.privateCallDepth + 1
-
-                    local ret = { baseMember.valueOriginal(self, ...)}
-
-                    self.privateCallDepth = self.privateCallDepth - 1
-
-                    return (unpack or table.unpack)(ret)
-                end
-            end
+        if formatMember.modifiers.static then
+            baseMember._value_static = formatMember.value
+        else
+            baseMember.value = formatMember.value
         end
 
-        baseInstance.members[formatMemberName] = baseMember
+
+        baseInstance._members[formatMemberName] = baseMember
     end
 
     function baseInstance.new(selfOrData, ...)
-        if selfOrData == baseInstance then
+        if selfOrData == baseInstance then -- called with :
             return simploo.baseinstancemethods.new(baseInstance, ...)
-        else
+        else -- called with .
             return simploo.baseinstancemethods.new(baseInstance, selfOrData, ...)
         end
     end
 
     function baseInstance.deserialize(selfOrData, ...)
-        if selfOrData == baseInstance then
+        if selfOrData == baseInstance then -- called with :
             return simploo.baseinstancemethods.deserialize(baseInstance, ...)
-        else
+        else -- called with .
             return simploo.baseinstancemethods.deserialize(baseInstance, selfOrData, ...)
         end
     end
@@ -622,7 +652,7 @@ function instancer:initClass(class)
     setmetatable(baseInstance, simploo.baseinstancemt)
 
     -- Initialize the instance for use as a class
-    self:registerClassInstance(baseInstance)
+    self:registerBaseInstance(baseInstance)
 
     simploo.hook:fire("afterInstancerInitClass", class, baseInstance)
 
@@ -630,12 +660,13 @@ function instancer:initClass(class)
 end
 
 -- Sets up a global instance of a class instance in which static member values are stored
-function instancer:registerClassInstance(classInstance)
-    simploo.config["baseInstanceTable"][classInstance.className] = classInstance
-    self:namespaceToTable(classInstance.className, simploo.config["baseInstanceTable"], classInstance)
-        
-    if classInstance.members["__declare"] and classInstance.members["__declare"].owner == classInstance then
-        classInstance.members["__declare"].value(classInstance)
+function instancer:registerBaseInstance(baseInstance)
+    simploo.config["baseInstanceTable"][baseInstance._name] = baseInstance
+    self:namespaceToTable(baseInstance._name, simploo.config["baseInstanceTable"], baseInstance)
+
+    if baseInstance._members["__declare"] then
+        local fn = (baseInstance._members["__declare"]._value_static or baseInstance._members["__declare"].value)
+        fn(baseInstance._members["__declare"].owner) -- no metamethod exists to call member directly
     end
 end
 
@@ -649,7 +680,7 @@ function instancer:namespaceToTable(namespaceName, targetTable, assignValue)
         targetTable[firstword] = targetTable[firstword] or {}
 
         -- TODO: test if this actually catches what we want
-        if targetTable[firstword].className then
+        if targetTable[firstword]._name then
             error("putting a class inside a class table")
         end
 
@@ -689,10 +720,11 @@ parser.modifiers = {"public", "private", "protected", "static", "const", "meta",
 
 function parser:new()
     local object = {}
-    object.className = ""
-    object.classParents = {}
-    object.classMembers = {}
-    object.classUsings = {}
+    object.ns = ""
+    object.name = ""
+    object.parents = {}
+    object.members = {}
+    object.usings = {}
 
     object.onFinishedData = false
     object.onFinished = function(self, output)
@@ -708,8 +740,8 @@ function parser:new()
         end
     end
 
-    function object:class(className, classOperation)
-        self.className = className
+    function object:class(name, classOperation)
+        self.name = name
 
         for k, v in pairs(classOperation or {}) do
             if self[k] then
@@ -721,8 +753,8 @@ function parser:new()
     end
 
     function object:extends(parentsString)
-        for className in string.gmatch(parentsString, "([^,^%s*]+)") do
-            table.insert(self.classParents, className)
+        for name in string.gmatch(parentsString, "([^,^%s*]+)") do
+            table.insert(self.parents, name)
         end
     end
 
@@ -732,18 +764,18 @@ function parser:new()
         end
 
         local output = {}
-        output.name = self.className
-        output.parents = self.classParents
-        output.members = self.classMembers
-        output.usings = self.classUsings
+        output.name = self.name
+        output.parents = self.parents
+        output.members = self.members
+        output.usings = self.usings
 
         do
             local env = {}
             for _, usingData in pairs(output.usings) do -- Assign all usings to the environment
-                parser:usingsToTable(usingData["path"], env, simploo.config["baseInstanceTable"], usingData["alias"])
+                parser:usingsToTable(usingData["path"], env, simploo.config["baseInstanceTable"], usingData["alias"], usingData.errorOnFail)
             end
 
-            local mt = {} -- Assign the metatable. Doing this after usingsToTable so it doesn't write to _G
+            local mt = {} -- Assign a metatable. Doing this after usingsToTable, because usingsToTable would trigger __newindex and write to _G
             function mt:__index(key) return _G[key] end
             function mt:__newindex(key, value) _G[key] = value end
 
@@ -785,22 +817,23 @@ function parser:new()
             memberValue = nil
         end
 		
-        self["classMembers"][memberName] = {
+        self["members"][memberName] = {
             value = memberValue,
             modifiers = {}
         }
 
         for _, modifier in pairs(modifiers or {}) do
-            self["classMembers"][memberName].modifiers[modifier] = true
+            self["members"][memberName].modifiers[modifier] = true
         end
     end
 
     function object:namespace(namespace)
-        self.className = namespace .. "." .. self.className
+        self.ns = namespace
+        self.name = namespace .. "." .. self.name
     end
 
     function object:using(using)
-        table.insert(self.classUsings, using)
+        table.insert(self.usings, using)
     end
 
     local meta = {}
@@ -834,11 +867,11 @@ end
 -- Supports the following formats:
 -- > a.b.c -- Everything inside that namespace
 -- > a.b.c.Foo -- Specific class inside namespace
-function parser:usingsToTable(name, targetTable, searchTable, alias)
+function parser:usingsToTable(name, targetTable, searchTable, alias, errorOnFail)
     local firstchunk, remainingchunks = string.match(name, "(%w+)%.(.+)")
 
     if searchTable[firstchunk] then
-        self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk], alias)
+        self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk], alias, errorOnFail)
     else
         -- Wildcard add all from this namespace
         if name == "*" then
@@ -846,24 +879,22 @@ function parser:usingsToTable(name, targetTable, searchTable, alias)
             for k, v in pairs(searchTable) do
                 if alias then
                     -- Resolve the namespace in the alias, and store the class inside this
-                    self:namespaceToTable(alias, targetTable, {[k] = v})
+                    simploo.instancer:namespaceToTable(alias, targetTable, {[k] = v})
                 else
                     -- Just assign the class directly
                     targetTable[k] = v
                 end
             end
         else -- Add single class
-            if not searchTable[name] then
+            if searchTable[name] then
+                if searchTable[name]._base then
+                    -- Assign a single class
+                    targetTable[alias or name] = searchTable[name]
+                else
+                    error(string.format("resolved %s, but the table found is not a class", name))
+                end
+            elseif errorOnFail then
                 error(string.format("failed to resolve using %s", name))
-            end
-
-            if not searchTable[name].className then
-                error(string.format("resolved %s, but the table found is not a class", name))
-            end
-
-            if searchTable[name].className then
-                -- Assign a single class
-                targetTable[alias or name] = searchTable[name]
             end
         end
     end
@@ -884,7 +915,7 @@ local activeUsings = {}
 
 function syntax.class(className, classOperation)
     if simploo.parser.instance then
-        error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance.className))
+        error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance.name))
     end
 
     simploo.parser.instance = simploo.parser:new(onFinished)
@@ -898,7 +929,7 @@ function syntax.class(className, classOperation)
             local newClass = simploo.instancer:initClass(parserOutput)
 
             -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it using the full path.
-            syntax.using(newClass.className)
+            syntax.using(newClass._name)
         end
     end)
     
@@ -936,8 +967,16 @@ function syntax.namespace(namespaceName)
     local returnNamespace = simploo.hook:fire("onSyntaxNamespace", namespaceName)
 
     activeNamespace = returnNamespace or namespaceName
-
     activeUsings = {}
+
+    -- Use everything in the current namespace automatically.
+    table.insert(activeUsings, {
+        path = #activeNamespace > 0 and (activeNamespace .. ".*") or "*",
+        alias = nil,
+        -- we may be the first class in the namespace..
+        -- in that case using our own namespace is allowed to fail, because there is no namespace yet..
+        errorOnFail = false
+    })
 end
 
 function syntax.using(namespaceName)
@@ -959,7 +998,8 @@ function syntax.using(namespaceName)
     -- Add the new using to our table
     table.insert(activeUsings, {
         path = returnNamespace or namespaceName,
-        alias = nil
+        alias = nil,
+        errorOnFail = true
     })
 end
 
@@ -1037,7 +1077,7 @@ end
 
 function hotswap:swap(newBase)
     for _, hotInstance in pairs(simploo_hotswap_instances) do
-        if hotInstance.className == newBase.className then
+        if hotInstance._name == newBase._name then
             hotswap:syncMembers(hotInstance, newBase)
         end
     end
@@ -1045,10 +1085,10 @@ end
 
 function hotswap:syncMembers(hotInstance, baseInstance)
     -- Add members that do not exist in the current instance.
-    for baseMemberName, baseMember in pairs(baseInstance.members) do
+    for baseMemberName, baseMember in pairs(baseInstance._members) do
         local contains = false
 
-        for hotMemberName, hotMember in pairs(hotInstance.members) do
+        for hotMemberName, hotMember in pairs(hotInstance._members) do
             if hotMemberName == baseMemberName then
                 contains = true
             end
@@ -1058,22 +1098,22 @@ function hotswap:syncMembers(hotInstance, baseInstance)
             baseMember = simploo.util.duplicateTable(baseMember)
             baseMember.owner = hotInstance
 
-            hotInstance.members[baseMemberName] = baseMember
+            hotInstance._members[baseMemberName] = baseMember
         end
     end
 
     -- Remove members from the current instance that are not in the new instance.
-    for hotMemberName, hotMember in pairs(hotInstance.members) do
+    for hotMemberName, hotMember in pairs(hotInstance._members) do
         local exists = false
 
-        for baseMemberName, baseMember in pairs(baseInstance.members) do
+        for baseMemberName, baseMember in pairs(baseInstance._members) do
             if hotMemberName == baseMemberName then
                 exists = true
             end
         end
 
         if not exists then
-            hotInstance.members[hotMemberName] = nil
+            hotInstance._members[hotMemberName] = nil
         end
     end
 end

@@ -19,6 +19,7 @@ parser.modifiers = {"public", "private", "protected", "static", "const", "meta",
 
 function parser:new()
     local object = {}
+    object.ns = ""
     object.name = ""
     object.parents = {}
     object.members = {}
@@ -70,7 +71,7 @@ function parser:new()
         do
             local env = {}
             for _, usingData in pairs(output.usings) do -- Assign all usings to the environment
-                parser:usingsToTable(usingData["path"], env, simploo.config["baseInstanceTable"], usingData["alias"])
+                parser:usingsToTable(usingData["path"], env, simploo.config["baseInstanceTable"], usingData["alias"], usingData.errorOnFail)
             end
 
             local mt = {} -- Assign a metatable. Doing this after usingsToTable, because usingsToTable would trigger __newindex and write to _G
@@ -126,6 +127,7 @@ function parser:new()
     end
 
     function object:namespace(namespace)
+        self.ns = namespace
         self.name = namespace .. "." .. self.name
     end
 
@@ -164,11 +166,11 @@ end
 -- Supports the following formats:
 -- > a.b.c -- Everything inside that namespace
 -- > a.b.c.Foo -- Specific class inside namespace
-function parser:usingsToTable(name, targetTable, searchTable, alias)
+function parser:usingsToTable(name, targetTable, searchTable, alias, errorOnFail)
     local firstchunk, remainingchunks = string.match(name, "(%w+)%.(.+)")
 
     if searchTable[firstchunk] then
-        self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk], alias)
+        self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk], alias, errorOnFail)
     else
         -- Wildcard add all from this namespace
         if name == "*" then
@@ -176,22 +178,22 @@ function parser:usingsToTable(name, targetTable, searchTable, alias)
             for k, v in pairs(searchTable) do
                 if alias then
                     -- Resolve the namespace in the alias, and store the class inside this
-                    self:namespaceToTable(alias, targetTable, {[k] = v})
+                    simploo.instancer:namespaceToTable(alias, targetTable, {[k] = v})
                 else
                     -- Just assign the class directly
                     targetTable[k] = v
                 end
             end
         else -- Add single class
-            if not searchTable[name] then
+            if searchTable[name] then
+                if searchTable[name]._base then
+                    -- Assign a single class
+                    targetTable[alias or name] = searchTable[name]
+                else
+                    error(string.format("resolved %s, but the table found is not a class", name))
+                end
+            elseif errorOnFail then
                 error(string.format("failed to resolve using %s", name))
-            end
-
-            if searchTable[name]._base then
-                -- Assign a single class
-                targetTable[alias or name] = searchTable[name]
-            else
-                error(string.format("resolved %s, but the table found is not a class", name))
             end
         end
     end

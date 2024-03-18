@@ -14,3 +14,5 @@ serializer.lua
 testhooks.lua
 testhotswap.lua
 memoryleaks.lua
+declare.lua
+instancer_testshadowing.lua
