@@ -32,9 +32,9 @@ function Test:testNamespaces()
     class "SameClassName" {}
 
     -----
- 
+
     namespace ""
-    
+
     using "testsimple.Foo"
     using "testwhole.*"
     using "testsub.*"
@@ -71,6 +71,8 @@ function Test:testUsingsForNamespaceTwice()
     namespace "ns"
 
     class "A" {}
+
+    namespace "WIPE IT ALL"
 
     namespace "ns"
 

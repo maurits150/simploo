@@ -9,7 +9,7 @@ function simploo.serialize(instance)
                     data[k] = v.value
                 end
             elseif v.modifiers.parent then
-                data[k] = v.value:serialize()
+                data[k] = simploo.serialize(v.value)
             end
         end
     end

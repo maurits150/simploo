@@ -22,7 +22,7 @@ function Test:testSerializer()
     instance.serializable_var = "serializable var";
     instance.unserializable_var = "unserializable var"
 
-    local data = instance:serialize()
+    local data = simploo.serialize(instance)
     assertEquals(data["P"]["serializable_var_parent"], "serializable var")
     assertIsNil(data["P"]["unserializable_var_parent"])
     assertEquals(data["serializable_var"], "serializable var")

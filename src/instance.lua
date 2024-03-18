@@ -41,10 +41,6 @@ function instancemethods:get_parents()
     return t
 end
 
-function instancemethods:serialize()
-    return simploo.serialize(self)
-end
-
 ---
 
 local instancemt = {}

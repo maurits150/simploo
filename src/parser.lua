@@ -73,7 +73,7 @@ function parser:new()
                 parser:usingsToTable(usingData["path"], env, simploo.config["baseInstanceTable"], usingData["alias"])
             end
 
-            local mt = {} -- Assign the metatable. Doing this after usingsToTable so it doesn't write to _G
+            local mt = {} -- Assign a metatable. Doing this after usingsToTable, because usingsToTable would trigger __newindex and write to _G
             function mt:__index(key) return _G[key] end
             function mt:__newindex(key, value) _G[key] = value end
 
