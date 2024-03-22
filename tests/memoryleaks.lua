@@ -98,3 +98,55 @@ function Test:testStaticsNotCopiedToInstances()
 
     assertFalse(above1MBused)
 end
+
+--
+-- This test fails in LuaJIT / Lua 5.1, something in fenv changed
+--
+function Test:testMemoryLeakViaUsingsFENVReferencingOldClasses()
+
+    collectgarbage('collect')
+
+    local startMemory = collectgarbage("count")
+
+    for i=1, 50 do
+        namespace "namespace1"
+
+        class "ClassA" {
+            static {
+                data = {}
+            };
+
+            __declare = function(self)
+                for i=1, 1000 * 1000 do
+                    -- 1MB of AAA, should give us 1MB x 25 = 25MB used if test fails
+                    -- We're inserting into a static so this should get recycled every loop.
+                    table.insert(self.data, "A")
+                end
+            end;
+        };
+
+
+        namespace "namespace2"
+
+        using "namespace1.ClassA" as "ClassA"
+
+        class "ClassB" {
+            test = function(self)
+            end;
+        };
+
+        namespace2.ClassB.new():test()
+    end
+
+    collectgarbage('collect')
+
+    local endMemory = collectgarbage("count")
+
+    local above5MBused = (endMemory - startMemory) > 5000
+    if above5MBused then
+        print("START MEMORY", startMemory, "END MEMORY", endMemory)
+    end
+
+    assertFalse(above5MBused)
+end
+
