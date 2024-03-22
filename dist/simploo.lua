@@ -597,7 +597,9 @@ function instancer:initClass(class)
     -- Copy members from provided parents
     for _, parentName in pairs(class.parents) do
         -- Retrieve parent from an earlier defined base instance that's global, or from the usings table.
-        local parentBaseInstance = simploo.config["baseInstanceTable"][parentName] or class.fenv[parentName]
+        local parentBaseInstance = simploo.config["baseInstanceTable"][parentName]
+            or (class.resolved_usings[parentName] and simploo.config["baseInstanceTable"][class.resolved_usings[parentName]])
+
         if not parentBaseInstance then
             error(string.format("class %s: could not find parent %s", baseInstance._name, parentName))
         end
@@ -661,7 +663,11 @@ end
 
 -- Sets up a global instance of a class instance in which static member values are stored
 function instancer:registerBaseInstance(baseInstance)
+    -- Assign a quick entry, to facilitate easy look-up for parent classes, for higher-up in this file.
+    -- !! Also used to quickly resolve keys in the method fenv based on localized 'using' classes.
     simploo.config["baseInstanceTable"][baseInstance._name] = baseInstance
+
+    -- Assign a proper deep table entry as well.
     self:namespaceToTable(baseInstance._name, simploo.config["baseInstanceTable"], baseInstance)
 
     if baseInstance._members["__declare"] then
@@ -769,23 +775,59 @@ function parser:new()
         output.members = self.members
         output.usings = self.usings
 
+
         do
-            local env = {}
-            for _, usingData in pairs(output.usings) do -- Assign all usings to the environment
-                parser:usingsToTable(usingData["path"], env, simploo.config["baseInstanceTable"], usingData["alias"], usingData.errorOnFail)
+            -- Create a table with localized class names as key, and a reference to the full class name as value.
+            -- When we want to access a locallized class, we look-up the full class name, and resolve that in the baseInstanceTable.
+            local resolvedUsings = {}
+            for _, using in pairs(output.usings) do
+                if using["path"]:sub(-1) == "*" then
+                    -- Wildcard import, add quick reference to the whole table
+                    local wildcardTable = parser:deepLookup(simploo.config["baseInstanceTable"], using["path"])
+                            or {} -- we always 'use' our own namespace, despite it not even existing, so this is often nil
+                    for k, v in pairs(wildcardTable) do
+                        if type(v) == "table" and v._name then -- it may not even be a simploo class we hit, so check for that
+                            resolvedUsings[k] = v._name
+                        end
+                    end
+                else
+                    -- Absolute import, add direct reference.
+                    -- If an alias is provided use that, else extract the last thing after the last dot, as in "a.b.c.ExtractMe"
+                    local classLookup = parser:deepLookup(simploo.config["baseInstanceTable"], using["path"])
+                    if type(classLookup) == "table" and classLookup._name then -- it may not even be a simploo class we hit, so check for that
+                        local k = using["alias"] or using["path"]:match("[^%.]+$")
+                        if not k then
+                            error("invalid 'using' path '" .. using["path"] .. "'")
+                        end
+
+                        resolvedUsings[k] = classLookup._name
+                    end
+                end
             end
 
-            local mt = {} -- Assign a metatable. Doing this after usingsToTable, because usingsToTable would trigger __newindex and write to _G
-            function mt:__index(key) return _G[key] end
-            function mt:__newindex(key, value) _G[key] = value end
+            output.resolved_usings = resolvedUsings
 
-            output.fenv = setmetatable(env, mt)
-        end
+            -- Create a meta table that intercepts all lookups of global variables inside class/instance functions.
+            local mt = {}
+            function mt:__index(key)
+                return
+                    -- If a key is a localized class, we look up the actual instance in our baseInstanceTable
+                    -- Putting this first makes 'using' take prevalence over what already exists in _G.
+                    (resolvedUsings[key] and simploo.config["baseInstanceTable"][resolvedUsings[key]])
+                    -- Unknown keys can refer back to _G
+                    or _G[key]
+            end
+            function mt:__newindex(key, value)
+                -- Assignments are always written into _G directly..
+                _G[key] = value
+            end
 
-        -- Add usings environment to class functions
-        for _, memberData in pairs(output.members) do
-            if type(memberData.value) == "function" then
-                simploo.util.setFunctionEnvironment(memberData.value, output.fenv)
+
+            -- Add usings environment to class functions
+            for _, memberData in pairs(output.members) do
+                if type(memberData.value) == "function" then
+                    simploo.util.setFunctionEnvironment(memberData.value, setmetatable({}, mt))
+                end
             end
         end
 
@@ -862,45 +904,10 @@ function parser:new()
     return setmetatable(object, meta)
 end
 
--- Resolve a using-declaration
--- Looks in searchTable for namespaceName and assigns it to targetTable.
--- Supports the following formats:
--- > a.b.c -- Everything inside that namespace
--- > a.b.c.Foo -- Specific class inside namespace
-function parser:usingsToTable(name, targetTable, searchTable, alias, errorOnFail)
-    local firstchunk, remainingchunks = string.match(name, "(%w+)%.(.+)")
-
-    if searchTable[firstchunk] then
-        self:usingsToTable(remainingchunks, targetTable, searchTable[firstchunk], alias, errorOnFail)
-    else
-        -- Wildcard add all from this namespace
-        if name == "*" then
-            -- Assign everything found in the table
-            for k, v in pairs(searchTable) do
-                if alias then
-                    -- Resolve the namespace in the alias, and store the class inside this
-                    simploo.instancer:namespaceToTable(alias, targetTable, {[k] = v})
-                else
-                    -- Just assign the class directly
-                    targetTable[k] = v
-                end
-            end
-        else -- Add single class
-            if searchTable[name] then
-                if searchTable[name]._base then
-                    -- Assign a single class
-                    targetTable[alias or name] = searchTable[name]
-                else
-                    error(string.format("resolved %s, but the table found is not a class", name))
-                end
-            elseif errorOnFail then
-                error(string.format("failed to resolve using %s", name))
-            end
-        end
-    end
+function parser:deepLookup(table, usingPath)
+    usingPath:gsub("[^.]+", function(k) if k ~= "*" then table = table and table[k] end end)
+    return table
 end
-
-
 
 ----
 ---- syntax.lua
@@ -1010,9 +1017,16 @@ function syntax.using(namespaceName)
 end
 
 function syntax.as(newPath)
-    if activeUsings[#activeUsings] then
-        activeUsings[#activeUsings]["alias"] = newPath
+    local current = activeUsings[#activeUsings]
+    if not current then
+        error("start a 'using' declaration before trying to alias it using 'as'")
     end
+
+    if current["path"]:sub(-1) == "*" then
+        error("aliasing a wildcard 'using' is not supported")
+    end
+
+    current["alias"] = newPath
 end
 
 do

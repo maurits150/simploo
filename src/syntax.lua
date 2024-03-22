@@ -102,9 +102,16 @@ function syntax.using(namespaceName)
 end
 
 function syntax.as(newPath)
-    if activeUsings[#activeUsings] then
-        activeUsings[#activeUsings]["alias"] = newPath
+    local current = activeUsings[#activeUsings]
+    if not current then
+        error("start a 'using' declaration before trying to alias it using 'as'")
     end
+
+    if current["path"]:sub(-1) == "*" then
+        error("aliasing a wildcard 'using' is not supported")
+    end
+
+    current["alias"] = newPath
 end
 
 do

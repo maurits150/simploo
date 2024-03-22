@@ -15,8 +15,8 @@ function Test:testNamespaces()
 
     -----
 
-    namespace "testsub.sub"
 
+    namespace "testsub.insidesub"
     class "Boo" {}
 
     -----
@@ -37,7 +37,7 @@ function Test:testNamespaces()
 
     using "testsimple.Foo"
     using "testwhole.*"
-    using "testsub.*"
+    using "testsub.insidesub.*"
     using "testdupe.1.SameClassName" as "SameClassName1"
     using "testdupe.2.SameClassName" as "SameClassName2"
 
@@ -46,14 +46,14 @@ function Test:testNamespaces()
             assertNotIs(Foo, nil)
             assertNotIs(Bar, nil)
             assertNotIs(Bonk, nil)
-            assertNotIs(sub.Boo, nil)
+            assertNotIs(insidesub.Boo, nil)
             assertNotIs(SameClassName1, nil)
             assertNotIs(SameClassName2, nil)
 
             assertNotIs(Foo._name, nil)
             assertNotIs(Bar._name, nil)
             assertNotIs(Bonk._name, nil)
-            assertNotIs(sub.Boo._name, nil)
+            assertNotIs(insidesub.Boo._name, nil)
             assertNotIs(SameClassName1._name, nil)
             assertNotIs(SameClassName2._name, nil)
 

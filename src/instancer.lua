@@ -22,7 +22,9 @@ function instancer:initClass(class)
     -- Copy members from provided parents
     for _, parentName in pairs(class.parents) do
         -- Retrieve parent from an earlier defined base instance that's global, or from the usings table.
-        local parentBaseInstance = simploo.config["baseInstanceTable"][parentName] or class.fenv[parentName]
+        local parentBaseInstance = simploo.config["baseInstanceTable"][parentName]
+            or (class.resolved_usings[parentName] and simploo.config["baseInstanceTable"][class.resolved_usings[parentName]])
+
         if not parentBaseInstance then
             error(string.format("class %s: could not find parent %s", baseInstance._name, parentName))
         end
@@ -86,7 +88,11 @@ end
 
 -- Sets up a global instance of a class instance in which static member values are stored
 function instancer:registerBaseInstance(baseInstance)
+    -- Assign a quick entry, to facilitate easy look-up for parent classes, for higher-up in this file.
+    -- !! Also used to quickly resolve keys in the method fenv based on localized 'using' classes.
     simploo.config["baseInstanceTable"][baseInstance._name] = baseInstance
+
+    -- Assign a proper deep table entry as well.
     self:namespaceToTable(baseInstance._name, simploo.config["baseInstanceTable"], baseInstance)
 
     if baseInstance._members["__declare"] then

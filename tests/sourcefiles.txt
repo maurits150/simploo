@@ -16,3 +16,4 @@ testhotswap.lua
 memoryleaks.lua
 declare.lua
 instancer_testshadowing.lua
+fenvupdates.lua

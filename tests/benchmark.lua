@@ -45,7 +45,8 @@ function Test:testBenchmark()
     class "Calls" {
         private {
             doCall2 = function()
-                -- 2nd function call
+                -- This tests the overhead of the  we have in here.
+                local a = print == print
             end
         };
         public {
