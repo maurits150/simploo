@@ -1,36 +1,36 @@
 function Test:testSerializer()
     class "P" {
-        serializable_var_parent = "unset";
-        nonserialized_fn = function() end;
+        parent_ok = "unset";
+
         transient {
-            unserializable_var_parent = "unset";
+            parent_bad = "unset";
         };
     }
 
     class "C" extends "P" {
-        serializable_var = "unset";
-        nonserialized_fn = function() end;
+        child_ok = "unset";
+
         transient {
-            unserializable_var = "unset";
+            child_bad = "unset";
         };
     }
 
     local instance = C.new()
-    instance.serializable_var_parent = "serializable var";
-    instance.unserializable_var_parent = "unserializable var"
-
-    instance.serializable_var = "serializable var";
-    instance.unserializable_var = "unserializable var"
+    instance.parent_ok = "ok"
+    instance.parent_bad = "no serialize"
+    instance.child_ok = "ok"
+    instance.child_bad = "no serialize"
 
     local data = simploo.serialize(instance)
-    assertEquals(data["P"]["serializable_var_parent"], "serializable var")
-    assertIsNil(data["P"]["unserializable_var_parent"])
-    assertEquals(data["serializable_var"], "serializable var")
-    assertIsNil(data["unserializable_var"])
+
+    assertEquals(data["P"]["parent_ok"], "ok")
+    assertIsNil(data["P"]["parent_bad"])
+    assertEquals(data["child_ok"], "ok")
+    assertIsNil(data["child_bad"])
 
     local newinstance = simploo.deserialize(data)
-    assertEquals(newinstance["serializable_var_parent"], "serializable var")
-    assertEquals(newinstance["unserializable_var_parent"], "unset")
-    assertEquals(newinstance["serializable_var"], "serializable var")
-    assertEquals(newinstance["unserializable_var"], "unset")
+    assertEquals(newinstance["parent_ok"], "ok")
+    assertEquals(newinstance["parent_bad"], "unset")
+    assertEquals(newinstance["child_ok"], "ok")
+    assertEquals(newinstance["child_bad"], "unset")
 end

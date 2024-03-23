@@ -333,7 +333,6 @@ function instancemt:__newindex(key, value)
     local member = self._members[key]
 
     if member then
-
         --------development--------
         if not simploo.config["production"] then
             if member.modifiers.const then
@@ -355,6 +354,8 @@ function instancemt:__newindex(key, value)
         else
             member.value = value
         end
+
+        return
     end
 
     if instancemethods[key] then
@@ -364,6 +365,12 @@ function instancemt:__newindex(key, value)
     if self._members["__newindex"] then -- lookup via members to prevent infinite loop
         return self:__newindex(key) -- call via metatable, because method may be static
     end
+
+    self._members[key] = {
+        owner = self,
+        value = value,
+        modifiers = {public = true, transient = true}
+    }
 end
 
 function instancemt:__tostring()
