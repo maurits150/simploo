@@ -206,7 +206,7 @@ end
 ---- serializer.lua
 ----
 
-function simploo.serialize(instance)
+function simploo.serialize(instance, customPerMemberFn)
     local data = {}
     data["_name"] = instance._name
 
@@ -214,10 +214,12 @@ function simploo.serialize(instance)
         if v.modifiers and v.owner == instance then
             if not v.modifiers.transient and not v.modifiers.parent then
                 if type(v.value) ~= "function" then
-                    data[k] = v.value
+                    data[k] = (customPerMemberFn and customPerMemberFn(k, v.value, v.modifiers, instance)) or v.value
                 end
-            elseif v.modifiers.parent then
-                data[k] = simploo.serialize(v.value)
+            end
+
+            if v.modifiers.parent then
+                data[k] = simploo.serialize(v.value, customPerMemberFn)
             end
         end
     end
@@ -225,7 +227,7 @@ function simploo.serialize(instance)
     return data
 end
 
-function simploo.deserialize(data)
+function simploo.deserialize(data, customPerMemberFn)
     local name = data["_name"]
     if not name then
         error("failed to deserialize: _name not found in data")
@@ -236,7 +238,7 @@ function simploo.deserialize(data)
         error("failed to deserialize: class " .. name .. " not found")
     end
 
-    return class:deserialize(data)
+    return class:deserialize(data, customPerMemberFn)
 end
 
 ----
@@ -366,10 +368,11 @@ function instancemt:__newindex(key, value)
         return self:__newindex(key) -- call via metatable, because method may be static
     end
 
+    -- Assign new member at runtime if we couldn't put it anywhere else.
     self._members[key] = {
         owner = self,
         value = value,
-        modifiers = {public = true, transient = true}
+        modifiers = {public = true, transient = true} -- Do not serialize these runtime members yet.. deserialize will fail on them.
     }
 end
 
@@ -536,20 +539,20 @@ function baseinstancemethods:new(...)
     return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
 end
 
-local function deserializeIntoMembers(instance, data)
+local function deserializeIntoMembers(instance, data, customPerMemberFn)
     for dataKey, dataVal in pairs(data) do
         local member = instance._members[dataKey]
         if member and member.modifiers and not member.modifiers.transient then
             if type(dataVal) == "table" and dataVal._name then
-                member.value = deserializeIntoMembers(member.value, dataVal)
+                member.value = deserializeIntoMembers(member.value, dataVal, customPerMemberFn)
             else
-                member.value = dataVal
+                member.value = (customPerMemberFn and customPerMemberFn(dataKey, dataVal, member.modifiers, instance)) or dataVal
             end
         end
     end
 end
 
-function baseinstancemethods:deserialize(data)
+function baseinstancemethods:deserialize(data, customPerMemberFn)
     for memberName, member in pairs(self._members) do
         if member.modifiers.abstract then
             error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy._name))
@@ -562,7 +565,7 @@ function baseinstancemethods:deserialize(data)
     markInstanceRecursively(copy, copy)
 
     -- restore serializable data
-    deserializeIntoMembers(copy, data)
+    deserializeIntoMembers(copy, data, customPerMemberFn)
 
     -- If our hook returns a different object, use that instead.
     return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy

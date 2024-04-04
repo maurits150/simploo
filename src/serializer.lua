@@ -1,4 +1,4 @@
-function simploo.serialize(instance)
+function simploo.serialize(instance, customPerMemberFn)
     local data = {}
     data["_name"] = instance._name
 
@@ -6,10 +6,12 @@ function simploo.serialize(instance)
         if v.modifiers and v.owner == instance then
             if not v.modifiers.transient and not v.modifiers.parent then
                 if type(v.value) ~= "function" then
-                    data[k] = v.value
+                    data[k] = (customPerMemberFn and customPerMemberFn(k, v.value, v.modifiers, instance)) or v.value
                 end
-            elseif v.modifiers.parent then
-                data[k] = simploo.serialize(v.value)
+            end
+
+            if v.modifiers.parent then
+                data[k] = simploo.serialize(v.value, customPerMemberFn)
             end
         end
     end
@@ -17,7 +19,7 @@ function simploo.serialize(instance)
     return data
 end
 
-function simploo.deserialize(data)
+function simploo.deserialize(data, customPerMemberFn)
     local name = data["_name"]
     if not name then
         error("failed to deserialize: _name not found in data")
@@ -28,5 +30,5 @@ function simploo.deserialize(data)
         error("failed to deserialize: class " .. name .. " not found")
     end
 
-    return class:deserialize(data)
+    return class:deserialize(data, customPerMemberFn)
 end

@@ -101,20 +101,20 @@ function baseinstancemethods:new(...)
     return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
 end
 
-local function deserializeIntoMembers(instance, data)
+local function deserializeIntoMembers(instance, data, customPerMemberFn)
     for dataKey, dataVal in pairs(data) do
         local member = instance._members[dataKey]
         if member and member.modifiers and not member.modifiers.transient then
             if type(dataVal) == "table" and dataVal._name then
-                member.value = deserializeIntoMembers(member.value, dataVal)
+                member.value = deserializeIntoMembers(member.value, dataVal, customPerMemberFn)
             else
-                member.value = dataVal
+                member.value = (customPerMemberFn and customPerMemberFn(dataKey, dataVal, member.modifiers, instance)) or dataVal
             end
         end
     end
 end
 
-function baseinstancemethods:deserialize(data)
+function baseinstancemethods:deserialize(data, customPerMemberFn)
     for memberName, member in pairs(self._members) do
         if member.modifiers.abstract then
             error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy._name))
@@ -127,7 +127,7 @@ function baseinstancemethods:deserialize(data)
     markInstanceRecursively(copy, copy)
 
     -- restore serializable data
-    deserializeIntoMembers(copy, data)
+    deserializeIntoMembers(copy, data, customPerMemberFn)
 
     -- If our hook returns a different object, use that instead.
     return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
