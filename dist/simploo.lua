@@ -92,7 +92,7 @@ function util.duplicateTable(tbl, lookup)
     local copy = {}
 
     for k, v in pairs(tbl) do
-        if k == "_value_static" then
+        if k == "value_static" then
             -- do nothing
         elseif type(v) == "table" and k ~= "_base" then
             lookup = lookup or {}
@@ -316,7 +316,7 @@ function instancemt:__index(key)
         --------development--------
 
         if member.modifiers.static and self._base then
-            return self._base._members[key]._value_static
+            return self._base._members[key].value_static
         end
 
         return member.value
@@ -352,7 +352,7 @@ function instancemt:__newindex(key, value)
         --------development--------
 
         if member.modifiers.static and self._base then
-            self._base._members[key]._value_static = value
+            self._base._members[key].value_static = value
         else
             member.value = value
         end
@@ -459,9 +459,9 @@ local function markInstanceRecursively(instance, ogchild)
                     return fn(selfOrData, ...)
                 end
             end
-        elseif memberData._value_static and type(memberData._value_static) == "function" then -- _value_static was a mistake..
-            local fn = memberData._value_static
-            memberData._value_static = function(potentialSelf, ...)
+        elseif memberData.value_static and type(memberData.value_static) == "function" then -- value_static was a mistake..
+            local fn = memberData.value_static
+            memberData.value_static = function(potentialSelf, ...)
                 if potentialSelf == ogchild then
                     return fn(instance, ...)
                 else
@@ -489,11 +489,11 @@ local function markInstanceRecursively(instance, ogchild)
 
                     return (unpack or table.unpack)(ret)
                 end
-            elseif memberData._value_static and type(memberData._value_static) == "function" then -- _value_static was a mistake..
+            elseif memberData.value_static and type(memberData.value_static) == "function" then -- value_static was a mistake..
                 -- assign a wrapper that always corrects 'self' to the local instance
                 -- this is a somewhat hacky fix for shadowing
-                local fn = memberData._value_static
-                memberData._value_static = function(potentialSelf, ...)
+                local fn = memberData.value_static
+                memberData.value_static = function(potentialSelf, ...)
                     -- TODO: CHECK THE OWNERSHIP STACK
                     -- use ogchild to keep the state across all parent stuffs
                     -- maybe make it coroutine compatible somehow?
@@ -636,7 +636,7 @@ function instancer:initClass(class)
         baseMember.modifiers = formatMember.modifiers
 
         if formatMember.modifiers.static then
-            baseMember._value_static = formatMember.value
+            baseMember.value_static = formatMember.value
         else
             baseMember.value = formatMember.value
         end
@@ -681,7 +681,7 @@ function instancer:registerBaseInstance(baseInstance)
     self:namespaceToTable(baseInstance._name, simploo.config["baseInstanceTable"], baseInstance)
 
     if baseInstance._members["__declare"] then
-        local fn = (baseInstance._members["__declare"]._value_static or baseInstance._members["__declare"].value)
+        local fn = (baseInstance._members["__declare"].value_static or baseInstance._members["__declare"].value)
         fn(baseInstance._members["__declare"].owner) -- no metamethod exists to call member directly
     end
 end

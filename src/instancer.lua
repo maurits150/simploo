@@ -51,7 +51,7 @@ function instancer:initClass(class)
         baseMember.modifiers = formatMember.modifiers
 
         if formatMember.modifiers.static then
-            baseMember._value_static = formatMember.value
+            baseMember.value_static = formatMember.value
         else
             baseMember.value = formatMember.value
         end
@@ -96,7 +96,7 @@ function instancer:registerBaseInstance(baseInstance)
     self:namespaceToTable(baseInstance._name, simploo.config["baseInstanceTable"], baseInstance)
 
     if baseInstance._members["__declare"] then
-        local fn = (baseInstance._members["__declare"]._value_static or baseInstance._members["__declare"].value)
+        local fn = (baseInstance._members["__declare"].value_static or baseInstance._members["__declare"].value)
         fn(baseInstance._members["__declare"].owner) -- no metamethod exists to call member directly
     end
 end

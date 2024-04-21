@@ -69,7 +69,7 @@ function instancemt:__index(key)
         --------development--------
 
         if member.modifiers.static and self._base then
-            return self._base._members[key]._value_static
+            return self._base._members[key].value_static
         end
 
         return member.value
@@ -105,7 +105,7 @@ function instancemt:__newindex(key, value)
         --------development--------
 
         if member.modifiers.static and self._base then
-            self._base._members[key]._value_static = value
+            self._base._members[key].value_static = value
         else
             member.value = value
         end

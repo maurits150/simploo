@@ -21,9 +21,9 @@ local function markInstanceRecursively(instance, ogchild)
                     return fn(selfOrData, ...)
                 end
             end
-        elseif memberData._value_static and type(memberData._value_static) == "function" then -- _value_static was a mistake..
-            local fn = memberData._value_static
-            memberData._value_static = function(potentialSelf, ...)
+        elseif memberData.value_static and type(memberData.value_static) == "function" then -- value_static was a mistake..
+            local fn = memberData.value_static
+            memberData.value_static = function(potentialSelf, ...)
                 if potentialSelf == ogchild then
                     return fn(instance, ...)
                 else
@@ -51,11 +51,11 @@ local function markInstanceRecursively(instance, ogchild)
 
                     return (unpack or table.unpack)(ret)
                 end
-            elseif memberData._value_static and type(memberData._value_static) == "function" then -- _value_static was a mistake..
+            elseif memberData.value_static and type(memberData.value_static) == "function" then -- value_static was a mistake..
                 -- assign a wrapper that always corrects 'self' to the local instance
                 -- this is a somewhat hacky fix for shadowing
-                local fn = memberData._value_static
-                memberData._value_static = function(potentialSelf, ...)
+                local fn = memberData.value_static
+                memberData.value_static = function(potentialSelf, ...)
                     -- TODO: CHECK THE OWNERSHIP STACK
                     -- use ogchild to keep the state across all parent stuffs
                     -- maybe make it coroutine compatible somehow?

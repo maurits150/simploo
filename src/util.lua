@@ -5,7 +5,7 @@ function util.duplicateTable(tbl, lookup)
     local copy = {}
 
     for k, v in pairs(tbl) do
-        if k == "_value_static" then
+        if k == "value_static" then
             -- do nothing
         elseif type(v) == "table" and k ~= "_base" then
             lookup = lookup or {}
