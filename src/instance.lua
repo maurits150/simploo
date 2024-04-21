@@ -62,9 +62,9 @@ function instancemt:__index(key)
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            if member.modifiers.private and self._callDepth == 0 then
-                error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
-            end
+            --if member.modifiers.private and self._callDepth == 0 then
+            --    error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
+            --end
         end
         --------development--------
 
@@ -98,9 +98,9 @@ function instancemt:__newindex(key, value)
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            if member.modifiers.private and self._callDepth == 0 then
-                error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
-            end
+            --if member.modifiers.private and self._callDepth == 0 then
+            --    error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
+            --end
         end
         --------development--------
 

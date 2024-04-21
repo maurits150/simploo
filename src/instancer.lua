@@ -15,7 +15,7 @@ function instancer:initClass(class)
 
     --------development--------
     if not simploo.config["production"] then
-        baseInstance._callDepth = 0
+        --baseInstance._callDepth = 0
     end
     --------development--------
 
