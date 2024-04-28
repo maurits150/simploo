@@ -1,4 +1,4 @@
-simploo.config = {}
+local config = {}
 
 --
 -- Production Mode
@@ -8,7 +8,7 @@ simploo.config = {}
 -- Default: false
 --
 
-simploo.config["production"] = false
+config["production"] = false
 
 --
 -- Expose Syntax
@@ -18,7 +18,7 @@ simploo.config["production"] = false
 -- Default: true
 --
 
-simploo.config["exposeSyntax"] = true
+config["exposeSyntax"] = true
 
 --
 -- Class Hotswapping
@@ -26,7 +26,7 @@ simploo.config["exposeSyntax"] = true
 -- Description: When defining a class a 2nd time, automatically update all the earlier instances of a class with newly added members. Will slightly increase class instantiation time and memory consumption.
 -- Default: false
 --
-simploo.config["classHotswap"] = false
+config["classHotswap"] = false
 
 --
 -- Base instance table
@@ -35,7 +35,7 @@ simploo.config["classHotswap"] = false
 -- Default: _G
 --
 
-simploo.config["baseInstanceTable"] = _G
+config["baseInstanceTable"] = _G
 
 --
 -- Custom modifiers
@@ -44,4 +44,13 @@ simploo.config["baseInstanceTable"] = _G
 -- Default: {}
 --
 
-simploo.config["customModifiers"] = {}
+config["customModifiers"] = {}
+
+--
+-- Apply config variables that aren't defined already.
+--
+for k, v in pairs(config) do
+    if not simploo.config[k] then
+        simploo.config[k] = v
+    end
+end
