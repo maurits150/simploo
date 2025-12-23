@@ -1,6 +1,8 @@
 local baseinstancemethods = simploo.util.duplicateTable(simploo.instancemethods)
 simploo.baseinstancemethods = baseinstancemethods
 
+local privateStack = {}
+
 local function markInstanceRecursively(instance, ogchild)
     setmetatable(instance, simploo.instancemt)
 
@@ -34,37 +36,37 @@ local function markInstanceRecursively(instance, ogchild)
 
         -- When in development mode, add another wrapper layer that checks for private access.
         if not simploo.config["production"] then
+            -- TODO: ensure it's coroutine compatible; coroutine.running() gives the current coroutine
             if memberData.value and type(memberData.value) == "function" then
-                -- assign a wrapper that always corrects 'self' to the local instance
-                -- this is a somewhat hacky fix for shadowing
                 local fn = memberData.value
                 memberData.value = function(...)
-                    -- TODO: CHECK THE OWNERSHIP STACK
-                    -- use ogchild to keep the state across all parent stuffs
-                    -- maybe make it coroutine compatible somehow?
+                    local thread = tostring(coroutine.running() or 0)
 
-                    -- TODO: BUILD AN OWNERSHIP STACK
+                    if not privateStack[thread] then
+                        privateStack[thread] = 0
+                    end
+
+                    privateStack[thread] = privateStack[thread] + 1
 
                     local ret = {fn(...)}
 
-                    -- TODO: POP AN OWNERSHIP STACK
+
+                    privateStack[thread] = privateStack[thread] - 1
 
                     return (unpack or table.unpack)(ret)
                 end
             elseif memberData.value_static and type(memberData.value_static) == "function" then -- value_static was a mistake..
-                -- assign a wrapper that always corrects 'self' to the local instance
-                -- this is a somewhat hacky fix for shadowing
                 local fn = memberData.value_static
-                memberData.value_static = function(potentialSelf, ...)
-                    -- TODO: CHECK THE OWNERSHIP STACK
-                    -- use ogchild to keep the state across all parent stuffs
-                    -- maybe make it coroutine compatible somehow?
+                memberData.value_static = function(...)
+                    if not privateStack[thread] then
+                        privateStack[thread] = 0
+                    end
 
-                    -- TODO: BUILD AN OWNERSHIP STACK
+                    privateStack[thread] = privateStack[thread] + 1
 
                     local ret = {fn(...)}
 
-                    -- TODO: POP AN OWNERSHIP STACK
+                    privateStack[thread] = privateStack[thread] - 1
 
                     return (unpack or table.unpack)(ret)
                 end
