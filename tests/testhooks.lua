@@ -5,7 +5,10 @@
     can chain return values between multiple handlers.
 ]]
 
--- Verifies beforeInstancerInitClass hook can add auto-generated getters/setters
+-- Tests using the beforeInstancerInitClass hook to auto-generate getter/setter methods.
+-- The hook receives the parser output before the class is finalized, allowing
+-- modification of the members table. This example adds getX/setX methods for
+-- each non-function member, demonstrating metaprogramming capabilities.
 function Test:testHooksBeforeInitClass()
     -- Automatically create getters and setters
     simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
@@ -52,15 +55,10 @@ function Test:testHooksBeforeInitClass()
     assertEquals(instance:getName(), "Lisa")
 end
 
--- Verifies afterNewInstance hook is called when instances are created
-function Test:testHooksAfterNewInstance()
-    -- Test when instance is made
-    simploo.hook:add("afterNewInstance", function(instance)
-		print(instance)
-	end)
-end
-
--- Verifies multiple hooks can modify the same parser output in-place
+-- Tests that multiple hooks registered for the same event share the same object.
+-- When the first hook adds a property to parserOutput, the second hook should
+-- see that modification. This enables hook chaining where each hook builds on
+-- previous modifications without needing explicit return values.
 function Test:testHookCanModifyInPlace()
     -- Test that multiple hooks can modify the same object
     simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
@@ -78,7 +76,10 @@ function Test:testHookCanModifyInPlace()
     }
 end
 
--- Verifies hook return values are passed to subsequent hooks in chain
+-- Tests that when a hook returns a value, it becomes the argument for the next hook.
+-- If hook1 returns a modified parserOutput, hook2 receives that modified version.
+-- This enables transformational pipelines where each hook can replace or
+-- transform the data being passed through the hook chain.
 function Test:testHookReturnValueChaining()
     -- Test that hook return values are passed to subsequent hooks
     simploo.hook:add("beforeInstancerInitClass", function(parserOutput)

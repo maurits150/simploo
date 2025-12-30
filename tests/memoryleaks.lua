@@ -5,7 +5,11 @@
     unbounded after collection.
 ]]
 
--- Verifies instances are garbage collected and don't leak memory
+-- Tests that instances are properly garbage collected when no longer referenced.
+-- Creates many instances in a loop without storing references to them.
+-- After garbage collection, memory usage should return close to starting level.
+-- A failure here indicates instances are being held by internal references
+-- (like global tables or closures) preventing garbage collection.
 function Test:testMemoryLeak()
     namespace "memoryleak"
 
@@ -69,7 +73,10 @@ function Test:testMemoryLeak()
     assertTrue(memoryFreed) -- less than 0.1 MB difference
 end
 
--- Verifies static members are shared, not copied to each instance
+-- Tests that static members are shared references, not deep-copied per instance.
+-- A class with a large static table (100k entries) should NOT multiply memory
+-- when creating many instances. Static values are stored on _base and accessed
+-- via lookup, so 100 instances should use roughly the same memory as 1 instance.
 function Test:testStaticsNotCopiedToInstances()
     namespace "memoryleak"
 
@@ -111,7 +118,11 @@ end
 --
 -- This test fails in LuaJIT / Lua 5.1, something in fenv changed
 --
--- Verifies redefined classes don't leak via stale fenv references from using statements
+-- Tests that redefining a class doesn't leak memory via stale fenv references.
+-- When a class is redefined, the old class should be garbage collected.
+-- Classes referenced via 'using' statements have their fenv updated to point
+-- to the new class definition. If the old class is still referenced somewhere,
+-- its static data would accumulate, causing a memory leak.
 function Test:testMemoryLeakViaUsingsFENVReferencingOldClasses()
 
     collectgarbage('collect')

@@ -5,7 +5,10 @@
     when instances are used with Lua operators and built-in functions.
 ]]
 
--- Verifies custom __newindex and __index metamethods redirect property access
+-- Tests that custom __newindex and __index metamethods correctly intercept
+-- property access on instances. When setting instance.foo, it should route
+-- through __newindex to store in data table. Reading should use __index
+-- to retrieve from data table instead of normal member lookup.
 function Test:testCustomNewIndex()
     class "CustomNewIndex" {
         public {
@@ -27,7 +30,10 @@ function Test:testCustomNewIndex()
     assertEquals(instance.foo, "bar")
 end
 
--- Verifies custom __tostring metamethod is invoked by tostring()
+-- Tests that a custom __tostring metamethod in the meta block is properly
+-- invoked when tostring() is called on an instance. The metamethod should
+-- receive self and be able to access instance members to build the string.
+-- This enables readable debug output and custom string representations.
 function Test:testCustomToString()
     class "CustomToString" {
         public {
@@ -46,7 +52,10 @@ function Test:testCustomToString()
     assertEquals(tostring(instance), "CustomToString: hello")
 end
 
--- Verifies instances can be called as functions via __call metamethod
+-- Tests that the __call metamethod allows instances to be invoked like functions.
+-- After construction, calling instance(args) invokes the __call handler.
+-- This is useful for creating callable objects like functors or command patterns.
+-- The metamethod receives self followed by any passed arguments.
 function Test:testCustomCall()
     class "Callable" {
         public {
@@ -65,7 +74,9 @@ function Test:testCustomCall()
     assertEquals(instance(5), 15)
 end
 
--- Verifies __concat metamethod enables string concatenation with ..
+-- Tests that the __concat metamethod enables using the .. operator with instances.
+-- When instance .. "string" is evaluated, __concat receives self and the other operand.
+-- This allows natural string building patterns with custom objects.
 function Test:testCustomConcat()
     class "Concatable" {
         public {
@@ -84,7 +95,9 @@ function Test:testCustomConcat()
     assertEquals(instance .. " world", "hello world")
 end
 
--- Verifies __unm metamethod enables unary minus operator
+-- Tests that the __unm metamethod enables the unary minus operator on instances.
+-- When -instance is evaluated, __unm is called with self to compute the negation.
+-- Useful for mathematical types like vectors or complex numbers.
 function Test:testCustomUnm()
     class "Negatable" {
         public {
@@ -103,7 +116,9 @@ function Test:testCustomUnm()
     assertEquals(-instance, -42)
 end
 
--- Verifies __add metamethod enables + operator
+-- Tests that the __add metamethod enables the + operator on instances.
+-- When instance + other is evaluated, __add receives self and the right operand.
+-- Useful for implementing mathematical addition on custom types.
 function Test:testCustomAdd()
     class "Addable" {
         public {
@@ -122,7 +137,9 @@ function Test:testCustomAdd()
     assertEquals(instance + 5, 15)
 end
 
--- Verifies __sub metamethod enables - operator
+-- Tests that the __sub metamethod enables the binary - operator on instances.
+-- When instance - other is evaluated, __sub receives self and the right operand.
+-- Useful for implementing subtraction on custom mathematical types.
 function Test:testCustomSub()
     class "Subtractable" {
         public {
@@ -141,7 +158,9 @@ function Test:testCustomSub()
     assertEquals(instance - 3, 7)
 end
 
--- Verifies __mul metamethod enables * operator
+-- Tests that the __mul metamethod enables the * operator on instances.
+-- When instance * other is evaluated, __mul receives self and the right operand.
+-- Useful for scalar multiplication, matrix operations, or scaling objects.
 function Test:testCustomMul()
     class "Multipliable" {
         public {
@@ -160,7 +179,9 @@ function Test:testCustomMul()
     assertEquals(instance * 7, 42)
 end
 
--- Verifies __div metamethod enables / operator
+-- Tests that the __div metamethod enables the / operator on instances.
+-- When instance / other is evaluated, __div receives self and the divisor.
+-- Useful for implementing division on custom mathematical types.
 function Test:testCustomDiv()
     class "Dividable" {
         public {
@@ -179,7 +200,9 @@ function Test:testCustomDiv()
     assertEquals(instance / 4, 5)
 end
 
--- Verifies __mod metamethod enables % operator
+-- Tests that the __mod metamethod enables the % (modulo) operator on instances.
+-- When instance % other is evaluated, __mod receives self and the divisor.
+-- Useful for implementing remainder operations on custom types.
 function Test:testCustomMod()
     class "Modable" {
         public {
@@ -198,7 +221,9 @@ function Test:testCustomMod()
     assertEquals(instance % 5, 2)
 end
 
--- Verifies __pow metamethod enables ^ operator
+-- Tests that the __pow metamethod enables the ^ (exponentiation) operator.
+-- When instance ^ other is evaluated, __pow receives self and the exponent.
+-- Useful for implementing power operations on custom mathematical types.
 function Test:testCustomPow()
     class "Powerable" {
         public {
@@ -217,7 +242,10 @@ function Test:testCustomPow()
     assertEquals(instance ^ 3, 8)
 end
 
--- Verifies __eq metamethod enables custom equality comparison
+-- Tests that the __eq metamethod enables custom equality comparison with ==.
+-- By default, two different instances are never equal (different tables).
+-- With __eq, we can define semantic equality (e.g., same id means equal).
+-- Both operands must have the same __eq metamethod for it to be invoked.
 function Test:testCustomEq()
     class "Equatable" {
         public {
@@ -241,7 +269,9 @@ function Test:testCustomEq()
     assertFalse(a == b)
 end
 
--- Verifies __lt metamethod enables < comparison
+-- Tests that the __lt metamethod enables the < (less than) comparison operator.
+-- When a < b is evaluated, __lt receives both instances to compare.
+-- This also enables > via Lua's automatic reversal (a > b becomes b < a).
 function Test:testCustomLt()
     class "Comparable" {
         public {
@@ -263,7 +293,9 @@ function Test:testCustomLt()
     assertFalse(b < a)
 end
 
--- Verifies __le metamethod enables <= comparison
+-- Tests that the __le metamethod enables the <= (less than or equal) operator.
+-- When a <= b is evaluated, __le receives both instances to compare.
+-- This also enables >= via Lua's automatic reversal (a >= b becomes b <= a).
 function Test:testCustomLe()
     class "ComparableLE" {
         public {

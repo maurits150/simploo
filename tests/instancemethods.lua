@@ -5,7 +5,11 @@
     multiple inheritance, including deep hierarchy chains.
 ]]
 
--- Verifies instance_of() correctly checks inheritance hierarchy
+-- Tests the instance_of() method for checking class relationships in a hierarchy.
+-- With classes P -> M -> C (C extends M extends P), verifies that:
+-- (1) child instances are instances of parent classes, (2) instance_of works
+-- with both class references and instance references, (3) parent classes are
+-- NOT instances of child classes (the relationship is not symmetric).
 function Test:testInstanceMethods()
     class "P" {
     }
@@ -36,7 +40,9 @@ function Test:testInstanceMethods()
     assertFalse(m:instance_of(c))
 end
 
--- Verifies instance_of() works with multiple inheritance
+-- Tests instance_of() with multiple inheritance where C extends both A and B.
+-- The child instance should be recognized as an instance of all parent classes.
+-- This verifies that instance_of traverses all parent branches, not just one.
 function Test:testInstanceOfMultipleInheritance()
     class "A" {}
     class "B" {}
@@ -49,7 +55,10 @@ function Test:testInstanceOfMultipleInheritance()
     assertTrue(c:instance_of(C))
 end
 
--- Verifies instance_of() traverses deep multi-parent hierarchies
+-- Tests instance_of() with a deep diamond-like hierarchy: Child extends Mid1 and Mid2,
+-- where Mid1 extends Base1 and Mid2 extends Base2. Verifies that instance_of
+-- correctly identifies the child as an instance of all ancestors (parents and
+-- grandparents) while correctly rejecting unrelated classes in different branches.
 function Test:testInstanceOfDeepMultipleInheritance()
     class "Base1" {}
     class "Base2" {}

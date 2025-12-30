@@ -1,11 +1,15 @@
 --[[
-    Tests that parent constructors can be called from child constructors.
+    Tests that child classes can explicitly call parent methods.
     
-    Child classes should be able to explicitly invoke parent constructors
-    to initialize inherited state.
+    With multiple inheritance, child methods can use self.ParentName:method()
+    to invoke specific parent implementations.
 ]]
 
--- Verifies child methods can explicitly call parent methods via self.ParentName:method()
+-- Tests that child methods can explicitly invoke specific parent methods.
+-- With multiple inheritance (C extends A, B), the child's func() can call
+-- both self.A:func() and self.B:func() to invoke each parent's implementation.
+-- This pattern is essential when the child needs to combine behavior from
+-- multiple parents rather than just overriding one.
 function Test:testParentConstructors()
 	A_CALLED = false
 	B_CALLED = false

@@ -6,7 +6,10 @@
     This matches Java, Python, JavaScript behavior.
 ]]
 
--- Verifies parent method calling self:method() finds child's override
+-- Tests basic polymorphism: parent's method calling self:method() finds child's override.
+-- PolyParent.callGetValue() calls self:getValue(). On a PolyChild instance,
+-- this should dispatch to PolyChild.getValue() (returning "child"), not
+-- PolyParent.getValue(). This is fundamental OOP behavior for extensibility.
 function Test:testPolymorphism()
     class "PolyParent" {
         getValue = function(self)
@@ -33,7 +36,11 @@ function Test:testPolymorphism()
     assertEquals(child:callGetValue(), "child")
 end
 
--- Verifies polymorphism works through multiple levels of inheritance
+-- Tests polymorphism through deep inheritance: Base -> Middle -> Leaf.
+-- Each level overrides getName(). When callGetName() is invoked on any
+-- instance, it should return that instance's class's version: "leaf" for
+-- Leaf instances, "middle" for Middle, "base" for Base. The lookup always
+-- starts from the actual instance's class and works up.
 function Test:testPolymorphismDeepHierarchy()
     class "Base" {
         getName = function(self)
@@ -67,7 +74,11 @@ function Test:testPolymorphismDeepHierarchy()
     assertEquals(base:callGetName(), "base")
 end
 
--- Verifies child can still call parent's version explicitly via self.Parent:method()
+-- Tests that child can explicitly call parent's version despite override.
+-- Dog overrides Animal's speak() to return "woof". Polymorphism makes
+-- describe() use the override. But Dog.parentSpeak() can still access
+-- Animal's original speak() via self.Animal:speak(). This allows extending
+-- rather than completely replacing parent behavior.
 function Test:testPolymorphismWithExplicitParentCall()
     class "Animal" {
         speak = function(self)
@@ -102,7 +113,11 @@ function Test:testPolymorphismWithExplicitParentCall()
     assertEquals(dog:parentSpeak(), "generic sound")
 end
 
--- Verifies polymorphism works with multiple inheritance
+-- Tests polymorphism with single inheritance and method override.
+-- FastThing extends Movable and overrides getSpeed(). Movable.describe()
+-- calls self:getSpeed() which should find FastThing's version (100).
+-- This confirms polymorphism works even when the overriding class
+-- doesn't explicitly call the parent method.
 function Test:testPolymorphismMultipleInheritance()
     class "Movable" {
         getSpeed = function(self)

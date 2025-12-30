@@ -5,7 +5,11 @@
     accessible from both the class and instances.
 ]]
 
--- Verifies static members are shared across all instances and the class itself
+-- Tests that static members are truly shared across all instances and the class.
+-- Modifying a static via one instance should affect all other instances and
+-- the class itself. Verifies: (1) initial value is shared, (2) changes via
+-- instance method propagate to other instances, (3) direct assignment via
+-- instance.staticvar propagates, (4) class-level access (A.staticvar) works.
 function Test:testStaticVariables()
     class "A" {
         static {

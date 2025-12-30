@@ -7,7 +7,11 @@
 
 namespace "Test"
 
--- Verifies constructor receives correct arguments via both .new() and :new() syntax
+-- Tests that constructor arguments are passed correctly with different call syntaxes.
+-- Verifies Class.new(args), Class:new(args), and Class(args) all work correctly.
+-- Also tests that when constructing B with an instance of A as argument,
+-- the A instance is passed through correctly (not the class itself).
+-- This ensures self is always the new instance, not accidentally the class.
 function Test:testConstructorArgsPass()
     class "A" {
         __construct = function(self)
@@ -48,7 +52,10 @@ function Test:testConstructorArgsPass()
     Test.B(a2) -- Call with :
 end
 
--- Verifies child constructor can forward arguments to parent constructor
+-- Tests that child constructors can forward arguments to parent constructors.
+-- Using self.Parent(...) or self.Parent:__construct(...) should pass the
+-- varargs to the parent's constructor. This is essential for proper
+-- initialization chaining in inheritance hierarchies.
 function Test:testInheritance()
     class "C" {
         __construct = function(self, a)

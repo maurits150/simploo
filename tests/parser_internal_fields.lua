@@ -1,7 +1,10 @@
 -- Test that user-defined members don't conflict with internal parser fields
 -- Internal fields: _name, _ns, _parents, _members, _usings
 
--- Verifies user can define a member called 'name' using block syntax
+-- Tests that user-defined 'name' member doesn't conflict with parser internals.
+-- The parser uses _name internally, but user code should be able to define
+-- a member called 'name' without issues. Block syntax stores user members
+-- separately from internal parser fields to avoid collisions.
 Test.testBlockSyntaxNameMember = function()
     class "TestBlockName" {
         public {
@@ -13,7 +16,10 @@ Test.testBlockSyntaxNameMember = function()
     assertEquals(inst.name, "test_value")
 end
 
--- Verifies user can define a member called 'name' using builder syntax
+-- Tests that builder syntax allows 'name' as a member without conflict.
+-- The parser stores internals in _simploo table (like _simploo.name), so
+-- c.public.name goes through __newindex to become a class member, not
+-- overwriting the internal parser name field.
 Test.testBuilderSyntaxNameMember = function()
     local c = class("TestBuilderName")
     c.public.name = "builder_value"
@@ -23,7 +29,10 @@ Test.testBuilderSyntaxNameMember = function()
     assertEquals(inst.name, "builder_value")
 end
 
--- Verifies user can define a member called 'parents' using builder syntax
+-- Tests that 'parents' as a member name doesn't conflict with internal parents list.
+-- The parser stores inheritance info in _simploo.parents, so defining a
+-- member called 'parents' works correctly - it becomes a class member
+-- containing user data (a table of strings), not the inheritance list.
 Test.testBuilderSyntaxParentsMember = function()
     local c = class("TestBuilderParents")
     c.public.parents = {"a", "b", "c"}
@@ -35,7 +44,10 @@ Test.testBuilderSyntaxParentsMember = function()
     assertEquals(inst.parents[3], "c")
 end
 
--- Verifies user can define a member called 'members' using builder syntax
+-- Tests that 'members' as a member name doesn't conflict with internal members table.
+-- The parser stores class members in _simploo.members, so a user-defined
+-- 'members' becomes a class member with user data (here, a table with foo="bar"),
+-- completely separate from the internal member storage.
 Test.testBuilderSyntaxMembersMember = function()
     local c = class("TestBuilderMembers")
     c.public.members = {foo = "bar"}

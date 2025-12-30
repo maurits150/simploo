@@ -7,7 +7,11 @@
 
 simploo.instancer = nil -- Disable the instancer for this test
 
--- Verifies block syntax and builder syntax produce identical parser output
+-- Tests that both class definition syntaxes produce equivalent parser output.
+-- Block syntax: class "Name" { public { var = value } }
+-- Builder syntax: c = class("Name"); c.public.var = value; c:register()
+-- Both should produce the same internal structure with identical member names,
+-- values, and modifier flags. This ensures syntax choice is purely stylistic.
 function Test:testParserOutput()
     function assertParsers(output)
         assertEquals(output.name, "Child")

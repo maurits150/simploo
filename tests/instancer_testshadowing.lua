@@ -7,7 +7,11 @@
     - Private fields are class-scoped (each class accesses its own privates)
 ]]
 
--- Verifies child's public variable shadows parent's when accessed from outside
+-- Tests that child's public variable shadows parent's for external access.
+-- Both A and B define 'variable'. Accessing instance.variable returns
+-- child's version ("OWNED BY CHILD"). Parent's version is still accessible
+-- via instance.A.variable. This is expected shadowing behavior for public
+-- members - child's definition takes precedence in the lookup chain.
 function Test:testChildPublicVariableShadowsParent()
     class "A" {
         variable = "OWNED BY PARENT";
@@ -26,7 +30,10 @@ function Test:testChildPublicVariableShadowsParent()
     assertEquals(instance.A.variable, "OWNED BY PARENT")
 end
 
--- Verifies _base refers to the class, not the runtime instance type
+-- Tests that _base correctly refers to the class definition.
+-- For an instance of Child, instance._base should equal the Child class.
+-- This is important for static member access and for identifying an
+-- instance's actual class (not just what it inherits from).
 function Test:testBaseIsCorrect()
     class "Parent" {}
     class "Child" extends "Parent" {}
@@ -35,7 +42,11 @@ function Test:testBaseIsCorrect()
     assertTrue(child._base == Child)
 end
 
--- Verifies methods work correctly when called with dot syntax (no implicit self)
+-- Tests method calls with both dot and colon syntax.
+-- Dot syntax (instance.method(arg)) passes arg as first parameter.
+-- Colon syntax (instance:method(arg)) passes instance as self, then arg.
+-- Methods must be defined accordingly - runDot expects data first,
+-- runSelf expects self then data. Both patterns should work correctly.
 function Test:testWhenNoSelfPassed()
     class "AAA" {
         runDot = function(data)

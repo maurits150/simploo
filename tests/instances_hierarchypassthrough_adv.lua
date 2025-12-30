@@ -6,8 +6,11 @@
     - Private fields are class-scoped (parent method accessing self.private finds parent's private)
 ]]
 
--- Test that constructor calls can chain through multiple levels
--- and each level can access its own private members.
+-- Tests constructor chaining through a 3-level hierarchy (Level1 -> Level2 -> Level3).
+-- Each level has its own private 'value' member and getter. Level3's constructor
+-- calls Level2's which calls Level1's, each setting their respective private.
+-- After construction, each getter should return the value set at that level,
+-- demonstrating that private members are truly class-scoped, not shadowed.
 function Test:testDeepHierarchyConstructorChain()
     class "Level1" {
         private {
@@ -69,9 +72,11 @@ function Test:testDeepHierarchyConstructorChain()
     assertEquals(instance:getValue3(), 30)
 end
 
--- When a child calls a parent's method, and that method accesses
--- the parent's private member, it should work because private
--- access is class-scoped (Java-like behavior).
+-- Tests that parent methods access parent's private members, not child's.
+-- When Child inherits Parent and calls getSecret(), the method runs with
+-- Parent's scope, so it accesses Parent's private 'secret'. Even if Child
+-- had its own 'secret', Parent's method would access Parent's version.
+-- This is critical for encapsulation in inheritance hierarchies.
 function Test:testParentMethodAccessingOwnPrivate()
     class "Parent" {
         private {
@@ -104,8 +109,11 @@ function Test:testParentMethodAccessingOwnPrivate()
     assertEquals(instance:callParentMethod(), "parent secret")
 end
 
--- Test that with multiple parents, each parent's private members
--- are correctly isolated and accessible via their own methods.
+-- Tests private member isolation with multiple inheritance.
+-- MultiChild extends ParentA and ParentB, each with their own private 'secret'.
+-- Calling getSecretA() uses ParentA's scope (returns "A"), and getSecretB()
+-- uses ParentB's scope (returns "B"). The child can call both and combine
+-- results without the privates interfering with each other.
 function Test:testMultipleInheritancePrivates()
     class "ParentA" {
         private {
@@ -151,9 +159,11 @@ function Test:testMultipleInheritancePrivates()
     assertEquals(instance:getBothSecrets(), "AB")
 end
 
--- Test that a child can have a private with the same name as parent's private.
--- Each class accesses its own (Java-like behavior).
--- Note: This only works in development mode where scope tracking is enabled.
+-- Tests that parent and child can have private members with the same name.
+-- OverrideChild has private 'value' and so does OverrideParent. When child's
+-- getValue() runs, it accesses child's 'value'. When parent's getValue() runs
+-- (via getParentValue calling self.OverrideParent:getValue()), it accesses
+-- parent's 'value'. Same name, different storage - true class-scoped privates.
 function Test:testChildOverridesParentMethod()
     -- Skip in production mode - scope tracking is disabled for performance
     if simploo.config["production"] then
@@ -199,8 +209,11 @@ function Test:testChildOverridesParentMethod()
     assertEquals(instance:getParentValue(), "parent value")
 end
 
--- Test polymorphism: parent method calling self:method() finds child's override.
--- This is the key difference from the old shadowing model.
+-- Tests that polymorphism works: parent methods find child's method overrides.
+-- PolyParent.callOverridable() calls self:overridable(). When called on a
+-- PolyChild instance, it should find PolyChild's overridable() (returning "child"),
+-- not PolyParent's version. This is the standard OOP polymorphism behavior
+-- matching Java, Python, and JavaScript.
 function Test:testPolymorphismSupported()
     class "PolyParent" {
         public {

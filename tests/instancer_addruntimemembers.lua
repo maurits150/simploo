@@ -5,7 +5,10 @@
     but are marked transient (not serialized).
 ]]
 
--- Verifies members can be added to instances dynamically after creation
+-- Tests that new members can be added to instances dynamically at runtime.
+-- When assigning to a key that doesn't exist in the class definition,
+-- the __newindex metamethod creates a new member marked as public and transient.
+-- Transient means runtime members won't be serialized (they only exist in memory).
 function Test:testAddingRuntimeMembers()
     class "RTM" {}
 

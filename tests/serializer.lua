@@ -5,7 +5,11 @@
     respecting transient members and parent class data.
 ]]
 
--- Verifies serialize/deserialize with custom transformers and transient member exclusion
+-- Tests the full serialize/deserialize cycle with an inheritance hierarchy.
+-- Verifies that: (1) transient members are excluded from serialization,
+-- (2) custom transformer functions can modify values during serialize/deserialize,
+-- (3) parent class data is properly nested under the parent class name in output.
+-- After deserialize, transient members should have their original default values.
 function Test:testSerializer()
     class "P" {
         public {
@@ -55,7 +59,10 @@ function Test:testSerializer()
     assertEquals(newinstance["child_bad"], "unset")
 end
 
--- Verifies parent class reference remains accessible after deserialization
+-- Tests that parent class members are properly restored after deserialization.
+-- When a child class is deserialized, the parent reference (e.g., restored.ParentName)
+-- should still be accessible and contain the correct serialized values.
+-- This ensures the inheritance hierarchy is preserved through serialize/deserialize.
 function Test:testSerializerParentAccess()
     class "SerParent" {
         public { parentValue = "parent" }

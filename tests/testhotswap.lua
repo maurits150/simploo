@@ -5,7 +5,11 @@
     new members while preserving their existing member values.
 ]]
 
--- Verifies hotswap updates existing instances with new members while preserving old values
+-- Tests class hotswapping: when a class is redefined, existing instances update.
+-- Scenario: Create instance with members keep_me and destroy. Redefine class
+-- to have keep_me (different default) and new_item (but no destroy).
+-- Expected: Instance's keep_me retains original value, destroy becomes nil,
+-- and new_item is added with the new default. This enables live code reloading.
 function Test:testHotswap()
     simploo.hotswap:init()
 

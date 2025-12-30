@@ -4,7 +4,11 @@
     Measures time to create many instances with various member counts.
 ]]
 
--- Measures performance of instance creation and method calls
+-- Performance benchmark measuring instance creation and method call overhead.
+-- Creates 10,000 instances with 20 members (10 private + 10 public) and
+-- times the operation. Then measures 2 million method calls including a
+-- private method invocation to test scope tracking overhead.
+-- Not a correctness test - just reports timing for performance analysis.
 function Test:testBenchmark()
     namespace "Benchmark"
 

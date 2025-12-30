@@ -5,7 +5,11 @@
     accessing that member should error as ambiguous unless overridden.
 ]]
 
--- Verifies accessing a member defined in multiple parents throws an ambiguity error
+-- Tests the diamond problem detection in multiple inheritance.
+-- When Child extends Parent1 and Parent2, and both parents define the same
+-- member (foo), accessing child.foo should throw an "ambiguous" error.
+-- The child must explicitly resolve this by overriding foo or using
+-- self.Parent1.foo / self.Parent2.foo to specify which parent's member to use.
 function Test:testInstancerAmbiguous()
     namespace "TestAmbiguous"
 

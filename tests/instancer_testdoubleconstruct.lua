@@ -5,7 +5,11 @@
     potentially fire. This verifies each is called exactly once.
 ]]
 
--- Verifies __construct is called once on instantiation and __call on subsequent calls
+-- Tests that __construct and __call are invoked correctly and not confused.
+-- Scenario: First call to Class(args) invokes __construct exactly once.
+-- Subsequent calls to instance(args) invoke __call, not __construct again.
+-- Also verifies parent constructor is called once when child calls self.Parent(args),
+-- and parent's __call is invoked for subsequent parent calls within child constructor.
 function Test:testDoubleConstructorCalls()
     local parentConstructCalls = 0
     local parentMetaCalls = 0

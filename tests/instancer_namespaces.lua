@@ -5,7 +5,12 @@
     via using declarations that import them into scope.
 ]]
 
--- Verifies namespace declarations and using imports make classes accessible
+-- Tests namespace functionality including declarations, wildcards, and aliasing.
+-- Verifies: (1) classes in namespaces are accessible via namespace.ClassName,
+-- (2) using "namespace.ClassName" imports a single class into scope,
+-- (3) using "namespace.*" imports all classes from that namespace,
+-- (4) using "namespace.ClassName" as "Alias" creates an aliased reference.
+-- Classes should be accessible by short name within methods after using.
 function Test:testNamespaces()
     namespace "testsimple"
 
@@ -75,7 +80,10 @@ function Test:testNamespaces()
     instance:test()
 end
 
--- Verifies classes in the same namespace can extend each other across declarations
+-- Tests that classes can reference earlier classes in the same namespace.
+-- When namespace "ns" is declared multiple times, each subsequent class
+-- should be able to extend classes defined earlier in that namespace.
+-- The automatic using "ns.*" within a namespace enables this pattern.
 function Test:testUsingsForNamespaceTwice()
     namespace "ns"
 
@@ -90,7 +98,10 @@ function Test:testUsingsForNamespaceTwice()
     class "C" extends "B" {}
 end
 
--- Verifies a class method can reference its own class by short name
+-- Tests that a class method can reference its own class by short name.
+-- When defining Vector in namespace "selfref", methods like add() should
+-- be able to call Vector.new() without using the full path selfref.Vector.
+-- The parser automatically adds the class itself to its resolved_usings table.
 function Test:testClassCanReferenceSelf()
     namespace "selfref"
 

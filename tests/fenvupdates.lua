@@ -1,6 +1,15 @@
--- Verifies fenv references update when classes are redefined
--- Test if variables inside the fenv update correctly.
--- Especially when a class is redefined, ensure the variable in the fenv is updated.
+--[[
+    Tests that function environments update when referenced classes are redefined.
+    
+    When classes are redefined (simulating hot-reload), 'using' references in
+    other classes should automatically resolve to the new class definitions.
+]]
+
+-- Tests that function environments update when referenced classes are redefined.
+-- ClassC uses ClassNormal and ClassWildcard via 'using' statements. When those
+-- classes are redefined (simulating code reload), the fenv references inside
+-- ClassC's methods should automatically resolve to the new class definitions.
+-- This is critical for hot-reload scenarios where code changes at runtime.
 function Test:testUsingsFenvCleanup()
     -- Create class A
     class "frtns.ClassNormal" {};
