@@ -7,7 +7,7 @@ local activeUsings = {}
 
 function syntax.class(className, classOperation)
     if simploo.parser.instance then
-        error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance.name))
+        error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance._simploo.name))
     end
 
     simploo.parser.instance = simploo.parser:new(onFinished)

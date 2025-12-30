@@ -63,7 +63,7 @@ local function deserializeIntoMembers(instance, data, customPerMemberFn)
         local member = instance._members[dataKey]
         if member and member.modifiers and not member.modifiers.transient then
             if type(dataVal) == "table" and dataVal._name then
-                member.value = deserializeIntoMembers(member.value, dataVal, customPerMemberFn)
+                deserializeIntoMembers(member.value, dataVal, customPerMemberFn)
             else
                 member.value = (customPerMemberFn and customPerMemberFn(dataKey, dataVal, member.modifiers, instance)) or dataVal
             end

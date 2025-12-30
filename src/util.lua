@@ -3,8 +3,8 @@ simploo.util = util
 
 -- Scope tracking for private/protected member access.
 -- The "scope" is the class whose method is currently executing.
--- Thread-keyed for coroutine safety.
-local scopeByThread = {}
+-- Thread-keyed for coroutine safety. Weak keys allow GC of dead coroutines.
+local scopeByThread = setmetatable({}, {__mode = "k"})
 
 function util.getScope()
     return scopeByThread[coroutine.running() or "main"]

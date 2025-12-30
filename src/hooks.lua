@@ -9,7 +9,7 @@ end
 
 function hook:fire(hookName, ...)
     local args = {...}
-    for _, v in pairs(self.hooks) do
+    for _, v in ipairs(self.hooks) do
         if v[1] == hookName then
             local ret = {v[2]((unpack or table.unpack)(args))}
 

@@ -176,7 +176,7 @@ function instancemt:__newindex(key, value)
     end
 
     if self._members["__newindex"] then -- lookup via members to prevent infinite loop
-        return self:__newindex(key) -- call via metatable, because method may be static
+        return self:__newindex(key, value) -- call via metatable, because method may be static
     end
 
     -- Assign new member at runtime if we couldn't put it anywhere else.

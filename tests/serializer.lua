@@ -46,3 +46,25 @@ function Test:testSerializer()
     assertEquals(newinstance["child_ok"], "ok")
     assertEquals(newinstance["child_bad"], "unset")
 end
+
+function Test:testSerializerParentAccess()
+    class "SerParent" {
+        public { parentValue = "parent" }
+    }
+
+    class "SerChild" extends "SerParent" {
+        public { childValue = "child" }
+    }
+
+    local instance = SerChild.new()
+    instance.parentValue = "modified"
+    instance.childValue = "also modified"
+
+    local data = simploo.serialize(instance)
+    local restored = simploo.deserialize(data)
+
+    -- Parent reference should still work after deserialization
+    assertIsTable(restored.SerParent)
+    assertEquals(restored.SerParent.parentValue, "modified")
+    assertEquals(restored.childValue, "also modified")
+end

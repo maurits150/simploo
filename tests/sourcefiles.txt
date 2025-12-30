@@ -21,3 +21,4 @@ instancer_testshadowing.lua
 instancer_polymorphism.lua
 fenvupdates.lua
 parser_internal_fields.lua
+metamethods.lua
