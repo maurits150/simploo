@@ -14,6 +14,7 @@ object_permissions.lua
 object_permissions_static.lua
 object_permissions_adv.lua
 object_permissions_adv_static.lua
+object_permissions_all.lua
 parser_all.lua
 serializer.lua
 testhooks.lua

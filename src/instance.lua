@@ -76,6 +76,14 @@ function instancemt:__index(key)
                     error(string.format("class %s: accessing private member %s", tostring(self), key))
                 end
             end
+
+            -- Protected access check: allowed if scope is the owner class OR a subclass of it
+            if member.modifiers.protected then
+                local scope = simploo.util.getScope()
+                if not scope or not scope:instance_of(member.owner) then
+                    error(string.format("class %s: accessing protected member %s", tostring(self), key))
+                end
+            end
         end
         --------development--------
 
@@ -111,6 +119,14 @@ function instancemt:__newindex(key, value)
                 local scope = simploo.util.getScope()
                 if not scope or member.owner._name ~= scope._name then
                     error(string.format("class %s: accessing private member %s", tostring(self), key))
+                end
+            end
+
+            -- Protected access check: allowed if scope is the owner class OR a subclass of it
+            if member.modifiers.protected then
+                local scope = simploo.util.getScope()
+                if not scope or not scope:instance_of(member.owner) then
+                    error(string.format("class %s: accessing protected member %s", tostring(self), key))
                 end
             end
         end

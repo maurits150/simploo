@@ -51,9 +51,92 @@ p:takeDamage(25)       -- OK: public access
     }
     ```
 
+## Protected
+
+`protected` members can be accessed from within the class's own methods and from subclass methods.
+
+=== "Block Syntax"
+
+    ```lua
+    class "Vehicle" {
+        protected {
+            speed = 0;
+            maxSpeed = 100;
+        };
+
+        public {
+            accelerate = function(self, amount)
+                self.speed = math.min(self.speed + amount, self.maxSpeed)
+            end;
+
+            getSpeed = function(self)
+                return self.speed
+            end;
+        };
+    }
+
+    class "SportsCar" extends "Vehicle" {
+        public {
+            __construct = function(self)
+                self.maxSpeed = 200  -- Can access parent's protected member
+            end;
+
+            turboBoost = function(self)
+                self.speed = self.maxSpeed  -- Can access parent's protected member
+            end;
+        };
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    local vehicle = class("Vehicle")
+    vehicle.protected.speed = 0
+    vehicle.protected.maxSpeed = 100
+
+    function vehicle.public:accelerate(amount)
+        self.speed = math.min(self.speed + amount, self.maxSpeed)
+    end
+
+    function vehicle.public:getSpeed()
+        return self.speed
+    end
+
+    vehicle:register()
+
+    local sportsCar = class("SportsCar")
+    sportsCar:extends("Vehicle")
+
+    function sportsCar.public:__construct()
+        self.maxSpeed = 200  -- Can access parent's protected member
+    end
+
+    function sportsCar.public:turboBoost()
+        self.speed = self.maxSpeed  -- Can access parent's protected member
+    end
+
+    sportsCar:register()
+    ```
+
+```lua
+local car = SportsCar.new()
+
+-- Access through public methods works
+car:accelerate(50)
+print(car:getSpeed())  -- 50
+
+car:turboBoost()
+print(car:getSpeed())  -- 200
+
+-- Direct access to protected member fails
+print(car.speed)  -- Error: accessing protected member speed
+car.maxSpeed = 300  -- Error: accessing protected member maxSpeed
+```
+
 ## Private
 
-`private` members can only be accessed from within the class's own methods.
+`private` members can only be accessed from within the class's own methods. Unlike `protected`, subclasses cannot access private members.
 
 === "Block Syntax"
 
@@ -346,7 +429,54 @@ wallet1:stealFrom(wallet2)  -- Error: accessing private member money
     u:changePassword("secret123", "newpass")  -- Password changed
     ```
 
+## Private vs Protected in Inheritance
+
+The key difference between `private` and `protected` becomes clear with inheritance:
+
+```lua
+class "Parent" {
+    private   { privateVar = "private" };
+    protected { protectedVar = "protected" };
+    
+    public {
+        getPrivate = function(self)
+            return self.privateVar
+        end;
+        getProtected = function(self)
+            return self.protectedVar
+        end;
+    };
+}
+
+class "Child" extends "Parent" {
+    public {
+        tryAccessPrivate = function(self)
+            return self.privateVar  -- Error! Private is not accessible
+        end;
+        tryAccessProtected = function(self)
+            return self.protectedVar  -- OK! Protected is accessible
+        end;
+    };
+}
+
+local child = Child.new()
+
+-- Parent methods can access both
+print(child:getPrivate())     -- "private"
+print(child:getProtected())   -- "protected"
+
+-- Child can access protected but not private
+print(child:tryAccessProtected())  -- "protected"
+print(child:tryAccessPrivate())    -- Error: accessing private member
+```
+
+| Modifier | Same Class | Subclass | Outside |
+|----------|------------|----------|---------|
+| `public` | Yes | Yes | Yes |
+| `protected` | Yes | Yes | No |
+| `private` | Yes | No | No |
+
 ---
 
 !!! info "Production Mode"
-    Private access enforcement only works in development mode. In production mode (`simploo.config["production"] = true`), private checks are disabled for performance. See [Configuration](../reference/config.md).
+    Access modifier enforcement only works in development mode. In production mode (`simploo.config["production"] = true`), access checks are disabled for performance. See [Configuration](../reference/config.md).
