@@ -1,74 +1,39 @@
 local baseinstancemethods = simploo.util.duplicateTable(simploo.instancemethods)
 simploo.baseinstancemethods = baseinstancemethods
 
-
-
 local function markInstanceRecursively(instance, ogchild)
     setmetatable(instance, simploo.instancemt)
-
-    -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
-    -- Development mode only: track method call depth per coroutine for private access enforcement.
-    -- if not simploo.config["production"] then
-    --     instance._methodCallDepth = {}
-    -- end
 
     for _, memberData in pairs(instance._members) do
         if memberData.modifiers.parent then
             markInstanceRecursively(memberData.value, ogchild)
         end
 
-        -- Wrap methods to support polymorphism: when called on the child instance,
-        -- 'self' remains the child so method lookups find child's overrides.
+        -- Wrap methods to support polymorphism and private access tracking.
+        -- When called on the child instance, 'self' remains the child so method lookups
+        -- find child's overrides. We also track the "scope" (declaring class) so private
+        -- member access can be checked correctly.
         if memberData.value and type(memberData.value) == "function" then
             local fn = memberData.value
+            local declaringClass = memberData.owner  -- the class that defined this method
 
-            -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
-            -- The old code had two paths: development mode with call depth tracking,
-            -- and production mode with just self-correction. Both used 'instance' 
-            -- (the parent) instead of 'ogchild' (the child), which broke polymorphism.
-            --
-            -- if not simploo.config["production"] then
-            --     -- Development mode: wrap with self-correction AND call depth tracking
-            --     memberData.value = function(selfOrData, ...)
-            --         -- Determine the actual self that will be used
-            --         local actualSelf = (selfOrData == ogchild) and instance or selfOrData
-            --
-            --         -- If called without self (using . instead of :), skip tracking
-            --         if type(actualSelf) ~= "table" or not actualSelf._methodCallDepth then
-            --             return fn(actualSelf, ...)
-            --         end
-            --
-            --         local thread = coroutine.running() or "main"
-            --         actualSelf._methodCallDepth[thread] = (actualSelf._methodCallDepth[thread] or 0) + 1
-            --
-            --         local success, ret = pcall(function(...) return {fn(actualSelf, ...)} end, ...)
-            --
-            --         actualSelf._methodCallDepth[thread] = actualSelf._methodCallDepth[thread] - 1
-            --
-            --         if not success then
-            --             error(ret, 0)
-            --         end
-            --
-            --         return (unpack or table.unpack)(ret)
-            --     end
-            -- else
-            --     -- Production mode: wrap with self-correction only
-            --     memberData.value = function(selfOrData, ...)
-            --         if selfOrData == ogchild then
-            --             return fn(instance, ...)  -- OLD: passed 'instance' (parent)
-            --         else
-            --             return fn(selfOrData, ...)
-            --         end
-            --     end
-            -- end
+            if not simploo.config["production"] then
+                -- Development mode: track scope for private access checking
+                memberData.value = function(selfOrData, ...)
+                    local prevScope = simploo.util.getScope()
+                    simploo.util.setScope(declaringClass)
 
-            -- NEW: Polymorphism-enabled wrapper - always pass ogchild so method lookups
-            -- find child's overrides. Private access will need a different mechanism.
-            memberData.value = function(selfOrData, ...)
-                if selfOrData == ogchild then
-                    return fn(ogchild, ...)  -- NEW: pass 'ogchild' (child) for polymorphism
-                else
-                    return fn(selfOrData, ...)
+                    local actualSelf = (selfOrData == ogchild) and ogchild or selfOrData
+                    return simploo.util.restoreScope(prevScope, fn(actualSelf, ...))
+                end
+            else
+                -- Production mode: polymorphism only, no scope tracking
+                memberData.value = function(selfOrData, ...)
+                    if selfOrData == ogchild then
+                        return fn(ogchild, ...)
+                    else
+                        return fn(selfOrData, ...)
+                    end
                 end
             end
         end

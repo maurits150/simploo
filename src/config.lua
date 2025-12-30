@@ -47,6 +47,17 @@ config["baseInstanceTable"] = _G
 config["customModifiers"] = {}
 
 --
+-- Coroutine-safe scope tracking
+--
+-- Description: When true, private member access tracking is coroutine-safe, allowing methods
+-- to yield and resume correctly. When false (default), uses a faster single-threaded approach.
+-- Only enable if you call class methods across coroutine yield boundaries.
+-- Default: false
+--
+
+config["coroutineSafeScope"] = false
+
+--
 -- Apply config variables that aren't defined already.
 --
 for k, v in pairs(config) do

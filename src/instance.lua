@@ -68,17 +68,14 @@ function instancemt:__index(key)
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
             end
 
-            -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
-            -- This used _methodCallDepth to track if we're inside a method call.
-            -- Needs rework to support Java-like class-scoped private access with polymorphism.
-            --
-            -- if member.modifiers.private and member.owner ~= self then
-            --     error(string.format("class %s: accessing private member %s", tostring(self), key))
-            -- end
-            --
-            -- if member.modifiers.private and (self._methodCallDepth[coroutine.running() or "main"] or 0) == 0 then
-            --     error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
-            -- end
+            -- Private access check: only allowed if the current scope (executing method's class)
+            -- matches the class that owns the private member
+            if member.modifiers.private then
+                local scope = simploo.util.getScope()
+                if not scope or member.owner._name ~= scope._name then
+                    error(string.format("class %s: accessing private member %s", tostring(self), key))
+                end
+            end
         end
         --------development--------
 
@@ -108,17 +105,14 @@ function instancemt:__newindex(key, value)
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
             end
 
-            -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
-            -- This used _methodCallDepth to track if we're inside a method call.
-            -- Needs rework to support Java-like class-scoped private access with polymorphism.
-            --
-            -- if member.modifiers.private and member.owner ~= self then
-            --     error(string.format("class %s: accessing private member %s", tostring(self), key))
-            -- end
-            --
-            -- if member.modifiers.private and (self._methodCallDepth[coroutine.running() or "main"] or 0) == 0 then
-            --     error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
-            -- end
+            -- Private access check: only allowed if the current scope (executing method's class)
+            -- matches the class that owns the private member
+            if member.modifiers.private then
+                local scope = simploo.util.getScope()
+                if not scope or member.owner._name ~= scope._name then
+                    error(string.format("class %s: accessing private member %s", tostring(self), key))
+                end
+            end
         end
         --------development--------
 
