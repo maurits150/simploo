@@ -33,7 +33,7 @@ end
 function baseinstancemethods:new(...)
     for memberName, member in pairs(self._members) do
         if member.modifiers.abstract then
-            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy._name))
+            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", self._name))
         end
     end
 
@@ -74,7 +74,7 @@ end
 function baseinstancemethods:deserialize(data, customPerMemberFn)
     for memberName, member in pairs(self._members) do
         if member.modifiers.abstract then
-            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", copy._name))
+            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", self._name))
         end
     end
 

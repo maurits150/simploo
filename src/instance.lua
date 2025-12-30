@@ -23,6 +23,7 @@ function instancemethods:instance_of(otherInstance)
         return true
     end
 
+    -- Check all parents (not just the first one)
     for memberName, member in pairs(self._members) do
         if member.modifiers.parent then
             if member.value == otherInstance or
@@ -32,7 +33,9 @@ function instancemethods:instance_of(otherInstance)
                 return true
             end
 
-            return member.value:instance_of(otherInstance) or member.value:instance_of(otherInstance._base)
+            if member.value:instance_of(otherInstance) then
+                return true
+            end
         end
     end
 
@@ -228,13 +231,8 @@ end
 
 -- Add support for meta methods as class members.
 for _, metaName in pairs(instancemt.metafunctions) do
-    local fnOriginal = instancemt[metaName]
-    if not fnOriginal then
+    if not instancemt[metaName] then
         instancemt[metaName] = function(self, ...)
-            if fnOriginal then
-                return fnOriginal(self, ...)
-            end
-
             return self._members[metaName] and self._members[metaName].value(self, ...)
         end
     end
