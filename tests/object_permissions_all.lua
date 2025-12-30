@@ -407,3 +407,121 @@ function Test:testSubclassCanCallProtectedMethod()
     local instance = MethodChild.new()
     assertEquals(instance:useHelper(), "helper")
 end
+
+---------------------------------------------------------------------
+-- Callbacks with bind() can access private/protected members
+---------------------------------------------------------------------
+
+function Test:testCallbackWithBindCanAccessPrivate()
+    class "CallbackAnimal" {
+        private { heartRate = 60 };
+        public {
+            onHeartbeat = function(self, callback)
+                callback()
+            end
+        }
+    }
+
+    class "CallbackPerson" extends "CallbackAnimal" {
+        private { name = "Unknown" };
+        public {
+            setName = function(self, n)
+                self.name = n
+            end;
+            
+            setupCallback = function(self)
+                -- Use bind() to preserve scope for the callback
+                self:onHeartbeat(self:bind(function()
+                    assertEquals(self.name, "Bob")
+                end))
+            end
+        }
+    }
+
+    local person = CallbackPerson.new()
+    person:setName("Bob")
+    person:setupCallback()  -- Should not error
+end
+
+function Test:testCallbackWithBindCanAccessProtected()
+    class "CallbackBase" {
+        protected { sharedData = "shared" };
+        public {
+            runCallback = function(self, callback)
+                callback()
+            end
+        }
+    }
+
+    class "CallbackChild" extends "CallbackBase" {
+        public {
+            setupCallback = function(self)
+                self:runCallback(self:bind(function()
+                    assertEquals(self.sharedData, "shared")
+                end))
+            end
+        }
+    }
+
+    local child = CallbackChild.new()
+    child:setupCallback()  -- Should not error
+end
+
+function Test:testNestedCallbacksWithBind()
+    class "Level1Bind" {
+        private { secret1 = "L1" };
+        public {
+            wrap = function(self, callback)
+                callback()
+            end
+        }
+    }
+
+    class "Level2Bind" extends "Level1Bind" {
+        private { secret2 = "L2" };
+        public {
+            testNested = function(self)
+                self:wrap(self:bind(function()
+                    self:wrap(self:bind(function()
+                        assertEquals(self.secret2, "L2")
+                    end))
+                end))
+            end
+        }
+    }
+
+    local instance = Level2Bind.new()
+    instance:testNested()  -- Should not error
+end
+
+function Test:testCallbackWithoutBindFails()
+    -- Separate class to run callbacks - simulates event emitter pattern
+    class "CallbackRunner" {
+        public {
+            run = function(self, callback)
+                callback()
+            end
+        }
+    }
+
+    class "NoBindClass" {
+        private { secret = "hidden" };
+        public {
+            tryWithoutBind = function(self, runner)
+                -- When runner:run() calls the callback, scope will be CallbackRunner, not NoBindClass
+                runner:run(function()
+                    local _ = self.secret  -- This should fail - wrong scope
+                end)
+            end
+        }
+    }
+
+    local runner = CallbackRunner.new()
+    local instance = NoBindClass.new()
+    local success = pcall(function()
+        instance:tryWithoutBind(runner)
+    end)
+    assertFalse(success)  -- Should fail without bind
+end
+
+

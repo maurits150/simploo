@@ -153,7 +153,13 @@ end
 
 -- Test that a child can have a private with the same name as parent's private.
 -- Each class accesses its own (Java-like behavior).
+-- Note: This only works in development mode where scope tracking is enabled.
 function Test:testChildOverridesParentMethod()
+    -- Skip in production mode - scope tracking is disabled for performance
+    if simploo.config["production"] then
+        return
+    end
+
     class "OverrideParent" {
         private {
             value = "parent value";
