@@ -5,6 +5,7 @@
     even when called on a child instance.
 ]]
 
+-- Verifies parent's methods can access parent's private members when called on child
 function Test:testHierarchyMemberPassthrough()
     class "A" {
         __construct = function(self, a)

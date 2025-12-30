@@ -5,6 +5,7 @@
     accessible from both the class and instances.
 ]]
 
+-- Verifies static members are shared across all instances and the class itself
 function Test:testStaticVariables()
     class "A" {
         static {

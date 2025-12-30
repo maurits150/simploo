@@ -5,6 +5,7 @@
     to initialize inherited state.
 ]]
 
+-- Verifies child methods can explicitly call parent methods via self.ParentName:method()
 function Test:testParentConstructors()
 	A_CALLED = false
 	B_CALLED = false

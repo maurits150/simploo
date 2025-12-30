@@ -4,6 +4,7 @@
     Measures time to create many instances with various member counts.
 ]]
 
+-- Measures performance of instance creation and method calls
 function Test:testBenchmark()
     namespace "Benchmark"
 

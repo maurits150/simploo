@@ -5,6 +5,7 @@
     unbounded after collection.
 ]]
 
+-- Verifies instances are garbage collected and don't leak memory
 function Test:testMemoryLeak()
     namespace "memoryleak"
 
@@ -68,6 +69,7 @@ function Test:testMemoryLeak()
     assertTrue(memoryFreed) -- less than 0.1 MB difference
 end
 
+-- Verifies static members are shared, not copied to each instance
 function Test:testStaticsNotCopiedToInstances()
     namespace "memoryleak"
 
@@ -109,6 +111,7 @@ end
 --
 -- This test fails in LuaJIT / Lua 5.1, something in fenv changed
 --
+-- Verifies redefined classes don't leak via stale fenv references from using statements
 function Test:testMemoryLeakViaUsingsFENVReferencingOldClasses()
 
     collectgarbage('collect')

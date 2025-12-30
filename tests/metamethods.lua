@@ -5,6 +5,7 @@
     when instances are used with Lua operators and built-in functions.
 ]]
 
+-- Verifies custom __newindex and __index metamethods redirect property access
 function Test:testCustomNewIndex()
     class "CustomNewIndex" {
         public {
@@ -26,6 +27,7 @@ function Test:testCustomNewIndex()
     assertEquals(instance.foo, "bar")
 end
 
+-- Verifies custom __tostring metamethod is invoked by tostring()
 function Test:testCustomToString()
     class "CustomToString" {
         public {
@@ -44,6 +46,7 @@ function Test:testCustomToString()
     assertEquals(tostring(instance), "CustomToString: hello")
 end
 
+-- Verifies instances can be called as functions via __call metamethod
 function Test:testCustomCall()
     class "Callable" {
         public {
@@ -62,6 +65,7 @@ function Test:testCustomCall()
     assertEquals(instance(5), 15)
 end
 
+-- Verifies __concat metamethod enables string concatenation with ..
 function Test:testCustomConcat()
     class "Concatable" {
         public {
@@ -80,6 +84,7 @@ function Test:testCustomConcat()
     assertEquals(instance .. " world", "hello world")
 end
 
+-- Verifies __unm metamethod enables unary minus operator
 function Test:testCustomUnm()
     class "Negatable" {
         public {
@@ -98,6 +103,7 @@ function Test:testCustomUnm()
     assertEquals(-instance, -42)
 end
 
+-- Verifies __add metamethod enables + operator
 function Test:testCustomAdd()
     class "Addable" {
         public {
@@ -116,6 +122,7 @@ function Test:testCustomAdd()
     assertEquals(instance + 5, 15)
 end
 
+-- Verifies __sub metamethod enables - operator
 function Test:testCustomSub()
     class "Subtractable" {
         public {
@@ -134,6 +141,7 @@ function Test:testCustomSub()
     assertEquals(instance - 3, 7)
 end
 
+-- Verifies __mul metamethod enables * operator
 function Test:testCustomMul()
     class "Multipliable" {
         public {
@@ -152,6 +160,7 @@ function Test:testCustomMul()
     assertEquals(instance * 7, 42)
 end
 
+-- Verifies __div metamethod enables / operator
 function Test:testCustomDiv()
     class "Dividable" {
         public {
@@ -170,6 +179,7 @@ function Test:testCustomDiv()
     assertEquals(instance / 4, 5)
 end
 
+-- Verifies __mod metamethod enables % operator
 function Test:testCustomMod()
     class "Modable" {
         public {
@@ -188,6 +198,7 @@ function Test:testCustomMod()
     assertEquals(instance % 5, 2)
 end
 
+-- Verifies __pow metamethod enables ^ operator
 function Test:testCustomPow()
     class "Powerable" {
         public {
@@ -206,6 +217,7 @@ function Test:testCustomPow()
     assertEquals(instance ^ 3, 8)
 end
 
+-- Verifies __eq metamethod enables custom equality comparison
 function Test:testCustomEq()
     class "Equatable" {
         public {
@@ -229,6 +241,7 @@ function Test:testCustomEq()
     assertFalse(a == b)
 end
 
+-- Verifies __lt metamethod enables < comparison
 function Test:testCustomLt()
     class "Comparable" {
         public {
@@ -250,6 +263,7 @@ function Test:testCustomLt()
     assertFalse(b < a)
 end
 
+-- Verifies __le metamethod enables <= comparison
 function Test:testCustomLe()
     class "ComparableLE" {
         public {

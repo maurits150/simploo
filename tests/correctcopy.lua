@@ -5,6 +5,7 @@
     so static members are properly shared.
 ]]
 
+-- Verifies all instances of a class share the same _base reference
 function Test:testInstancesWithParentsShareSameBase()
     class "P" {}
     class "M" extends "P" {}

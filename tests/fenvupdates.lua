@@ -1,7 +1,6 @@
---
+-- Verifies fenv references update when classes are redefined
 -- Test if variables inside the fenv update correctly.
 -- Especially when a class is redefined, ensure the variable in the fenv is updated.
---
 function Test:testUsingsFenvCleanup()
     -- Create class A
     class "frtns.ClassNormal" {};

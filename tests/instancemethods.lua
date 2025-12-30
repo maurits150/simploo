@@ -5,6 +5,7 @@
     multiple inheritance, including deep hierarchy chains.
 ]]
 
+-- Verifies instance_of() correctly checks inheritance hierarchy
 function Test:testInstanceMethods()
     class "P" {
     }
@@ -35,6 +36,7 @@ function Test:testInstanceMethods()
     assertFalse(m:instance_of(c))
 end
 
+-- Verifies instance_of() works with multiple inheritance
 function Test:testInstanceOfMultipleInheritance()
     class "A" {}
     class "B" {}
@@ -47,6 +49,7 @@ function Test:testInstanceOfMultipleInheritance()
     assertTrue(c:instance_of(C))
 end
 
+-- Verifies instance_of() traverses deep multi-parent hierarchies
 function Test:testInstanceOfDeepMultipleInheritance()
     class "Base1" {}
     class "Base2" {}

@@ -5,6 +5,7 @@
     via using declarations that import them into scope.
 ]]
 
+-- Verifies namespace declarations and using imports make classes accessible
 function Test:testNamespaces()
     namespace "testsimple"
 
@@ -74,6 +75,7 @@ function Test:testNamespaces()
     instance:test()
 end
 
+-- Verifies classes in the same namespace can extend each other across declarations
 function Test:testUsingsForNamespaceTwice()
     namespace "ns"
 
@@ -88,6 +90,7 @@ function Test:testUsingsForNamespaceTwice()
     class "C" extends "B" {}
 end
 
+-- Verifies a class method can reference its own class by short name
 function Test:testClassCanReferenceSelf()
     namespace "selfref"
 

@@ -1,6 +1,7 @@
 -- Test that user-defined members don't conflict with internal parser fields
 -- Internal fields: _name, _ns, _parents, _members, _usings
 
+-- Verifies user can define a member called 'name' using block syntax
 Test.testBlockSyntaxNameMember = function()
     class "TestBlockName" {
         public {
@@ -12,6 +13,7 @@ Test.testBlockSyntaxNameMember = function()
     assertEquals(inst.name, "test_value")
 end
 
+-- Verifies user can define a member called 'name' using builder syntax
 Test.testBuilderSyntaxNameMember = function()
     local c = class("TestBuilderName")
     c.public.name = "builder_value"
@@ -21,6 +23,7 @@ Test.testBuilderSyntaxNameMember = function()
     assertEquals(inst.name, "builder_value")
 end
 
+-- Verifies user can define a member called 'parents' using builder syntax
 Test.testBuilderSyntaxParentsMember = function()
     local c = class("TestBuilderParents")
     c.public.parents = {"a", "b", "c"}
@@ -32,6 +35,7 @@ Test.testBuilderSyntaxParentsMember = function()
     assertEquals(inst.parents[3], "c")
 end
 
+-- Verifies user can define a member called 'members' using builder syntax
 Test.testBuilderSyntaxMembersMember = function()
     local c = class("TestBuilderMembers")
     c.public.members = {foo = "bar"}

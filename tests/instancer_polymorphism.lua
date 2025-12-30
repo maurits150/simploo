@@ -6,7 +6,7 @@
     This matches Java, Python, JavaScript behavior.
 ]]
 
--- Basic polymorphism: parent method calling overridden child method
+-- Verifies parent method calling self:method() finds child's override
 function Test:testPolymorphism()
     class "PolyParent" {
         getValue = function(self)
@@ -33,7 +33,7 @@ function Test:testPolymorphism()
     assertEquals(child:callGetValue(), "child")
 end
 
--- Polymorphism with multiple levels of inheritance
+-- Verifies polymorphism works through multiple levels of inheritance
 function Test:testPolymorphismDeepHierarchy()
     class "Base" {
         getName = function(self)
@@ -67,7 +67,7 @@ function Test:testPolymorphismDeepHierarchy()
     assertEquals(base:callGetName(), "base")
 end
 
--- Polymorphism with explicit parent method call
+-- Verifies child can still call parent's version explicitly via self.Parent:method()
 function Test:testPolymorphismWithExplicitParentCall()
     class "Animal" {
         speak = function(self)
@@ -102,7 +102,7 @@ function Test:testPolymorphismWithExplicitParentCall()
     assertEquals(dog:parentSpeak(), "generic sound")
 end
 
--- Polymorphism should work with multiple inheritance
+-- Verifies polymorphism works with multiple inheritance
 function Test:testPolymorphismMultipleInheritance()
     class "Movable" {
         getSpeed = function(self)

@@ -5,6 +5,7 @@
     respecting transient members and parent class data.
 ]]
 
+-- Verifies serialize/deserialize with custom transformers and transient member exclusion
 function Test:testSerializer()
     class "P" {
         public {
@@ -54,6 +55,7 @@ function Test:testSerializer()
     assertEquals(newinstance["child_bad"], "unset")
 end
 
+-- Verifies parent class reference remains accessible after deserialization
 function Test:testSerializerParentAccess()
     class "SerParent" {
         public { parentValue = "parent" }

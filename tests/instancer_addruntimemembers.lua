@@ -5,6 +5,7 @@
     but are marked transient (not serialized).
 ]]
 
+-- Verifies members can be added to instances dynamically after creation
 function Test:testAddingRuntimeMembers()
     class "RTM" {}
 

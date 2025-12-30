@@ -7,6 +7,7 @@
 
 simploo.instancer = nil -- Disable the instancer for this test
 
+-- Verifies block syntax and builder syntax produce identical parser output
 function Test:testParserOutput()
     function assertParsers(output)
         assertEquals(output.name, "Child")

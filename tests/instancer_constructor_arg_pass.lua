@@ -7,6 +7,7 @@
 
 namespace "Test"
 
+-- Verifies constructor receives correct arguments via both .new() and :new() syntax
 function Test:testConstructorArgsPass()
     class "A" {
         __construct = function(self)
@@ -47,7 +48,8 @@ function Test:testConstructorArgsPass()
     Test.B(a2) -- Call with :
 end
 
-function Test:testInheritance() -- Arguments should be passed to child correctly
+-- Verifies child constructor can forward arguments to parent constructor
+function Test:testInheritance()
     class "C" {
         __construct = function(self, a)
             assertEquals(a, "Value")

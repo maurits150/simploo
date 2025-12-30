@@ -5,6 +5,7 @@
     can chain return values between multiple handlers.
 ]]
 
+-- Verifies beforeInstancerInitClass hook can add auto-generated getters/setters
 function Test:testHooksBeforeInitClass()
     -- Automatically create getters and setters
     simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
@@ -51,6 +52,7 @@ function Test:testHooksBeforeInitClass()
     assertEquals(instance:getName(), "Lisa")
 end
 
+-- Verifies afterNewInstance hook is called when instances are created
 function Test:testHooksAfterNewInstance()
     -- Test when instance is made
     simploo.hook:add("afterNewInstance", function(instance)
@@ -58,6 +60,7 @@ function Test:testHooksAfterNewInstance()
 	end)
 end
 
+-- Verifies multiple hooks can modify the same parser output in-place
 function Test:testHookCanModifyInPlace()
     -- Test that multiple hooks can modify the same object
     simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
@@ -75,6 +78,7 @@ function Test:testHookCanModifyInPlace()
     }
 end
 
+-- Verifies hook return values are passed to subsequent hooks in chain
 function Test:testHookReturnValueChaining()
     -- Test that hook return values are passed to subsequent hooks
     simploo.hook:add("beforeInstancerInitClass", function(parserOutput)

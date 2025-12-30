@@ -5,6 +5,7 @@
     potentially fire. This verifies each is called exactly once.
 ]]
 
+-- Verifies __construct is called once on instantiation and __call on subsequent calls
 function Test:testDoubleConstructorCalls()
     local parentConstructCalls = 0
     local parentMetaCalls = 0

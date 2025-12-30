@@ -5,6 +5,7 @@
     new members while preserving their existing member values.
 ]]
 
+-- Verifies hotswap updates existing instances with new members while preserving old values
 function Test:testHotswap()
     simploo.hotswap:init()
 

@@ -5,6 +5,7 @@
     accessing that member should error as ambiguous unless overridden.
 ]]
 
+-- Verifies accessing a member defined in multiple parents throws an ambiguity error
 function Test:testInstancerAmbiguous()
     namespace "TestAmbiguous"
 

@@ -7,7 +7,7 @@
     - Private fields are class-scoped (each class accesses its own privates)
 ]]
 
--- Test that child's public variable shadows parent's when accessed from outside
+-- Verifies child's public variable shadows parent's when accessed from outside
 function Test:testChildPublicVariableShadowsParent()
     class "A" {
         variable = "OWNED BY PARENT";
@@ -26,7 +26,7 @@ function Test:testChildPublicVariableShadowsParent()
     assertEquals(instance.A.variable, "OWNED BY PARENT")
 end
 
--- Test that _base refers to the class, not the runtime instance type
+-- Verifies _base refers to the class, not the runtime instance type
 function Test:testBaseIsCorrect()
     class "Parent" {}
     class "Child" extends "Parent" {}
@@ -35,6 +35,7 @@ function Test:testBaseIsCorrect()
     assertTrue(child._base == Child)
 end
 
+-- Verifies methods work correctly when called with dot syntax (no implicit self)
 function Test:testWhenNoSelfPassed()
     class "AAA" {
         runDot = function(data)

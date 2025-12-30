@@ -19,6 +19,7 @@ end
 -- Same class access: all modifiers should be accessible
 ---------------------------------------------------------------------
 
+-- Verifies methods can access public, protected, and private members of their own class
 function Test:testSameClassCanAccessAllModifiers()
     class "AccessTest" {
         public    { pubVar = "public" };
@@ -61,6 +62,7 @@ end
 -- Subclass access: public and protected yes, private no
 ---------------------------------------------------------------------
 
+-- Verifies subclass methods can access parent's public and protected members
 function Test:testSubclassCanAccessPublicAndProtected()
     class "Parent" {
         public    { pubVar = "public" };
@@ -98,6 +100,7 @@ function Test:testSubclassCanAccessPublicAndProtected()
     assertEquals(instance:readProtected(), "prot2")
 end
 
+-- Verifies subclass methods cannot access parent's private members
 function Test:testSubclassCannotAccessPrivate()
     class "ParentPriv" {
         private { secret = "hidden" };
@@ -133,6 +136,7 @@ end
 -- Outside access: only public works
 ---------------------------------------------------------------------
 
+-- Verifies external code can only access public members
 function Test:testOutsideCanAccessPublicOnly()
     class "Outsider" {
         public    { pubVar = "public" };
@@ -148,6 +152,7 @@ function Test:testOutsideCanAccessPublicOnly()
     assertEquals(instance.pubVar, "pub2")
 end
 
+-- Verifies external code cannot read or write protected members
 function Test:testOutsideCannotAccessProtected()
     class "ProtectedOutsider" {
         protected { protVar = "protected" };
@@ -168,6 +173,7 @@ function Test:testOutsideCannotAccessProtected()
     assertFalse(success)
 end
 
+-- Verifies external code cannot read or write private members
 function Test:testOutsideCannotAccessPrivate()
     class "PrivateOutsider" {
         private { privVar = "private" };
@@ -192,6 +198,7 @@ end
 -- Unrelated class cannot access protected or private
 ---------------------------------------------------------------------
 
+-- Verifies unrelated class methods cannot access another class's protected/private
 function Test:testUnrelatedClassCannotAccessProtectedOrPrivate()
     class "Target" {
         public    { pubVar = "public" };
@@ -236,6 +243,7 @@ end
 -- Deep hierarchy: grandchild can access grandparent's protected
 ---------------------------------------------------------------------
 
+-- Verifies grandchild can access grandparent's protected members
 function Test:testDeepHierarchyProtectedAccess()
     class "GrandParent" {
         protected { familySecret = "inherited" };
@@ -267,6 +275,7 @@ end
 -- Static members follow same access rules
 ---------------------------------------------------------------------
 
+-- Verifies static members follow the same access rules as instance members
 function Test:testStaticMemberAccess()
     class "StaticAccess" {
         static {
@@ -311,6 +320,7 @@ function Test:testStaticMemberAccess()
     assertFalse(success)
 end
 
+-- Verifies subclass can access parent's protected static but not private static
 function Test:testStaticSubclassAccess()
     class "StaticParent" {
         static {
@@ -346,6 +356,7 @@ end
 -- Methods also respect access modifiers
 ---------------------------------------------------------------------
 
+-- Verifies protected/private methods can be called internally but not externally
 function Test:testMethodAccessModifiers()
     class "MethodAccess" {
         public {
@@ -387,6 +398,7 @@ function Test:testMethodAccessModifiers()
     assertFalse(success)
 end
 
+-- Verifies subclass can call parent's protected methods
 function Test:testSubclassCanCallProtectedMethod()
     class "MethodParent" {
         protected {
@@ -412,6 +424,7 @@ end
 -- Callbacks with bind() can access private/protected members
 ---------------------------------------------------------------------
 
+-- Verifies bind() preserves scope so callbacks can access private members
 function Test:testCallbackWithBindCanAccessPrivate()
     class "CallbackAnimal" {
         private { heartRate = 60 };
@@ -443,6 +456,7 @@ function Test:testCallbackWithBindCanAccessPrivate()
     person:setupCallback()  -- Should not error
 end
 
+-- Verifies bind() preserves scope so callbacks can access protected members
 function Test:testCallbackWithBindCanAccessProtected()
     class "CallbackBase" {
         protected { sharedData = "shared" };
@@ -467,6 +481,7 @@ function Test:testCallbackWithBindCanAccessProtected()
     child:setupCallback()  -- Should not error
 end
 
+-- Verifies nested callbacks with bind() maintain correct scope
 function Test:testNestedCallbacksWithBind()
     class "Level1Bind" {
         private { secret1 = "L1" };
@@ -494,6 +509,7 @@ function Test:testNestedCallbacksWithBind()
     instance:testNested()  -- Should not error
 end
 
+-- Verifies callbacks without bind() lose scope and cannot access private members
 function Test:testCallbackWithoutBindFails()
     -- Separate class to run callbacks - simulates event emitter pattern
     class "CallbackRunner" {
@@ -528,6 +544,7 @@ end
 -- Coroutine safety: scope is tracked per-thread
 ---------------------------------------------------------------------
 
+-- Verifies scope is maintained correctly across coroutine yields
 function Test:testCoroutineScopeSafety()
     class "CoroClass" {
         private { secret = "coroutine-safe" };
@@ -562,6 +579,7 @@ function Test:testCoroutineScopeSafety()
     assertEquals(result, "coroutine-safe")
 end
 
+-- Verifies multiple coroutines have independent scope tracking
 function Test:testMultipleCoroutinesDontInterfere()
     class "MultiCoroClass" {
         private { id = 0 };
@@ -610,6 +628,7 @@ end
 -- Cross-instance attacks
 ---------------------------------------------------------------------
 
+-- Verifies one class cannot access another class's private members
 function Test:testCrossInstanceAttack()
     class "Victim" {
         private { secret = 42 }
@@ -636,6 +655,7 @@ end
 -- Nested method calls
 ---------------------------------------------------------------------
 
+-- Verifies nested method calls maintain correct scope for private access
 function Test:testNestedMethodCalls()
     class "Nested" {
         private { secret = 99 };
@@ -657,6 +677,7 @@ end
 -- Private method access
 ---------------------------------------------------------------------
 
+-- Verifies private methods can be called internally but not externally
 function Test:testPrivateMethodAccess()
     class "PrivateMethod" {
         private {

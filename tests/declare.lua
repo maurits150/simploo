@@ -5,6 +5,7 @@
     the class itself (not an instance) as self.
 ]]
 
+-- Verifies __declare is called once at class registration with the class itself as self
 function Test:testDeclare()
     class "TestDeclare" {
         __declare = function(self)
