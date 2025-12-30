@@ -145,9 +145,10 @@ SIMPLOO has two modes:
 - **Development mode** (default) - Includes safety checks like private member access enforcement
 - **Production mode** - Disables checks for better performance
 
-Set the mode before loading any classes:
+Set the mode before loading simploo:
 
 ```lua
+simploo = {config = {}}
 simploo.config["production"] = true
 dofile("simploo.lua")
 ```

@@ -153,8 +153,11 @@ class "Image" {}  -- Same name, different namespace
 
 namespace "app"
 
-using "graphics.Image" as "GraphicsImage"
-using "data.Image" as "DataImage"
+using "graphics.Image"
+as "GraphicsImage"
+
+using "data.Image"
+as "DataImage"
 
 class "Processor" {
     process = function(self)

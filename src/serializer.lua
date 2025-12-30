@@ -4,7 +4,7 @@ function simploo.serialize(instance, customPerMemberFn)
 
     for k, v in pairs(instance._members) do
         if v.modifiers and v.owner == instance then
-            if not v.modifiers.transient and not v.modifiers.parent then
+            if not v.modifiers.transient and not v.modifiers.parent and not v.modifiers.static then
                 if type(v.value) ~= "function" then
                     data[k] = (customPerMemberFn and customPerMemberFn(k, v.value, v.modifiers, instance)) or v.value
                 end

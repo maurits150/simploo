@@ -14,7 +14,7 @@ function hook:fire(hookName, ...)
             local ret = {v[2]((unpack or table.unpack)(args))}
 
             -- Overwrite the original value, but do pass it on to the next hook if any
-            if ret[0] then
+            if ret[1] ~= nil then
                 args = ret
             end
         end
