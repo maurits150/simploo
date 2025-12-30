@@ -142,6 +142,7 @@ do
                 end
             end
         end
+        overwrittenGlobals = {}
     end
 
     -- Add modifiers as global functions
