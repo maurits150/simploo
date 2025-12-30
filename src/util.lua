@@ -3,23 +3,19 @@ simploo.util = util
 
 -- Scope tracking for private/protected member access.
 -- The "scope" is the class whose method is currently executing.
--- We use a thread-keyed table for coroutine safety.
+-- Thread-keyed for coroutine safety.
 local scopeByThread = {}
 
 function util.getScope()
-    local thread = coroutine.running() or "main"
-    return scopeByThread[thread]
+    return scopeByThread[coroutine.running() or "main"]
 end
 
 function util.setScope(scope)
-    local thread = coroutine.running() or "main"
-    scopeByThread[thread] = scope
+    scopeByThread[coroutine.running() or "main"] = scope
 end
 
--- Helper to restore scope after a function call while preserving multiple return values
 function util.restoreScope(prevScope, ...)
-    local thread = coroutine.running() or "main"
-    scopeByThread[thread] = prevScope
+    scopeByThread[coroutine.running() or "main"] = prevScope
     return ...
 end
 

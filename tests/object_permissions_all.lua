@@ -524,4 +524,161 @@ function Test:testCallbackWithoutBindFails()
     assertFalse(success)  -- Should fail without bind
 end
 
+---------------------------------------------------------------------
+-- Coroutine safety: scope is tracked per-thread
+---------------------------------------------------------------------
 
+function Test:testCoroutineScopeSafety()
+    class "CoroClass" {
+        private { secret = "coroutine-safe" };
+        public {
+            getSecret = function(self)
+                return self.secret
+            end;
+            
+            getSecretWithYield = function(self)
+                coroutine.yield()
+                return self.secret
+            end
+        }
+    }
+
+    local instance = CoroClass.new()
+    
+    -- Test that scope works across yield
+    local co = coroutine.create(function()
+        return instance:getSecretWithYield()
+    end)
+    
+    -- Start coroutine (will yield inside method)
+    coroutine.resume(co)
+    
+    -- While suspended, call another method (should have separate scope)
+    assertEquals(instance:getSecret(), "coroutine-safe")
+    
+    -- Resume and get result
+    local success, result = coroutine.resume(co)
+    assertTrue(success)
+    assertEquals(result, "coroutine-safe")
+end
+
+function Test:testMultipleCoroutinesDontInterfere()
+    class "MultiCoroClass" {
+        private { id = 0 };
+        public {
+            setId = function(self, newId)
+                self.id = newId
+            end;
+            
+            getId = function(self)
+                return self.id
+            end;
+            
+            yieldAndGetId = function(self)
+                coroutine.yield()
+                return self.id
+            end
+        }
+    }
+
+    local instance = MultiCoroClass.new()
+    instance:setId(42)
+    
+    local results = {}
+    
+    local co1 = coroutine.create(function()
+        return instance:yieldAndGetId()
+    end)
+    
+    local co2 = coroutine.create(function()
+        return instance:yieldAndGetId()
+    end)
+    
+    -- Start both coroutines
+    coroutine.resume(co1)
+    coroutine.resume(co2)
+    
+    -- Resume in different order
+    local _, r2 = coroutine.resume(co2)
+    local _, r1 = coroutine.resume(co1)
+    
+    assertEquals(r1, 42)
+    assertEquals(r2, 42)
+end
+
+---------------------------------------------------------------------
+-- Cross-instance attacks
+---------------------------------------------------------------------
+
+function Test:testCrossInstanceAttack()
+    class "Victim" {
+        private { secret = 42 }
+    }
+
+    class "Attacker" {
+        public {
+            steal = function(self, victim)
+                return victim.secret
+            end
+        }
+    }
+
+    local victim = Victim.new()
+    local attacker = Attacker.new()
+
+    local success = pcall(function()
+        return attacker:steal(victim)
+    end)
+    assertFalse(success)
+end
+
+---------------------------------------------------------------------
+-- Nested method calls
+---------------------------------------------------------------------
+
+function Test:testNestedMethodCalls()
+    class "Nested" {
+        private { secret = 99 };
+        public {
+            outer = function(self)
+                return self:inner()
+            end;
+            inner = function(self)
+                return self.secret
+            end
+        }
+    }
+
+    local instance = Nested.new()
+    assertEquals(instance:outer(), 99)
+end
+
+---------------------------------------------------------------------
+-- Private method access
+---------------------------------------------------------------------
+
+function Test:testPrivateMethodAccess()
+    class "PrivateMethod" {
+        private {
+            secretMethod = function(self)
+                return "secret"
+            end
+        };
+        public {
+            callSecret = function(self)
+                return self:secretMethod()
+            end
+        }
+    }
+
+    local instance = PrivateMethod.new()
+
+    -- Calling private method from public method (should work)
+    assertEquals(instance:callSecret(), "secret")
+
+    -- Calling private method from outside (should fail)
+    local success = pcall(function()
+        return instance:secretMethod()
+    end)
+    assertFalse(success)
+end
