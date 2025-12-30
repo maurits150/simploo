@@ -7,6 +7,18 @@ function hook:add(hookName, callbackFn)
     table.insert(self.hooks, {hookName, callbackFn})
 end
 
+function hook:remove(hookName, callbackFn)
+    for i = #self.hooks, 1, -1 do
+        local h = self.hooks[i]
+        if h[1] == hookName and (not callbackFn or h[2] == callbackFn) then
+            table.remove(self.hooks, i)
+            if callbackFn then
+                return -- only remove first match when callback specified
+            end
+        end
+    end
+end
+
 function hook:fire(hookName, ...)
     local args = {...}
     for _, v in ipairs(self.hooks) do

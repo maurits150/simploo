@@ -96,3 +96,23 @@ function Test:testHookReturnValueChaining()
         value = 0;
     }
 end
+
+-- Tests that hook:remove() can unregister hooks by name and optionally by callback.
+-- When called with just hookName, removes all hooks for that event.
+-- When called with hookName and callbackFn, removes only that specific hook.
+function Test:testHookRemove()
+    local callCount = 0
+    local hookFn = function(parserOutput)
+        callCount = callCount + 1
+    end
+    
+    simploo.hook:add("beforeInstancerInitClass", hookFn)
+    
+    class "HookRemoveTest1" { value = 0 }
+    assertEquals(callCount, 1)
+    
+    simploo.hook:remove("beforeInstancerInitClass", hookFn)
+    
+    class "HookRemoveTest2" { value = 0 }
+    assertEquals(callCount, 1)  -- should not have increased
+end

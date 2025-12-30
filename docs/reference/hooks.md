@@ -11,6 +11,18 @@ simploo.hook:add("hookName", function(...)
 end)
 ```
 
+## Removing a Hook
+
+```lua
+-- Remove a specific hook by its callback function
+local myHook = function(instance) ... end
+simploo.hook:add("afterInstancerInstanceNew", myHook)
+simploo.hook:remove("afterInstancerInstanceNew", myHook)
+
+-- Remove all hooks for an event
+simploo.hook:remove("afterInstancerInstanceNew")
+```
+
 ## Available Hooks
 
 ### beforeInstancerInitClass
