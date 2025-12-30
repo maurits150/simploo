@@ -62,14 +62,14 @@ function instancemt:__index(key)
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            --if member.modifiers.private and self._callDepth == 0 then
-            --    error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
-            --end
+            if member.modifiers.private and (self._methodCallDepth[coroutine.running() or "main"] or 0) == 0 then
+                error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
+            end
         end
         --------development--------
 
         if member.modifiers.static and self._base then
-            return self._base._members[key].value_static
+            return self._base._members[key].value
         end
 
         return member.value
@@ -98,14 +98,14 @@ function instancemt:__newindex(key, value)
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            --if member.modifiers.private and self._callDepth == 0 then
-            --    error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
-            --end
+            if member.modifiers.private and (self._methodCallDepth[coroutine.running() or "main"] or 0) == 0 then
+                error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
+            end
         end
         --------development--------
 
         if member.modifiers.static and self._base then
-            self._base._members[key].value_static = value
+            self._base._members[key].value = value
         else
             member.value = value
         end

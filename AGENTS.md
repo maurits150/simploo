@@ -1,0 +1,3 @@
+- Performance is critical. Do not use `debug.getinfo` or other debug library functions in code paths that run during method calls (e.g., wrappers, metamethods). These are too slow for hot paths.
+- Tests do not need pcall wrappers - the test framework (menu.lua) handles errors. Only use pcall when testing that something should fail (e.g., assertFalse(success) after pcall).
+- Do NOT add `namespace ""` to test files - the test framework (menu.lua) reloads simploo fresh for each test file, so namespace state does not persist between files.

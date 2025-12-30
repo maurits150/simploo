@@ -4,9 +4,14 @@ simploo.util = util
 function util.duplicateTable(tbl, lookup)
     local copy = {}
 
+    -- Check if this table is a static member (has modifiers.static)
+    -- If so, we copy the structure but skip deep-copying the value
+    local isStaticMember = tbl.modifiers and tbl.modifiers.static
+
     for k, v in pairs(tbl) do
-        if k == "value_static" then
-            -- do nothing
+        -- Skip copying value for static members - it's accessed via _base anyway
+        if isStaticMember and k == "value" then
+            copy[k] = v
         elseif type(v) == "table" and k ~= "_base" then
             lookup = lookup or {}
             lookup[tbl] = copy

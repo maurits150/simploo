@@ -1,0 +1,5 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Lua LSP has a PERFORMANCE BUG: https://github.com/sst/opencode/issues/6310
+  "lsp": false
+}

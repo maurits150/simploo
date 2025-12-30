@@ -13,11 +13,12 @@ function instancer:initClass(class)
     baseInstance._name = class.name
     baseInstance._members = {}
 
-    --------development--------
+    -- Development mode only: track method call depth per coroutine for private access enforcement.
     if not simploo.config["production"] then
-        --baseInstance._callDepth = 0
+        baseInstance._methodCallDepth = {}
     end
-    --------development--------
+
+
 
     -- Copy members from provided parents
     for _, parentName in pairs(class.parents) do
@@ -49,13 +50,27 @@ function instancer:initClass(class)
         local baseMember = {}
         baseMember.owner = baseInstance
         baseMember.modifiers = formatMember.modifiers
+        baseMember.value = formatMember.value
 
-        if formatMember.modifiers.static then
-            baseMember.value_static = formatMember.value
-        else
-            baseMember.value = formatMember.value
+        -- Development mode only: wrap static functions to track call depth for private access enforcement.
+        -- (Non-static functions are wrapped in markInstanceRecursively during new())
+        if not simploo.config["production"] and formatMember.modifiers.static and type(baseMember.value) == "function" then
+            local fn = baseMember.value
+            baseMember.value = function(self, ...)
+                local thread = coroutine.running() or "main"
+                self._methodCallDepth[thread] = (self._methodCallDepth[thread] or 0) + 1
+
+                local success, ret = pcall(function(...) return {fn(self, ...)} end, ...)
+
+                self._methodCallDepth[thread] = self._methodCallDepth[thread] - 1
+
+                if not success then
+                    error(ret, 0)
+                end
+
+                return (unpack or table.unpack)(ret)
+            end
         end
-
 
         baseInstance._members[formatMemberName] = baseMember
     end
@@ -96,7 +111,7 @@ function instancer:registerBaseInstance(baseInstance)
     self:namespaceToTable(baseInstance._name, simploo.config["baseInstanceTable"], baseInstance)
 
     if baseInstance._members["__declare"] then
-        local fn = (baseInstance._members["__declare"].value_static or baseInstance._members["__declare"].value)
+        local fn = baseInstance._members["__declare"].value
         fn(baseInstance._members["__declare"].owner) -- no metamethod exists to call member directly
     end
 end
