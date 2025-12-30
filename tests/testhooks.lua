@@ -50,3 +50,37 @@ function Test:testHooksAfterNewInstance()
 		print(instance)
 	end)
 end
+
+function Test:testHookCanModifyInPlace()
+    -- Test that multiple hooks can modify the same object
+    simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
+        parserOutput.hookValue = 10
+    end)
+    
+    simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
+        -- Second hook sees first hook's modification
+        assertEquals(parserOutput.hookValue, 10)
+        parserOutput.hookValue = 20
+    end)
+    
+    class "HookModifyTest" {
+        value = 0;
+    }
+end
+
+function Test:testHookReturnValueChaining()
+    -- Test that hook return values are passed to subsequent hooks
+    simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
+        parserOutput.chainTest = 100
+        return parserOutput
+    end)
+    
+    simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
+        assertEquals(parserOutput.chainTest, 100)
+        return parserOutput
+    end)
+    
+    class "HookChainTest" {
+        value = 0;
+    }
+end
