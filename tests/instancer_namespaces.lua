@@ -80,3 +80,29 @@ function Test:testUsingsForNamespaceTwice()
 
     class "C" extends "B" {}
 end
+
+function Test:testClassCanReferenceSelf()
+    namespace "selfref"
+
+    class "Vector" {
+        x = 0;
+        y = 0;
+
+        __construct = function(self, x, y)
+            self.x = x or 0
+            self.y = y or 0
+        end;
+
+        add = function(self, other)
+            -- Class should be able to reference itself by short name
+            return Vector.new(self.x + other.x, self.y + other.y)
+        end;
+    }
+
+    local v1 = selfref.Vector.new(1, 2)
+    local v2 = selfref.Vector.new(3, 4)
+    local v3 = v1:add(v2)
+
+    assertEquals(v3.x, 4)
+    assertEquals(v3.y, 6)
+end

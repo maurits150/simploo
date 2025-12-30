@@ -142,7 +142,7 @@ function Test:testMemoryLeakViaUsingsFENVReferencingOldClasses()
 
     local endMemory = collectgarbage("count")
 
-    local above5MBused = (endMemory - startMemory) > 500
+    local above5MBused = (endMemory - startMemory) > 5000
     if above5MBused then
         print("START MEMORY", startMemory, "END MEMORY", endMemory)
     end

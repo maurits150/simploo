@@ -22,3 +22,4 @@ memoryleaks.lua
 declare.lua
 instancer_testshadowing.lua
 fenvupdates.lua
+parser_internal_fields.lua

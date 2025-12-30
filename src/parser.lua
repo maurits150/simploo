@@ -19,28 +19,32 @@ parser.modifiers = {"public", "private", "protected", "static", "const", "meta",
 
 function parser:new()
     local object = {}
-    object.ns = ""
-    object.name = ""
-    object.parents = {}
-    object.members = {}
-    object.usings = {}
 
-    object.onFinishedData = false
-    object.onFinished = function(self, output)
-        self.onFinishedData = output
-    end
+    -- Store all internal state in a single _simploo table to avoid conflicts with user-defined
+    -- members like 'name', 'parents', 'members', etc. This is important because __newindex only
+    -- triggers when a key doesn't exist on the object. If we stored internal fields directly,
+    -- `c.public.name = "value"` would overwrite the internal field instead of going through
+    -- __newindex to add it as a class member.
+    object._simploo = {
+        ns = "",
+        name = "",
+        parents = {},
+        members = {},
+        usings = {},
+        onFinishedData = false
+    }
 
     function object:setOnFinished(fn)
-        if self.onFinishedData then
+        if self._simploo.onFinishedData then
             -- Directly call the finished function if we already have a result available
-            fn(self, self.onFinishedData)
+            fn(self._simploo)
         else
-            self.onFinished = fn
+            self._simploo.onFinished = fn
         end
     end
 
     function object:class(name, classOperation)
-        self.name = name
+        self._simploo.name = name
 
         for k, v in pairs(classOperation or {}) do
             if self[k] then
@@ -53,7 +57,7 @@ function parser:new()
 
     function object:extends(parentsString)
         for name in string.gmatch(parentsString, "([^,^%s*]+)") do
-            table.insert(self.parents, name)
+            table.insert(self._simploo.parents, name)
         end
     end
 
@@ -62,18 +66,11 @@ function parser:new()
             self:addMemberRecursive(classContent)
         end
 
-        local output = {}
-        output.name = self.name
-        output.parents = self.parents
-        output.members = self.members
-        output.usings = self.usings
-
-
         do
             -- Create a table with localized class names as key, and a reference to the full class name as value.
             -- When we want to access a locallized class, we look-up the full class name, and resolve that in the baseInstanceTable.
             local resolvedUsings = {}
-            for _, using in pairs(output.usings) do
+            for _, using in pairs(self._simploo.usings) do
                 if using["path"]:sub(-1) == "*" then
                     -- Wildcard import, add quick reference to the whole table
                     local wildcardTable = parser:deepLookup(simploo.config["baseInstanceTable"], using["path"])
@@ -98,7 +95,11 @@ function parser:new()
                 end
             end
 
-            output.resolved_usings = resolvedUsings
+            -- Add the class itself to resolvedUsings so it can reference itself by short name
+            local shortName = self._simploo.name:match("[^%.]+$") or self._simploo.name
+            resolvedUsings[shortName] = self._simploo.name
+
+            self._simploo.resolved_usings = resolvedUsings
 
             -- Create a meta table that intercepts all lookups of global variables inside class/instance functions.
             local mt = {}
@@ -117,14 +118,17 @@ function parser:new()
 
 
             -- Add usings environment to class functions
-            for _, memberData in pairs(output.members) do
+            for _, memberData in pairs(self._simploo.members) do
                 if type(memberData.value) == "function" then
                     simploo.util.setFunctionEnvironment(memberData.value, setmetatable({}, mt))
                 end
             end
         end
 
-        self:onFinished(output)
+        if self._simploo.onFinished then
+            self._simploo.onFinished(self._simploo)
+        end
+        self._simploo.onFinishedData = true
     end
 
     -- Recursively compile and pass through all members and modifiers found in a tree like structured table.
@@ -152,23 +156,23 @@ function parser:new()
             memberValue = nil
         end
 		
-        self["members"][memberName] = {
+        self._simploo.members[memberName] = {
             value = memberValue,
             modifiers = {}
         }
 
         for _, modifier in pairs(modifiers or {}) do
-            self["members"][memberName].modifiers[modifier] = true
+            self._simploo.members[memberName].modifiers[modifier] = true
         end
     end
 
     function object:namespace(namespace)
-        self.ns = namespace
-        self.name = namespace .. "." .. self.name
+        self._simploo.ns = namespace
+        self._simploo.name = namespace .. "." .. self._simploo.name
     end
 
     function object:using(using)
-        table.insert(self.usings, using)
+        table.insert(self._simploo.usings, using)
     end
 
     local meta = {}

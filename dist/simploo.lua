@@ -1,39 +1,20 @@
 --[[
-	SIMPLOO - Simple Lua Object Orientation
-
-	The MIT License (MIT)
-	Copyright (c) 2016 maurits.tv
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the \"Software\"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in
-	all copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-	THE SOFTWARE.
-]]
+SIMPLOO]]
 
 ----
 ---- init.lua
 ----
 
+local config = simploo and simploo.config or {} -- keep configs that were defined earlier
+
 simploo = {}
+simploo.config = config
 
 ----
 ---- config.lua
 ----
 
-simploo.config = {}
+local config = {}
 
 --
 -- Production Mode
@@ -43,7 +24,7 @@ simploo.config = {}
 -- Default: false
 --
 
-simploo.config["production"] = false
+config["production"] = false
 
 --
 -- Expose Syntax
@@ -53,7 +34,7 @@ simploo.config["production"] = false
 -- Default: true
 --
 
-simploo.config["exposeSyntax"] = true
+config["exposeSyntax"] = true
 
 --
 -- Class Hotswapping
@@ -61,7 +42,7 @@ simploo.config["exposeSyntax"] = true
 -- Description: When defining a class a 2nd time, automatically update all the earlier instances of a class with newly added members. Will slightly increase class instantiation time and memory consumption.
 -- Default: false
 --
-simploo.config["classHotswap"] = false
+config["classHotswap"] = false
 
 --
 -- Base instance table
@@ -70,7 +51,7 @@ simploo.config["classHotswap"] = false
 -- Default: _G
 --
 
-simploo.config["baseInstanceTable"] = _G
+config["baseInstanceTable"] = _G
 
 --
 -- Custom modifiers
@@ -79,7 +60,17 @@ simploo.config["baseInstanceTable"] = _G
 -- Default: {}
 --
 
-simploo.config["customModifiers"] = {}
+config["customModifiers"] = {}
+
+--
+-- Apply config variables that aren't defined already.
+--
+for k, v in pairs(config) do
+    if not simploo.config[k] then
+        simploo.config[k] = v
+    end
+end
+
 
 ----
 ---- util.lua
@@ -91,9 +82,14 @@ simploo.util = util
 function util.duplicateTable(tbl, lookup)
     local copy = {}
 
+    -- Check if this table is a static member (has modifiers.static)
+    -- If so, we copy the structure but skip deep-copying the value
+    local isStaticMember = tbl.modifiers and tbl.modifiers.static
+
     for k, v in pairs(tbl) do
-        if k == "value_static" then
-            -- do nothing
+        -- Skip copying value for static members - it's accessed via _base anyway
+        if isStaticMember and k == "value" then
+            copy[k] = v
         elseif type(v) == "table" and k ~= "_base" then
             lookup = lookup or {}
             lookup[tbl] = copy
@@ -262,6 +258,14 @@ function instancemethods:instance_of(otherInstance)
         error("passed instance is not a class")
     end
 
+    -- Check if self is the same class as otherInstance
+    if self == otherInstance or
+            self == otherInstance._base or
+            self._base == otherInstance or
+            self._base == otherInstance._base then
+        return true
+    end
+
     for memberName, member in pairs(self._members) do
         if member.modifiers.parent then
             if member.value == otherInstance or
@@ -281,8 +285,10 @@ end
 function instancemethods:get_parents()
     local t = {}
 
-    for _, parentName in pairs(instance.parents) do
-        t[parentName] = self[parentName]
+    for memberName, member in pairs(self._members) do
+        if member.modifiers.parent then
+            t[memberName] = member.value
+        end
     end
 
     return t
@@ -309,14 +315,14 @@ function instancemt:__index(key)
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            if member.modifiers.private and self._callDepth == 0 then
+            if member.modifiers.private and (self._methodCallDepth[coroutine.running() or "main"] or 0) == 0 then
                 error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
             end
         end
         --------development--------
 
         if member.modifiers.static and self._base then
-            return self._base._members[key].value_static
+            return self._base._members[key].value
         end
 
         return member.value
@@ -345,14 +351,14 @@ function instancemt:__newindex(key, value)
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            if member.modifiers.private and self._callDepth == 0 then
+            if member.modifiers.private and (self._methodCallDepth[coroutine.running() or "main"] or 0) == 0 then
                 error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
             end
         end
         --------development--------
 
         if member.modifiers.static and self._base then
-            self._base._members[key].value_static = value
+            self._base._members[key].value = value
         else
             member.value = value
         end
@@ -439,72 +445,63 @@ end
 local baseinstancemethods = simploo.util.duplicateTable(simploo.instancemethods)
 simploo.baseinstancemethods = baseinstancemethods
 
+
+
 local function markInstanceRecursively(instance, ogchild)
     setmetatable(instance, simploo.instancemt)
+
+    -- Development mode only: track method call depth per coroutine for private access enforcement.
+    if not simploo.config["production"] then
+        instance._methodCallDepth = {}
+    end
 
     for _, memberData in pairs(instance._members) do
         if memberData.modifiers.parent then
             markInstanceRecursively(memberData.value, ogchild)
         end
 
-
         -- Assign a wrapper that always corrects 'self' to the local instance.
         -- This is the only way to make shadowing work correctly (I think).
+        -- Note: static members are not copied to instances, so we only handle non-static here.
+        --
+        -- In development mode, we also track call depth for private member access enforcement.
+        -- The _methodCallDepth increment must happen AFTER the self-correction, so we track
+        -- on the correct instance (the one that will be used as 'self' inside the function).
         if memberData.value and type(memberData.value) == "function" then
             local fn = memberData.value
-            memberData.value = function(selfOrData, ...)
-                if selfOrData == ogchild then
-                    return fn(instance, ...)
-                else
-                    return fn(selfOrData, ...)
-                end
-            end
-        elseif memberData.value_static and type(memberData.value_static) == "function" then -- value_static was a mistake..
-            local fn = memberData.value_static
-            memberData.value_static = function(potentialSelf, ...)
-                if potentialSelf == ogchild then
-                    return fn(instance, ...)
-                else
-                    return fn(...)
-                end
-            end
-        end
 
-        -- When in development mode, add another wrapper layer that checks for private access.
-        if not simploo.config["production"] then
-            if memberData.value and type(memberData.value) == "function" then
-                -- assign a wrapper that always corrects 'self' to the local instance
-                -- this is a somewhat hacky fix for shadowing
-                local fn = memberData.value
-                memberData.value = function(...)
-                    -- TODO: CHECK THE OWNERSHIP STACK
-                    -- use ogchild to keep the state across all parent stuffs
-                    -- maybe make it coroutine compatible somehow?
+            if not simploo.config["production"] then
+                -- Development mode: wrap with self-correction AND call depth tracking
+                memberData.value = function(selfOrData, ...)
+                    -- Determine the actual self that will be used
+                    local actualSelf = (selfOrData == ogchild) and instance or selfOrData
 
-                    -- TODO: BUILD AN OWNERSHIP STACK
+                    -- If called without self (using . instead of :), skip tracking
+                    if type(actualSelf) ~= "table" or not actualSelf._methodCallDepth then
+                        return fn(actualSelf, ...)
+                    end
 
-                    local ret = {fn(...)}
+                    local thread = coroutine.running() or "main"
+                    actualSelf._methodCallDepth[thread] = (actualSelf._methodCallDepth[thread] or 0) + 1
 
-                    -- TODO: POP AN OWNERSHIP STACK
+                    local success, ret = pcall(function(...) return {fn(actualSelf, ...)} end, ...)
+
+                    actualSelf._methodCallDepth[thread] = actualSelf._methodCallDepth[thread] - 1
+
+                    if not success then
+                        error(ret, 0)
+                    end
 
                     return (unpack or table.unpack)(ret)
                 end
-            elseif memberData.value_static and type(memberData.value_static) == "function" then -- value_static was a mistake..
-                -- assign a wrapper that always corrects 'self' to the local instance
-                -- this is a somewhat hacky fix for shadowing
-                local fn = memberData.value_static
-                memberData.value_static = function(potentialSelf, ...)
-                    -- TODO: CHECK THE OWNERSHIP STACK
-                    -- use ogchild to keep the state across all parent stuffs
-                    -- maybe make it coroutine compatible somehow?
-
-                    -- TODO: BUILD AN OWNERSHIP STACK
-
-                    local ret = {fn(...)}
-
-                    -- TODO: POP AN OWNERSHIP STACK
-
-                    return (unpack or table.unpack)(ret)
+            else
+                -- Production mode: wrap with self-correction only
+                memberData.value = function(selfOrData, ...)
+                    if selfOrData == ogchild then
+                        return fn(instance, ...)
+                    else
+                        return fn(selfOrData, ...)
+                    end
                 end
             end
         end
@@ -598,11 +595,12 @@ function instancer:initClass(class)
     baseInstance._name = class.name
     baseInstance._members = {}
 
-    --------development--------
+    -- Development mode only: track method call depth per coroutine for private access enforcement.
     if not simploo.config["production"] then
-        baseInstance._callDepth = 0
+        baseInstance._methodCallDepth = {}
     end
-    --------development--------
+
+
 
     -- Copy members from provided parents
     for _, parentName in pairs(class.parents) do
@@ -625,7 +623,22 @@ function instancer:initClass(class)
 
         -- Add variables from parents to child
         for parentMemberName, parentMember in pairs(parentBaseInstance._members) do
-            baseInstance._members[parentMemberName] = parentMember
+            local existingMember = baseInstance._members[parentMemberName]
+            -- Check for ambiguous members: same name from different parents (not parent references).
+            -- We don't compare values - even if they're equal now, they could diverge later,
+            -- and the child should explicitly choose which parent's member to use (via self.ParentName.member).
+            if existingMember
+                    and not existingMember.modifiers.parent
+                    and not parentMember.modifiers.parent then
+                -- Mark as ambiguous - child must override to resolve
+                baseInstance._members[parentMemberName] = {
+                    owner = baseInstance,
+                    value = nil,
+                    modifiers = { ambiguous = true }
+                }
+            else
+                baseInstance._members[parentMemberName] = parentMember
+            end
         end
     end
 
@@ -634,13 +647,27 @@ function instancer:initClass(class)
         local baseMember = {}
         baseMember.owner = baseInstance
         baseMember.modifiers = formatMember.modifiers
+        baseMember.value = formatMember.value
 
-        if formatMember.modifiers.static then
-            baseMember.value_static = formatMember.value
-        else
-            baseMember.value = formatMember.value
+        -- Development mode only: wrap static functions to track call depth for private access enforcement.
+        -- (Non-static functions are wrapped in markInstanceRecursively during new())
+        if not simploo.config["production"] and formatMember.modifiers.static and type(baseMember.value) == "function" then
+            local fn = baseMember.value
+            baseMember.value = function(self, ...)
+                local thread = coroutine.running() or "main"
+                self._methodCallDepth[thread] = (self._methodCallDepth[thread] or 0) + 1
+
+                local success, ret = pcall(function(...) return {fn(self, ...)} end, ...)
+
+                self._methodCallDepth[thread] = self._methodCallDepth[thread] - 1
+
+                if not success then
+                    error(ret, 0)
+                end
+
+                return (unpack or table.unpack)(ret)
+            end
         end
-
 
         baseInstance._members[formatMemberName] = baseMember
     end
@@ -681,7 +708,7 @@ function instancer:registerBaseInstance(baseInstance)
     self:namespaceToTable(baseInstance._name, simploo.config["baseInstanceTable"], baseInstance)
 
     if baseInstance._members["__declare"] then
-        local fn = (baseInstance._members["__declare"].value_static or baseInstance._members["__declare"].value)
+        local fn = baseInstance._members["__declare"].value
         fn(baseInstance._members["__declare"].owner) -- no metamethod exists to call member directly
     end
 end
@@ -708,7 +735,7 @@ end
 
 -- Get the class name from a full path
 function instancer:classNameFromFullPath(fullPath)
-    return string.match(fullPath, ".*(.+)")
+    return string.match(fullPath, ".*%.(.+)") or fullPath
 end
 
 ----
@@ -736,28 +763,32 @@ parser.modifiers = {"public", "private", "protected", "static", "const", "meta",
 
 function parser:new()
     local object = {}
-    object.ns = ""
-    object.name = ""
-    object.parents = {}
-    object.members = {}
-    object.usings = {}
 
-    object.onFinishedData = false
-    object.onFinished = function(self, output)
-        self.onFinishedData = output
-    end
+    -- Store all internal state in a single _simploo table to avoid conflicts with user-defined
+    -- members like 'name', 'parents', 'members', etc. This is important because __newindex only
+    -- triggers when a key doesn't exist on the object. If we stored internal fields directly,
+    -- `c.public.name = "value"` would overwrite the internal field instead of going through
+    -- __newindex to add it as a class member.
+    object._simploo = {
+        ns = "",
+        name = "",
+        parents = {},
+        members = {},
+        usings = {},
+        onFinishedData = false
+    }
 
     function object:setOnFinished(fn)
-        if self.onFinishedData then
+        if self._simploo.onFinishedData then
             -- Directly call the finished function if we already have a result available
-            fn(self, self.onFinishedData)
+            fn(self._simploo)
         else
-            self.onFinished = fn
+            self._simploo.onFinished = fn
         end
     end
 
     function object:class(name, classOperation)
-        self.name = name
+        self._simploo.name = name
 
         for k, v in pairs(classOperation or {}) do
             if self[k] then
@@ -770,7 +801,7 @@ function parser:new()
 
     function object:extends(parentsString)
         for name in string.gmatch(parentsString, "([^,^%s*]+)") do
-            table.insert(self.parents, name)
+            table.insert(self._simploo.parents, name)
         end
     end
 
@@ -779,18 +810,11 @@ function parser:new()
             self:addMemberRecursive(classContent)
         end
 
-        local output = {}
-        output.name = self.name
-        output.parents = self.parents
-        output.members = self.members
-        output.usings = self.usings
-
-
         do
             -- Create a table with localized class names as key, and a reference to the full class name as value.
             -- When we want to access a locallized class, we look-up the full class name, and resolve that in the baseInstanceTable.
             local resolvedUsings = {}
-            for _, using in pairs(output.usings) do
+            for _, using in pairs(self._simploo.usings) do
                 if using["path"]:sub(-1) == "*" then
                     -- Wildcard import, add quick reference to the whole table
                     local wildcardTable = parser:deepLookup(simploo.config["baseInstanceTable"], using["path"])
@@ -815,7 +839,11 @@ function parser:new()
                 end
             end
 
-            output.resolved_usings = resolvedUsings
+            -- Add the class itself to resolvedUsings so it can reference itself by short name
+            local shortName = self._simploo.name:match("[^%.]+$") or self._simploo.name
+            resolvedUsings[shortName] = self._simploo.name
+
+            self._simploo.resolved_usings = resolvedUsings
 
             -- Create a meta table that intercepts all lookups of global variables inside class/instance functions.
             local mt = {}
@@ -834,14 +862,17 @@ function parser:new()
 
 
             -- Add usings environment to class functions
-            for _, memberData in pairs(output.members) do
+            for _, memberData in pairs(self._simploo.members) do
                 if type(memberData.value) == "function" then
                     simploo.util.setFunctionEnvironment(memberData.value, setmetatable({}, mt))
                 end
             end
         end
 
-        self:onFinished(output)
+        if self._simploo.onFinished then
+            self._simploo.onFinished(self._simploo)
+        end
+        self._simploo.onFinishedData = true
     end
 
     -- Recursively compile and pass through all members and modifiers found in a tree like structured table.
@@ -869,23 +900,23 @@ function parser:new()
             memberValue = nil
         end
 		
-        self["members"][memberName] = {
+        self._simploo.members[memberName] = {
             value = memberValue,
             modifiers = {}
         }
 
         for _, modifier in pairs(modifiers or {}) do
-            self["members"][memberName].modifiers[modifier] = true
+            self._simploo.members[memberName].modifiers[modifier] = true
         end
     end
 
     function object:namespace(namespace)
-        self.ns = namespace
-        self.name = namespace .. "." .. self.name
+        self._simploo.ns = namespace
+        self._simploo.name = namespace .. "." .. self._simploo.name
     end
 
     function object:using(using)
-        table.insert(self.usings, using)
+        table.insert(self._simploo.usings, using)
     end
 
     local meta = {}
@@ -936,7 +967,7 @@ function syntax.class(className, classOperation)
     end
 
     simploo.parser.instance = simploo.parser:new(onFinished)
-    simploo.parser.instance:setOnFinished(function(self, parserOutput)
+    simploo.parser.instance:setOnFinished(function(parserOutput)
         -- Set parser instance to nil first, before calling the instancer
 		-- That means that if the instancer errors out, at least the bugging instance is cleared and not gonna be used again.
         simploo.parser.instance = nil

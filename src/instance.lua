@@ -15,6 +15,14 @@ function instancemethods:instance_of(otherInstance)
         error("passed instance is not a class")
     end
 
+    -- Check if self is the same class as otherInstance
+    if self == otherInstance or
+            self == otherInstance._base or
+            self._base == otherInstance or
+            self._base == otherInstance._base then
+        return true
+    end
+
     for memberName, member in pairs(self._members) do
         if member.modifiers.parent then
             if member.value == otherInstance or
@@ -34,8 +42,10 @@ end
 function instancemethods:get_parents()
     local t = {}
 
-    for _, parentName in pairs(instance.parents) do
-        t[parentName] = self[parentName]
+    for memberName, member in pairs(self._members) do
+        if member.modifiers.parent then
+            t[memberName] = member.value
+        end
     end
 
     return t

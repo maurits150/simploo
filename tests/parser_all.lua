@@ -1,21 +1,21 @@
 simploo.instancer = nil -- Disable the instancer for this test
 
 function Test:testParserOutput()
-    function assertParsers(parser, output)
+    function assertParsers(output)
         assertEquals(output.name, "Child")
-        assertStrContains(table.concat(output.parentNames, ","), "Parent1")
-        assertStrContains(table.concat(output.parentNames, ","), "Parent2")
+        assertStrContains(table.concat(output.parents, ","), "Parent1")
+        assertStrContains(table.concat(output.parents, ","), "Parent2")
 
-        assertEquals(output.variables.varOne.modifiers["public"], true)
+        assertEquals(output.members.varOne.modifiers["public"], true)
 
-        assertEquals(output.variables.varTwo.modifiers["public"], true)
-        assertEquals(output.variables.varTwo.modifiers["static"], true)
+        assertEquals(output.members.varTwo.modifiers["public"], true)
+        assertEquals(output.members.varTwo.modifiers["static"], true)
 
-        assertEquals(output.variables.varThree.modifiers["private"], true)
+        assertEquals(output.members.varThree.modifiers["private"], true)
 
-        assertEquals(output.functions.fnTest.modifiers["public"], true)
-        assertEquals(type(output.functions.fnTest.value), "function")
-        assertEquals(output.functions.fnTest.value(), "data")
+        assertEquals(output.members.fnTest.modifiers["public"], true)
+        assertEquals(type(output.members.fnTest.value), "function")
+        assertEquals(output.members.fnTest.value(), "data")
     end
 
     -- Parse two test classes

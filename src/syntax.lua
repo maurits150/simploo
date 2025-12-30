@@ -11,7 +11,7 @@ function syntax.class(className, classOperation)
     end
 
     simploo.parser.instance = simploo.parser:new(onFinished)
-    simploo.parser.instance:setOnFinished(function(self, parserOutput)
+    simploo.parser.instance:setOnFinished(function(parserOutput)
         -- Set parser instance to nil first, before calling the instancer
 		-- That means that if the instancer errors out, at least the bugging instance is cleared and not gonna be used again.
         simploo.parser.instance = nil

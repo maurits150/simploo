@@ -1,0 +1,49 @@
+site_name: SIMPLOO Documentation
+site_description: Simple Lua Object Orientation - A class-based OOP library for Lua
+site_url: https://github.com/maurits150/simploo
+
+theme:
+  name: material
+  features:
+    - content.tabs.link
+    - content.code.copy
+    - navigation.sections
+    - navigation.expand
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Basics:
+    - basics/index.md
+    - Classes: basics/classes.md
+    - Members: basics/members.md
+    - Constructors: basics/constructors.md
+    - Instances: basics/instances.md
+    - Null Values: basics/null-values.md
+  - Modifiers:
+    - modifiers/index.md
+    - Access Modifiers: modifiers/access.md
+    - Static: modifiers/static.md
+    - Other Modifiers: modifiers/other.md
+  - Advanced:
+    - advanced/index.md
+    - Inheritance: advanced/inheritance.md
+    - Namespaces: advanced/namespaces.md
+    - Metamethods: advanced/metamethods.md
+    - Serialization: advanced/serialization.md
+    - Hotswap: advanced/hotswap.md
+    - Custom Modifiers: advanced/custom-modifiers.md
+  - Reference:
+    - reference/index.md
+    - Configuration: reference/config.md
+    - Hooks: reference/hooks.md
+    - Instance Methods: reference/instance-methods.md

@@ -41,7 +41,22 @@ function instancer:initClass(class)
 
         -- Add variables from parents to child
         for parentMemberName, parentMember in pairs(parentBaseInstance._members) do
-            baseInstance._members[parentMemberName] = parentMember
+            local existingMember = baseInstance._members[parentMemberName]
+            -- Check for ambiguous members: same name from different parents (not parent references).
+            -- We don't compare values - even if they're equal now, they could diverge later,
+            -- and the child should explicitly choose which parent's member to use (via self.ParentName.member).
+            if existingMember
+                    and not existingMember.modifiers.parent
+                    and not parentMember.modifiers.parent then
+                -- Mark as ambiguous - child must override to resolve
+                baseInstance._members[parentMemberName] = {
+                    owner = baseInstance,
+                    value = nil,
+                    modifiers = { ambiguous = true }
+                }
+            else
+                baseInstance._members[parentMemberName] = parentMember
+            end
         end
     end
 
@@ -138,5 +153,5 @@ end
 
 -- Get the class name from a full path
 function instancer:classNameFromFullPath(fullPath)
-    return string.match(fullPath, ".*(.+)")
+    return string.match(fullPath, ".*%.(.+)") or fullPath
 end
