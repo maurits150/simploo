@@ -13,10 +13,11 @@ function instancer:initClass(class)
     baseInstance._name = class.name
     baseInstance._members = {}
 
+    -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
     -- Development mode only: track method call depth per coroutine for private access enforcement.
-    if not simploo.config["production"] then
-        baseInstance._methodCallDepth = {}
-    end
+    -- if not simploo.config["production"] then
+    --     baseInstance._methodCallDepth = {}
+    -- end
 
 
 
@@ -67,25 +68,28 @@ function instancer:initClass(class)
         baseMember.modifiers = formatMember.modifiers
         baseMember.value = formatMember.value
 
+        -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
         -- Development mode only: wrap static functions to track call depth for private access enforcement.
         -- (Non-static functions are wrapped in markInstanceRecursively during new())
-        if not simploo.config["production"] and formatMember.modifiers.static and type(baseMember.value) == "function" then
-            local fn = baseMember.value
-            baseMember.value = function(self, ...)
-                local thread = coroutine.running() or "main"
-                self._methodCallDepth[thread] = (self._methodCallDepth[thread] or 0) + 1
-
-                local success, ret = pcall(function(...) return {fn(self, ...)} end, ...)
-
-                self._methodCallDepth[thread] = self._methodCallDepth[thread] - 1
-
-                if not success then
-                    error(ret, 0)
-                end
-
-                return (unpack or table.unpack)(ret)
-            end
-        end
+        -- Needs rework to support Java-like class-scoped private access with polymorphism.
+        --
+        -- if not simploo.config["production"] and formatMember.modifiers.static and type(baseMember.value) == "function" then
+        --     local fn = baseMember.value
+        --     baseMember.value = function(self, ...)
+        --         local thread = coroutine.running() or "main"
+        --         self._methodCallDepth[thread] = (self._methodCallDepth[thread] or 0) + 1
+        --
+        --         local success, ret = pcall(function(...) return {fn(self, ...)} end, ...)
+        --
+        --         self._methodCallDepth[thread] = self._methodCallDepth[thread] - 1
+        --
+        --         if not success then
+        --             error(ret, 0)
+        --         end
+        --
+        --         return (unpack or table.unpack)(ret)
+        --     end
+        -- end
 
         baseInstance._members[formatMemberName] = baseMember
     end

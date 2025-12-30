@@ -311,13 +311,17 @@ function instancemt:__index(key)
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
             end
 
-            if member.modifiers.private and member.owner ~= self then
-                error(string.format("class %s: accessing private member %s", tostring(self), key))
-            end
-
-            if member.modifiers.private and (self._methodCallDepth[coroutine.running() or "main"] or 0) == 0 then
-                error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
-            end
+            -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
+            -- This used _methodCallDepth to track if we're inside a method call.
+            -- Needs rework to support Java-like class-scoped private access with polymorphism.
+            --
+            -- if member.modifiers.private and member.owner ~= self then
+            --     error(string.format("class %s: accessing private member %s", tostring(self), key))
+            -- end
+            --
+            -- if member.modifiers.private and (self._methodCallDepth[coroutine.running() or "main"] or 0) == 0 then
+            --     error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
+            -- end
         end
         --------development--------
 
@@ -347,13 +351,17 @@ function instancemt:__newindex(key, value)
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
             end
 
-            if member.modifiers.private and member.owner ~= self then
-                error(string.format("class %s: accessing private member %s", tostring(self), key))
-            end
-
-            if member.modifiers.private and (self._methodCallDepth[coroutine.running() or "main"] or 0) == 0 then
-                error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
-            end
+            -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
+            -- This used _methodCallDepth to track if we're inside a method call.
+            -- Needs rework to support Java-like class-scoped private access with polymorphism.
+            --
+            -- if member.modifiers.private and member.owner ~= self then
+            --     error(string.format("class %s: accessing private member %s", tostring(self), key))
+            -- end
+            --
+            -- if member.modifiers.private and (self._methodCallDepth[coroutine.running() or "main"] or 0) == 0 then
+            --     error(string.format("class %s: accessing private member %s from outside", tostring(self), key))
+            -- end
         end
         --------development--------
 
@@ -450,58 +458,69 @@ simploo.baseinstancemethods = baseinstancemethods
 local function markInstanceRecursively(instance, ogchild)
     setmetatable(instance, simploo.instancemt)
 
+    -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
     -- Development mode only: track method call depth per coroutine for private access enforcement.
-    if not simploo.config["production"] then
-        instance._methodCallDepth = {}
-    end
+    -- if not simploo.config["production"] then
+    --     instance._methodCallDepth = {}
+    -- end
 
     for _, memberData in pairs(instance._members) do
         if memberData.modifiers.parent then
             markInstanceRecursively(memberData.value, ogchild)
         end
 
-        -- Assign a wrapper that always corrects 'self' to the local instance.
-        -- This is the only way to make shadowing work correctly (I think).
-        -- Note: static members are not copied to instances, so we only handle non-static here.
-        --
-        -- In development mode, we also track call depth for private member access enforcement.
-        -- The _methodCallDepth increment must happen AFTER the self-correction, so we track
-        -- on the correct instance (the one that will be used as 'self' inside the function).
+        -- Wrap methods to support polymorphism: when called on the child instance,
+        -- 'self' remains the child so method lookups find child's overrides.
         if memberData.value and type(memberData.value) == "function" then
             local fn = memberData.value
 
-            if not simploo.config["production"] then
-                -- Development mode: wrap with self-correction AND call depth tracking
-                memberData.value = function(selfOrData, ...)
-                    -- Determine the actual self that will be used
-                    local actualSelf = (selfOrData == ogchild) and instance or selfOrData
+            -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
+            -- The old code had two paths: development mode with call depth tracking,
+            -- and production mode with just self-correction. Both used 'instance' 
+            -- (the parent) instead of 'ogchild' (the child), which broke polymorphism.
+            --
+            -- if not simploo.config["production"] then
+            --     -- Development mode: wrap with self-correction AND call depth tracking
+            --     memberData.value = function(selfOrData, ...)
+            --         -- Determine the actual self that will be used
+            --         local actualSelf = (selfOrData == ogchild) and instance or selfOrData
+            --
+            --         -- If called without self (using . instead of :), skip tracking
+            --         if type(actualSelf) ~= "table" or not actualSelf._methodCallDepth then
+            --             return fn(actualSelf, ...)
+            --         end
+            --
+            --         local thread = coroutine.running() or "main"
+            --         actualSelf._methodCallDepth[thread] = (actualSelf._methodCallDepth[thread] or 0) + 1
+            --
+            --         local success, ret = pcall(function(...) return {fn(actualSelf, ...)} end, ...)
+            --
+            --         actualSelf._methodCallDepth[thread] = actualSelf._methodCallDepth[thread] - 1
+            --
+            --         if not success then
+            --             error(ret, 0)
+            --         end
+            --
+            --         return (unpack or table.unpack)(ret)
+            --     end
+            -- else
+            --     -- Production mode: wrap with self-correction only
+            --     memberData.value = function(selfOrData, ...)
+            --         if selfOrData == ogchild then
+            --             return fn(instance, ...)  -- OLD: passed 'instance' (parent)
+            --         else
+            --             return fn(selfOrData, ...)
+            --         end
+            --     end
+            -- end
 
-                    -- If called without self (using . instead of :), skip tracking
-                    if type(actualSelf) ~= "table" or not actualSelf._methodCallDepth then
-                        return fn(actualSelf, ...)
-                    end
-
-                    local thread = coroutine.running() or "main"
-                    actualSelf._methodCallDepth[thread] = (actualSelf._methodCallDepth[thread] or 0) + 1
-
-                    local success, ret = pcall(function(...) return {fn(actualSelf, ...)} end, ...)
-
-                    actualSelf._methodCallDepth[thread] = actualSelf._methodCallDepth[thread] - 1
-
-                    if not success then
-                        error(ret, 0)
-                    end
-
-                    return (unpack or table.unpack)(ret)
-                end
-            else
-                -- Production mode: wrap with self-correction only
-                memberData.value = function(selfOrData, ...)
-                    if selfOrData == ogchild then
-                        return fn(instance, ...)
-                    else
-                        return fn(selfOrData, ...)
-                    end
+            -- NEW: Polymorphism-enabled wrapper - always pass ogchild so method lookups
+            -- find child's overrides. Private access will need a different mechanism.
+            memberData.value = function(selfOrData, ...)
+                if selfOrData == ogchild then
+                    return fn(ogchild, ...)  -- NEW: pass 'ogchild' (child) for polymorphism
+                else
+                    return fn(selfOrData, ...)
                 end
             end
         end
@@ -595,10 +614,11 @@ function instancer:initClass(class)
     baseInstance._name = class.name
     baseInstance._members = {}
 
+    -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
     -- Development mode only: track method call depth per coroutine for private access enforcement.
-    if not simploo.config["production"] then
-        baseInstance._methodCallDepth = {}
-    end
+    -- if not simploo.config["production"] then
+    --     baseInstance._methodCallDepth = {}
+    -- end
 
 
 
@@ -649,25 +669,28 @@ function instancer:initClass(class)
         baseMember.modifiers = formatMember.modifiers
         baseMember.value = formatMember.value
 
+        -- [OLD PRIVATE ACCESS CODE - COMMENTED OUT]
         -- Development mode only: wrap static functions to track call depth for private access enforcement.
         -- (Non-static functions are wrapped in markInstanceRecursively during new())
-        if not simploo.config["production"] and formatMember.modifiers.static and type(baseMember.value) == "function" then
-            local fn = baseMember.value
-            baseMember.value = function(self, ...)
-                local thread = coroutine.running() or "main"
-                self._methodCallDepth[thread] = (self._methodCallDepth[thread] or 0) + 1
-
-                local success, ret = pcall(function(...) return {fn(self, ...)} end, ...)
-
-                self._methodCallDepth[thread] = self._methodCallDepth[thread] - 1
-
-                if not success then
-                    error(ret, 0)
-                end
-
-                return (unpack or table.unpack)(ret)
-            end
-        end
+        -- Needs rework to support Java-like class-scoped private access with polymorphism.
+        --
+        -- if not simploo.config["production"] and formatMember.modifiers.static and type(baseMember.value) == "function" then
+        --     local fn = baseMember.value
+        --     baseMember.value = function(self, ...)
+        --         local thread = coroutine.running() or "main"
+        --         self._methodCallDepth[thread] = (self._methodCallDepth[thread] or 0) + 1
+        --
+        --         local success, ret = pcall(function(...) return {fn(self, ...)} end, ...)
+        --
+        --         self._methodCallDepth[thread] = self._methodCallDepth[thread] - 1
+        --
+        --         if not success then
+        --             error(ret, 0)
+        --         end
+        --
+        --         return (unpack or table.unpack)(ret)
+        --     end
+        -- end
 
         baseInstance._members[formatMemberName] = baseMember
     end

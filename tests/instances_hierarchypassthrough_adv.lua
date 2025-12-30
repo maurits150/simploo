@@ -1,15 +1,9 @@
 --[[
     Advanced hierarchy passthrough tests.
     
-    Tests that private member access works correctly in complex inheritance scenarios:
-    - Deep inheritance chains with constructor passthrough
-    - Parent methods accessing their own privates when called from child
-    - Multiple inheritance (diamond) with private members
-    - Method overriding with separate private members
-    
-    Note: Simploo uses a shadowing model where parent methods always operate on
-    their own instance, not the child instance. This means polymorphic behavior
-    (parent method calling child's overridden method) is NOT supported.
+    Tests that SIMPLOO follows Java-like semantics:
+    - Polymorphism works for methods (parent method calling self:x() finds child's override)
+    - Private fields are class-scoped (parent method accessing self.private finds parent's private)
 ]]
 
 -- Test that constructor calls can chain through multiple levels
@@ -69,14 +63,15 @@ function Test:testDeepHierarchyConstructorChain()
 
     local instance = Level3(10, 20, 30)
 
+    -- Each getter accesses its own class's private member
     assertEquals(instance:getValue1(), 10)
     assertEquals(instance:getValue2(), 20)
     assertEquals(instance:getValue3(), 30)
 end
 
 -- When a child calls a parent's method, and that method accesses
--- the parent's private member, it should work because the method
--- belongs to the parent and the shadowing wrapper corrects 'self'.
+-- the parent's private member, it should work because private
+-- access is class-scoped (Java-like behavior).
 function Test:testParentMethodAccessingOwnPrivate()
     class "Parent" {
         private {
@@ -85,7 +80,7 @@ function Test:testParentMethodAccessingOwnPrivate()
 
         public {
             getSecret = function(self)
-                return self.secret
+                return self.secret  -- Should access Parent's private
             end;
         }
     }
@@ -93,7 +88,7 @@ function Test:testParentMethodAccessingOwnPrivate()
     class "Child" extends "Parent" {
         public {
             callParentMethod = function(self)
-                return self:getSecret()
+                return self:getSecret()  -- Polymorphism finds Parent's method
             end;
         }
     }
@@ -102,10 +97,10 @@ function Test:testParentMethodAccessingOwnPrivate()
 
     local instance = Child.new()
 
-    -- Direct call to inherited method
+    -- Direct call to inherited method - accesses parent's private
     assertEquals(instance:getSecret(), "parent secret")
 
-    -- Call through child method
+    -- Call through child method - still accesses parent's private
     assertEquals(instance:callParentMethod(), "parent secret")
 end
 
@@ -148,7 +143,7 @@ function Test:testMultipleInheritancePrivates()
 
     local instance = MultiChild.new()
 
-    -- Each parent's method should access its own private
+    -- Each parent's method accesses its own private
     assertEquals(instance:getSecretA(), "A")
     assertEquals(instance:getSecretB(), "B")
 
@@ -156,8 +151,8 @@ function Test:testMultipleInheritancePrivates()
     assertEquals(instance:getBothSecrets(), "AB")
 end
 
--- Test that a child can override a parent method and access its own private,
--- while the parent's original method still accesses the parent's private.
+-- Test that a child can have a private with the same name as parent's private.
+-- Each class accesses its own (Java-like behavior).
 function Test:testChildOverridesParentMethod()
     class "OverrideParent" {
         private {
@@ -166,19 +161,19 @@ function Test:testChildOverridesParentMethod()
 
         public {
             getValue = function(self)
-                return self.value
+                return self.value  -- Accesses OverrideParent's private
             end;
         }
     }
 
     class "OverrideChild" extends "OverrideParent" {
         private {
-            value = "child value";
+            value = "child value";  -- Separate private, same name
         };
 
         public {
             getValue = function(self)
-                return self.value
+                return self.value  -- Accesses OverrideChild's private
             end;
 
             getParentValue = function(self)
@@ -191,25 +186,20 @@ function Test:testChildOverridesParentMethod()
 
     local instance = OverrideChild.new()
 
-    -- Child's getValue returns child's private
+    -- Child's getValue accesses child's private
     assertEquals(instance:getValue(), "child value")
 
-    -- Explicit call to parent's getValue returns parent's private
+    -- Explicit call to parent's getValue accesses parent's private
     assertEquals(instance:getParentValue(), "parent value")
 end
 
--- Test that polymorphic behavior (parent method calling child's overridden method)
--- is NOT supported in simploo. When a parent method calls self:someMethod(), and
--- the child has overridden someMethod(), the parent's version is called instead
--- because the shadowing wrapper corrects 'self' to the parent instance.
---
--- This is a design decision to make private member access work correctly with
--- inheritance - each class's methods operate on their own instance.
-function Test:testPolymorphismNotSupported()
+-- Test polymorphism: parent method calling self:method() finds child's override.
+-- This is the key difference from the old shadowing model.
+function Test:testPolymorphismSupported()
     class "PolyParent" {
         public {
             callOverridable = function(self)
-                return self:overridable()
+                return self:overridable()  -- Should find child's override
             end;
 
             overridable = function(self)
@@ -230,13 +220,10 @@ function Test:testPolymorphismNotSupported()
 
     local instance = PolyChild.new()
 
-    -- Direct call to overridable() returns child's version (child's method is found first)
-    local result = instance:overridable()
-    assertEquals(result, "child")
+    -- Direct call returns child's version
+    assertEquals(instance:overridable(), "child")
 
-    -- But when parent's callOverridable() calls self:overridable(),
-    -- it calls the PARENT's overridable(), not the child's.
-    -- This is because the shadowing wrapper corrects 'self' to the parent instance.
-    local result = instance:callOverridable()
-    assertEquals(result, "parent") -- NOT "child" - polymorphism not supported
+    -- Parent's callOverridable() calls self:overridable(),
+    -- which finds child's version (polymorphism!)
+    assertEquals(instance:callOverridable(), "child")
 end

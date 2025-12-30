@@ -1,5 +1,11 @@
-function Test:testHierarchyMemberPassthrough()
+--[[
+    Basic hierarchy passthrough test.
+    
+    Tests that parent's private members are accessible via parent's methods,
+    even when called on a child instance.
+]]
 
+function Test:testHierarchyMemberPassthrough()
     class "A" {
         __construct = function(self, a)
             self:SetRef(a);
@@ -11,11 +17,11 @@ function Test:testHierarchyMemberPassthrough()
 
         public {
             SetRef = function(self, a)
-                self.ref = a;
+                self.ref = a;  -- Accesses A's private
             end;
 
             GetRef = function(self)
-                return self.ref;
+                return self.ref;  -- Accesses A's private
             end
         }
     }
