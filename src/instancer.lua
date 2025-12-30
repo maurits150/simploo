@@ -60,14 +60,13 @@ function instancer:initClass(class)
         baseMember.modifiers = formatMember.modifiers
         baseMember.value = formatMember.value
 
-        -- Wrap static functions to track scope for private access enforcement
+        -- Wrap static functions to track scope for private/protected access
         if not simploo.config["production"] and formatMember.modifiers.static and type(baseMember.value) == "function" then
             local fn = baseMember.value
             local declaringClass = baseInstance
             baseMember.value = function(selfOrData, ...)
                 local prevScope = simploo.util.getScope()
                 simploo.util.setScope(declaringClass)
-
                 return simploo.util.restoreScope(prevScope, fn(selfOrData, ...))
             end
         end

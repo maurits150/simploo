@@ -9,27 +9,30 @@ local function markInstanceRecursively(instance, ogchild)
             markInstanceRecursively(memberData.value, ogchild)
         end
 
-        -- Wrap methods to support polymorphism and private access tracking.
-        -- When called on the child instance, 'self' remains the child so method lookups
-        -- find child's overrides. We also track the "scope" (declaring class) so private
-        -- member access can be checked correctly.
+        -- Wrap methods to support polymorphism and scope tracking for access control.
         if memberData.value and type(memberData.value) == "function" then
             local fn = memberData.value
             local declaringClass = memberData.owner  -- the class that defined this method
 
             if not simploo.config["production"] then
-                -- Development mode: track scope for private access checking
+                -- Development mode: track scope for private/protected access checking
                 memberData.value = function(selfOrData, ...)
-                    local prevScope = simploo.util.getScope()
-                    simploo.util.setScope(declaringClass)
-
-                    local actualSelf = (selfOrData == ogchild) and ogchild or selfOrData
-                    return simploo.util.restoreScope(prevScope, fn(actualSelf, ...))
+                    -- Check if called with : (self is instance) or . (self is first data arg)
+                    local isMethodCall = selfOrData == ogchild or selfOrData == instance
+                    
+                    if isMethodCall then
+                        local prevScope = simploo.util.getScope()
+                        simploo.util.setScope(declaringClass)
+                        return simploo.util.restoreScope(prevScope, fn(ogchild, ...))
+                    else
+                        -- Called with ., pass through data as-is
+                        return fn(selfOrData, ...)
+                    end
                 end
             else
-                -- Production mode: polymorphism only, no scope tracking
+                -- Production mode: polymorphism only, no access control
                 memberData.value = function(selfOrData, ...)
-                    if selfOrData == ogchild then
+                    if selfOrData == ogchild or selfOrData == instance then
                         return fn(ogchild, ...)
                     else
                         return fn(selfOrData, ...)

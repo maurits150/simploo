@@ -51,6 +51,22 @@ function instancemethods:get_parents()
     return t
 end
 
+-- Binds a function to the current scope, allowing callbacks to access private/protected members.
+-- Similar to JavaScript's Function.prototype.bind() but for scope instead of 'this'.
+-- Usage: self:onEvent(self:bind(function() print(self.secret) end))
+-- Note: In production mode, this is a no-op since scope tracking is disabled.
+function instancemethods:bind(fn)
+    if simploo.config["production"] then
+        return fn  -- No scope tracking in production, just return the function as-is
+    end
+    local capturedScope = simploo.util.getScope()
+    return function(...)
+        local prevScope = simploo.util.getScope()
+        simploo.util.setScope(capturedScope)
+        return simploo.util.restoreScope(prevScope, fn(...))
+    end
+end
+
 ---
 
 local instancemt = {}
@@ -59,36 +75,41 @@ instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__
 
 function instancemt:__index(key)
     local member = self._members[key]
+    local lookupInstance = self
 
-    if member then
+    --------development--------
+    if not simploo.config["production"] then
+        local scope = simploo.util.getScope()
+        
+        -- For private/protected, redirect lookup to scope's members.
+        -- This ensures parent methods access parent's privates, not child's.
+        if scope then
+            local scopeMember = scope._members[key]
+            if scopeMember and (scopeMember.modifiers.private or scopeMember.modifiers.protected) then
+                member = scopeMember
+                lookupInstance = scope
+            end
+        end
 
-        --------development--------
-        if not simploo.config["production"] then
+        if member then
             if member.modifiers.ambiguous then
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
             end
 
-            -- Private access check: only allowed if the current scope (executing method's class)
-            -- matches the class that owns the private member
-            if member.modifiers.private then
-                local scope = simploo.util.getScope()
-                if not scope or member.owner._name ~= scope._name then
-                    error(string.format("class %s: accessing private member %s", tostring(self), key))
-                end
+            if member.modifiers.private and (not scope or member.owner._name ~= scope._name) then
+                error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            -- Protected access check: allowed if scope is the owner class OR a subclass of it
-            if member.modifiers.protected then
-                local scope = simploo.util.getScope()
-                if not scope or not scope:instance_of(member.owner) then
-                    error(string.format("class %s: accessing protected member %s", tostring(self), key))
-                end
+            if member.modifiers.protected and (not scope or not scope:instance_of(member.owner)) then
+                error(string.format("class %s: accessing protected member %s", tostring(self), key))
             end
         end
-        --------development--------
+    end
+    --------development--------
 
-        if member.modifiers.static and self._base then
-            return self._base._members[key].value
+    if member then
+        if member.modifiers.static and lookupInstance._base then
+            return lookupInstance._base._members[key].value
         end
 
         return member.value
@@ -105,35 +126,41 @@ end
 
 function instancemt:__newindex(key, value)
     local member = self._members[key]
+    local lookupInstance = self
 
-    if member then
-        --------development--------
-        if not simploo.config["production"] then
+    --------development--------
+    if not simploo.config["production"] then
+        local scope = simploo.util.getScope()
+        
+        -- For private/protected, redirect lookup to scope's members.
+        -- This ensures parent methods access parent's privates, not child's.
+        if scope then
+            local scopeMember = scope._members[key]
+            if scopeMember and (scopeMember.modifiers.private or scopeMember.modifiers.protected) then
+                member = scopeMember
+                lookupInstance = scope
+            end
+        end
+
+        if member then
             if member.modifiers.const then
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
             end
 
-            -- Private access check: only allowed if the current scope (executing method's class)
-            -- matches the class that owns the private member
-            if member.modifiers.private then
-                local scope = simploo.util.getScope()
-                if not scope or member.owner._name ~= scope._name then
-                    error(string.format("class %s: accessing private member %s", tostring(self), key))
-                end
+            if member.modifiers.private and (not scope or member.owner._name ~= scope._name) then
+                error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            -- Protected access check: allowed if scope is the owner class OR a subclass of it
-            if member.modifiers.protected then
-                local scope = simploo.util.getScope()
-                if not scope or not scope:instance_of(member.owner) then
-                    error(string.format("class %s: accessing protected member %s", tostring(self), key))
-                end
+            if member.modifiers.protected and (not scope or not scope:instance_of(member.owner)) then
+                error(string.format("class %s: accessing protected member %s", tostring(self), key))
             end
         end
-        --------development--------
+    end
+    --------development--------
 
-        if member.modifiers.static and self._base then
-            self._base._members[key].value = value
+    if member then
+        if member.modifiers.static and lookupInstance._base then
+            lookupInstance._base._members[key].value = value
         else
             member.value = value
         end
