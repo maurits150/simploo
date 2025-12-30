@@ -1,3 +1,10 @@
+--[[
+    Tests that constructors and __call metamethods are not called twice.
+    
+    When using instance() syntax, both __construct and __call could
+    potentially fire. This verifies each is called exactly once.
+]]
+
 function Test:testDoubleConstructorCalls()
     local parentConstructCalls = 0
     local parentMetaCalls = 0

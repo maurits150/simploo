@@ -1,3 +1,10 @@
+--[[
+    Tests that instances correctly share base class references.
+    
+    Multiple instances should reference the same _base class object
+    so static members are properly shared.
+]]
+
 function Test:testInstancesWithParentsShareSameBase()
     class "P" {}
     class "M" extends "P" {}

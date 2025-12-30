@@ -1,3 +1,10 @@
+--[[
+    Tests class hotswapping functionality.
+    
+    When a class is redefined, existing instances should receive
+    new members while preserving their existing member values.
+]]
+
 function Test:testHotswap()
     simploo.hotswap:init()
 

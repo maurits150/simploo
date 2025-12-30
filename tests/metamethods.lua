@@ -1,3 +1,10 @@
+--[[
+    Tests custom metamethod support (__tostring, __call, __add, etc).
+    
+    Verifies that user-defined metamethods are properly invoked
+    when instances are used with Lua operators and built-in functions.
+]]
+
 function Test:testCustomNewIndex()
     class "CustomNewIndex" {
         public {

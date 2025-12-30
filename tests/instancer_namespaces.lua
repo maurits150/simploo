@@ -1,3 +1,10 @@
+--[[
+    Tests namespace functionality and the using keyword.
+    
+    Classes in namespaces should be accessible via full path or
+    via using declarations that import them into scope.
+]]
+
 function Test:testNamespaces()
     namespace "testsimple"
 

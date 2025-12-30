@@ -1,3 +1,10 @@
+--[[
+    Tests the diamond problem with multiple inheritance.
+    
+    When a class inherits from two parents that have the same member,
+    accessing that member should error as ambiguous unless overridden.
+]]
+
 function Test:testInstancerAmbiguous()
     namespace "TestAmbiguous"
 

@@ -1,3 +1,10 @@
+--[[
+    Tests that parent constructors can be called from child constructors.
+    
+    Child classes should be able to explicitly invoke parent constructors
+    to initialize inherited state.
+]]
+
 function Test:testParentConstructors()
 	A_CALLED = false
 	B_CALLED = false

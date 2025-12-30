@@ -1,3 +1,10 @@
+--[[
+    Tests serialization and deserialization of class instances.
+    
+    Verifies that instances can be converted to data tables and back,
+    respecting transient members and parent class data.
+]]
+
 function Test:testSerializer()
     class "P" {
         public {

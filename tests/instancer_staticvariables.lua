@@ -1,3 +1,10 @@
+--[[
+    Tests static member behavior.
+    
+    Static members should be shared across all instances and
+    accessible from both the class and instances.
+]]
+
 function Test:testStaticVariables()
     class "A" {
         static {

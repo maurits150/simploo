@@ -1,3 +1,9 @@
+--[[
+    Performance benchmark for instance creation.
+    
+    Measures time to create many instances with various member counts.
+]]
+
 function Test:testBenchmark()
     namespace "Benchmark"
 

@@ -1,6 +1,13 @@
+--[[
+    Tests that constructor arguments are passed correctly.
+    
+    Both Class.new(args) and Class:new(args) syntax should
+    forward arguments to __construct properly.
+]]
+
 namespace "Test"
 
-function Test:testConstructorArgsPass() -- new() called with both . and : should work fine
+function Test:testConstructorArgsPass()
     class "A" {
         __construct = function(self)
             assertEquals(self:get_name(), "Test.A")

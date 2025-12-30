@@ -1,3 +1,10 @@
+--[[
+    Tests built-in instance methods like instance_of().
+    
+    Verifies inheritance checking works correctly with single and
+    multiple inheritance, including deep hierarchy chains.
+]]
+
 function Test:testInstanceMethods()
     class "P" {
     }

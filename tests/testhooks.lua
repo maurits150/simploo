@@ -1,3 +1,10 @@
+--[[
+    Tests the hook system for intercepting class creation and instantiation.
+    
+    Hooks allow modifying class definitions before registration and
+    can chain return values between multiple handlers.
+]]
+
 function Test:testHooksBeforeInitClass()
     -- Automatically create getters and setters
     simploo.hook:add("beforeInstancerInitClass", function(parserOutput)

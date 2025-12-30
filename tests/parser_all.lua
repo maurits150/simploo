@@ -1,3 +1,10 @@
+--[[
+    Tests the parser's output format for class definitions.
+    
+    Verifies that both block syntax and builder syntax produce
+    the same internal parser output structure.
+]]
+
 simploo.instancer = nil -- Disable the instancer for this test
 
 function Test:testParserOutput()

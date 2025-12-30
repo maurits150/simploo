@@ -1,3 +1,10 @@
+--[[
+    Tests that instances are properly garbage collected.
+    
+    Creates many instances and verifies memory doesn't grow
+    unbounded after collection.
+]]
+
 function Test:testMemoryLeak()
     namespace "memoryleak"
 
