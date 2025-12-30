@@ -123,6 +123,42 @@ print(parents.A)  -- parent A instance
 print(parents.B)  -- parent B instance
 ```
 
+## bind(fn)
+
+Wraps a callback so it can access private/protected members.
+
+Most code doesn't need this. You only need `bind()` when you pass a callback to another class and that callback accesses private/protected members.
+
+```lua
+class "Emitter" {
+    public {
+        onEvent = function(self, callback)
+            callback()
+        end
+    }
+}
+
+class "Player" {
+    private { health = 100 };
+    
+    public {
+        setup = function(self, emitter)
+            -- Without bind
+            emitter:onEvent(function()
+                print(self.health)  -- ERROR: "accessing private member health"
+            end)
+            
+            -- With bind
+            emitter:onEvent(self:bind(function()
+                print(self.health)  -- OK
+            end))
+        end
+    }
+}
+```
+
+If your callback only uses public members, you don't need `bind()`.
+
 ## Internal Properties
 
 These are not methods but properties available on all instances:
@@ -185,6 +221,7 @@ end
 | `get_class()` | class | Base class reference |
 | `instance_of(other)` | boolean | Inheritance check |
 | `get_parents()` | table | Parent instances |
+| `bind(fn)` | function | Bind callback to current scope |
 
 | Property | Type | Description |
 |----------|------|-------------|
