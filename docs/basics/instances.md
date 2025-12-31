@@ -58,21 +58,15 @@ print(a.value)  -- 10
 print(b.value)  -- 0 (unchanged)
 ```
 
-## The `_base` Reference
+## Class Reference
 
-Every instance has a `_base` property that refers to its class:
+Every instance can access its class via `get_class()`:
 
 ```lua
 local player = Player.new()
 
-print(player._base == Player)  -- true
-print(player._base._name)      -- Player
-```
-
-For a class (not an instance), `_base` refers to itself:
-
-```lua
-print(Player._base == Player)  -- true
+print(player:get_class() == Player)  -- true
+print(player:get_name())             -- Player
 ```
 
 ## Instance Identity

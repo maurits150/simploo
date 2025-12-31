@@ -81,10 +81,7 @@ Called after a class is fully initialized and registered.
 
 ```lua
 simploo.hook:add("afterInstancerInitClass", function(classData, baseInstance)
-    print("Class registered: " .. baseInstance._name)
-
-    -- Access the class
-    print("Members: " .. #baseInstance._members)
+    print("Class registered: " .. baseInstance:get_name())
 end)
 ```
 
@@ -104,7 +101,7 @@ Called after a new instance is created.
 
 ```lua
 simploo.hook:add("afterInstancerInstanceNew", function(instance)
-    print("New instance of: " .. instance._name)
+    print("New instance of: " .. instance:get_name())
 
     -- Track all instances
     allInstances = allInstances or {}
@@ -247,7 +244,7 @@ local instanceLog = {}
 
 simploo.hook:add("afterInstancerInstanceNew", function(instance)
     table.insert(instanceLog, {
-        class = instance._name,
+        class = instance:get_name(),
         time = os.time(),
         instance = instance
     })
@@ -255,7 +252,7 @@ simploo.hook:add("afterInstancerInstanceNew", function(instance)
     print(string.format(
         "[%s] Created %s instance (#%d total)",
         os.date("%H:%M:%S"),
-        instance._name,
+        instance:get_name(),
         #instanceLog
     ))
 

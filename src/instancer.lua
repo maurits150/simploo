@@ -191,12 +191,11 @@ function instancer:namespaceToTable(namespaceName, targetTable, assignValue)
     local firstword, remainingwords = string.match(namespaceName, "(%w+)%.(.+)")
 
     if firstword and remainingwords then
-        targetTable[firstword] = targetTable[firstword] or {}
-
-        -- TODO: test if this actually catches what we want
-        if targetTable[firstword]._name then
-            error("putting a class inside a class table")
+        local existing = targetTable[firstword]
+        if existing ~= nil and type(existing) ~= "table" then
+            error("can not register namespace, variable '" .. firstword .. "' already exists")
         end
+        targetTable[firstword] = existing or {}
 
         self:namespaceToTable(remainingwords, targetTable[firstword], assignValue)
     else

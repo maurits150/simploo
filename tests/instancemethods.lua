@@ -1,5 +1,6 @@
 --[[
-    Tests built-in instance methods like instance_of().
+    Tests built-in instance methods like instance_of(), get_name(), 
+    get_class(), and get_parents().
     
     Verifies inheritance checking works correctly with single and
     multiple inheritance, including deep hierarchy chains.
@@ -82,4 +83,113 @@ function Test:testInstanceOfDeepMultipleInheritance()
     -- Unrelated
     assertFalse(Mid1:instance_of(Mid2))
     assertFalse(Base1:instance_of(Base2))
+end
+
+---------------------------------------------------------------------
+-- get_name() tests
+---------------------------------------------------------------------
+
+-- Tests get_name() returns the class name as a string.
+-- From docs: "print(p:get_name())  -- Player"
+function Test:testGetName()
+    class "GetNamePlayer" {}
+
+    local p = GetNamePlayer.new()
+    assertEquals(p:get_name(), "GetNamePlayer")
+end
+
+-- Tests get_name() with namespaces returns the full qualified name.
+-- From docs: "print(e:get_name())  -- game.entities.Enemy"
+function Test:testGetNameWithNamespace()
+    namespace "game.entities"
+
+    class "Enemy" {}
+
+    local e = game.entities.Enemy.new()
+    assertEquals(e:get_name(), "game.entities.Enemy")
+    
+    namespace ""
+end
+
+---------------------------------------------------------------------
+-- get_class() tests
+---------------------------------------------------------------------
+
+-- Tests get_class() returns the base class of the instance.
+-- From docs: "print(p:get_class() == Player)  -- true"
+function Test:testGetClass()
+    class "GetClassPlayer" {}
+
+    local p = GetClassPlayer.new()
+    assertTrue(p:get_class() == GetClassPlayer)
+end
+
+-- Tests that get_class() is equivalent to accessing _base.
+-- From docs: "print(p:get_class() == p._base)  -- true"
+function Test:testGetClassEqualsBase()
+    class "GetClassBase" {}
+
+    local p = GetClassBase.new()
+    assertTrue(p:get_class() == p._base)
+end
+
+-- Tests get_class() with inheritance returns the actual class, not parent.
+function Test:testGetClassWithInheritance()
+    class "GetClassParent" {}
+    class "GetClassChild" extends "GetClassParent" {}
+
+    local c = GetClassChild.new()
+    assertTrue(c:get_class() == GetClassChild)
+    assertFalse(c:get_class() == GetClassParent)
+end
+
+---------------------------------------------------------------------
+-- get_parents() tests
+---------------------------------------------------------------------
+
+-- Tests get_parents() returns a table of parent instances.
+-- From docs: accessing parents.A and parents.B after extends "A, B"
+function Test:testGetParents()
+    class "ParentA" {
+        value = "A";
+    }
+    class "ParentB" {
+        value = "B";
+    }
+    class "ChildAB" extends "ParentA, ParentB" {}
+
+    local c = ChildAB.new()
+    local parents = c:get_parents()
+
+    -- Should have both parents
+    assertTrue(parents.ParentA ~= nil)
+    assertTrue(parents.ParentB ~= nil)
+end
+
+-- Tests that get_parents() returns empty table for class with no parents.
+function Test:testGetParentsNoInheritance()
+    class "NoParents" {}
+
+    local n = NoParents.new()
+    local parents = n:get_parents()
+
+    -- Should be empty or have no entries
+    local count = 0
+    for _ in pairs(parents) do
+        count = count + 1
+    end
+    assertEquals(count, 0)
+end
+
+-- Tests get_parents() with single inheritance.
+function Test:testGetParentsSingleInheritance()
+    class "SingleParent" {
+        value = 42;
+    }
+    class "SingleChild" extends "SingleParent" {}
+
+    local c = SingleChild.new()
+    local parents = c:get_parents()
+
+    assertTrue(parents.SingleParent ~= nil)
 end

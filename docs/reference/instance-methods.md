@@ -38,7 +38,7 @@ print(p:get_class() == Player)  -- true
 Equivalent to accessing `_base`:
 
 ```lua
-print(p:get_class() == p._base)  -- true
+print(p:get_class() == Player)  -- true
 ```
 
 ## instance_of(other)
@@ -159,60 +159,6 @@ class "Player" {
 
 If your callback only uses public members, you don't need `bind()`.
 
-## Internal Properties
-
-These are not methods but properties available on all instances:
-
-### _name
-
-The full class name as a string.
-
-```lua
-print(instance._name)  -- "game.Player"
-```
-
-### _base
-
-Reference to the base class (the class definition, not an instance).
-
-```lua
-print(instance._base == Player)  -- true
-```
-
-For a class (not instance), `_base` references itself:
-
-```lua
-print(Player._base == Player)  -- true
-```
-
-### _members
-
-Table containing all member definitions. Each member has:
-
-- `value` - Current value
-- `modifiers` - Table of modifiers (`{public = true, static = false, ...}`)
-- `owner` - The class that defined this member
-
-```lua
-class "Example" {
-    public {
-        name = "test";
-    };
-    private {
-        secret = 42;
-    };
-}
-
-local e = Example.new()
-
-for memberName, memberData in pairs(e._members) do
-    print(memberName, memberData.value)
-end
-```
-
-!!! warning "Internal Use"
-    `_members` is primarily for internal use. Accessing it directly bypasses access modifiers.
-
 ## Summary
 
 | Method | Returns | Description |
@@ -222,9 +168,3 @@ end
 | `instance_of(other)` | boolean | Inheritance check |
 | `get_parents()` | table | Parent instances |
 | `bind(fn)` | function | Bind callback to current scope |
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `_name` | string | Full class name |
-| `_base` | class | Base class reference |
-| `_members` | table | Member definitions (internal) |

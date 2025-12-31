@@ -1,6 +1,6 @@
 # Configuration
 
-SIMPLOO behavior can be customized through configuration options. Set these before loading SIMPLOO or before defining classes.
+SIMPLOO behavior can be customized through configuration options. Set these before loading SIMPLOO.
 
 ## Setting Configuration
 
@@ -8,11 +8,9 @@ SIMPLOO behavior can be customized through configuration options. Set these befo
 -- Set before loading SIMPLOO
 simploo = {config = {}}
 simploo.config["production"] = true
-dofile("simploo.lua")
-
--- Or after loading (for most options)
-dofile("simploo.lua")
 simploo.config["classHotswap"] = true
+
+dofile("simploo.lua")
 ```
 
 ## Options
@@ -30,11 +28,7 @@ Enables production mode, which disables safety checks for better performance.
 simploo.config["production"] = true
 ```
 
-**What it disables:**
-
-- Private member access enforcement
-- Method call depth tracking
-- Ambiguous member access checks
+Disables private member access enforcement, method call depth tracking, and ambiguous member access checks.
 
 **When to use:**
 
@@ -54,35 +48,16 @@ Exposes syntax functions (`class`, `extends`, `namespace`, etc.) as globals.
 | **Default** | `true` |
 
 ```lua
-simploo.config["exposeSyntax"] = true
+simploo.config["exposeSyntax"] = false
 ```
 
-**When `true`:**
-
-```lua
-class "Player" {}
-namespace "game"
-```
-
-**When `false`:**
-
-```lua
-simploo.syntax.class "Player" {}
-simploo.syntax.namespace "game"
-```
-
-You can also toggle at runtime:
-
-```lua
-simploo.syntax.init()     -- Expose globals
-simploo.syntax.destroy()  -- Remove globals
-```
+When `false`, use `simploo.syntax.class`, `simploo.syntax.namespace`, etc. You can also toggle at runtime with `simploo.syntax.init()` and `simploo.syntax.destroy()`.
 
 ---
 
 ### classHotswap
 
-Enables hot-reloading of class definitions, updating existing instances when classes are redefined.
+Enables hot-reloading of class definitions, updating existing instances when classes are redefined. New members are added to existing instances. Slightly increases memory usage and has a small performance overhead on instance creation.
 
 | | |
 |---|---|
@@ -93,20 +68,13 @@ Enables hot-reloading of class definitions, updating existing instances when cla
 simploo.config["classHotswap"] = true
 ```
 
-**Effects:**
-
-- New members are added to existing instances
-- Removed members are deleted from existing instances
-- Slightly increases memory usage (tracks all instances)
-- Small performance overhead on instance creation
-
 See [Hotswap](../advanced/hotswap.md) for details.
 
 ---
 
 ### baseInstanceTable
 
-The table where classes are stored. By default, classes are added to the global table `_G`.
+The table where classes are stored. By default, classes are added to the global table `_G`. Useful for isolating classes from global scope, sandboxing, or managing multiple independent class registries.
 
 | | |
 |---|---|
@@ -114,30 +82,36 @@ The table where classes are stored. By default, classes are added to the global 
 | **Default** | `_G` |
 
 ```lua
--- Store classes in a custom table
-local myClasses = {}
-simploo.config["baseInstanceTable"] = myClasses
-
-class "Player" {}
-
--- Access via custom table
-local p = myClasses.Player.new()
-
--- Not in _G
-print(_G.Player)  -- nil
+simploo.config["baseInstanceTable"] = myLib
 ```
 
-**Use cases:**
+---
 
-- Isolating classes from global scope
-- Managing multiple independent class registries
-- Sandboxing
+### baseSyntaxTable
+
+The table where syntax functions (`class`, `namespace`, `extends`, etc.) are exposed. By default, they are added to the global table `_G`. Useful for isolating syntax from global scope or avoiding conflicts with other libraries.
+
+| | |
+|---|---|
+| **Type** | `table` |
+| **Default** | `_G` |
+
+```lua
+simploo.config["baseSyntaxTable"] = myLib
+```
+
+Note: Due to Lua parsing rules, `myLib.class "A" myLib.extends "B" {}` doesn't work. Extract to locals for chainable syntax:
+
+```lua
+local class, extends = myLib.class, myLib.extends
+class "Player" extends "Entity" {}
+```
 
 ---
 
 ### customModifiers
 
-Define custom modifier keywords for class members.
+Define custom modifier keywords for class members. Custom modifiers are markers only - implement behavior via [hooks](hooks.md).
 
 | | |
 |---|---|
@@ -145,7 +119,7 @@ Define custom modifier keywords for class members.
 | **Default** | `{}` |
 
 ```lua
-simploo.config["customModifiers"] = {"observable", "validated", "cached"}
+simploo.config["customModifiers"] = {"observable", "cached"}
 ```
 
 After defining, use them like built-in modifiers:
@@ -157,8 +131,6 @@ class "Model" {
     };
 }
 ```
-
-Custom modifiers are markers only - implement behavior via [hooks](hooks.md).
 
 See [Custom Modifiers](../advanced/custom-modifiers.md) for details.
 
@@ -172,6 +144,7 @@ See [Custom Modifiers](../advanced/custom-modifiers.md) for details.
 | `exposeSyntax` | boolean | `true` | Expose syntax as globals |
 | `classHotswap` | boolean | `false` | Enable class hot-reloading |
 | `baseInstanceTable` | table | `_G` | Where classes are stored |
+| `baseSyntaxTable` | table | `_G` | Where syntax functions are exposed |
 | `customModifiers` | table | `{}` | Custom modifier keywords |
 
 ## Recommended Settings
@@ -190,10 +163,11 @@ simploo.config["production"] = true
 simploo.config["classHotswap"] = false
 ```
 
-### Library/Module
+### Library/Module use only (usually not a thing..)
 
 ```lua
 local myLib = {}
 simploo.config["baseInstanceTable"] = myLib
+simploo.config["baseSyntaxTable"] = myLib
 simploo.config["exposeSyntax"] = false
 ```

@@ -21,3 +21,7 @@ instancer_polymorphism.lua
 fenvupdates.lua
 parser_internal_fields.lua
 metamethods.lua
+modifier_const.lua
+modifier_abstract.lua
+finalize.lua
+config.lua

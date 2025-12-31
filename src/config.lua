@@ -1,3 +1,11 @@
+--
+-- Configuration options should be set before loading simploo:
+--
+-- simploo = {config = {}}
+-- simploo.config["production"] = true
+-- dofile("simploo.lua")
+--
+
 local config = {}
 
 --
@@ -36,6 +44,15 @@ config["classHotswap"] = false
 --
 
 config["baseInstanceTable"] = _G
+
+--
+-- Base syntax table
+--
+-- Description: the global table in which simploo exposes syntax functions (class, namespace, extends, etc.)
+-- Default: _G
+--
+
+config["baseSyntaxTable"] = _G
 
 --
 -- Custom modifiers

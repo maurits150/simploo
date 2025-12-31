@@ -2,7 +2,7 @@ local parser = {}
 simploo.parser = parser
 
 parser.instance = false
-parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract", "transient", (unpack or table.unpack)(simploo.config["customModifiers"])}
+parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract", "transient"}
 
 -- Parses the simploo class syntax into the following table format:
 --
@@ -201,7 +201,7 @@ function parser:new()
     return setmetatable(object, meta)
 end
 
-function parser:deepLookup(table, usingPath)
-    usingPath:gsub("[^.]+", function(k) if k ~= "*" then table = table and table[k] end end)
-    return table
+function parser:deepLookup(tbl, usingPath)
+    usingPath:gsub("[^.]+", function(k) if k ~= "*" then tbl = type(tbl) == "table" and tbl[k] end end)
+    return tbl
 end

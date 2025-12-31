@@ -43,25 +43,9 @@ Once defined, use them like built-in modifiers:
     model:register()
     ```
 
-## Accessing Modifier Data
-
-Custom modifiers are stored in the member's modifiers table:
-
-```lua
-class "Example" {
-    observable {
-        value = 0;
-    };
-}
-
--- Access via hooks or direct inspection
-local member = Example._members.value
-print(member.modifiers.observable)  -- true
-```
-
 ## Processing with Hooks
 
-Use the `beforeInstancerInitClass` hook to process custom modifiers:
+Use the `beforeInstancerInitClass` hook to access and process custom modifiers. The hook receives `classData` which contains `members` - a table where each member has `value` and `modifiers`:
 
 ```lua
 simploo.config["customModifiers"] = {"observable"}

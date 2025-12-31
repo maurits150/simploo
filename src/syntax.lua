@@ -115,44 +115,53 @@ function syntax.as(newPath)
 end
 
 do
-    local overwrittenGlobals = {}
+    local registeredModifiers = {}
+    local initialized = false
 
     function syntax.init()
-        -- Add syntax things
-        for k, v in pairs(syntax) do
-            if k ~= "init" and k ~= "destroy" then
-    			-- Backup existing globals that we may overwrite
-                if _G[k] then
-                    overwrittenGlobals[k] = _G[k]
-                end
-
-                _G[k] = v
+        -- Add custom modifiers to parser.modifiers
+        for _, modifierName in pairs(simploo.config["customModifiers"]) do
+            if not registeredModifiers[modifierName] then
+                table.insert(simploo.parser.modifiers, modifierName)
             end
         end
+
+        -- Add modifiers as global functions
+        for _, modifierName in pairs(simploo.parser.modifiers) do
+            if not registeredModifiers[modifierName] then
+                registeredModifiers[modifierName] = true
+                syntax[modifierName] = function(body)
+                    body["__modifiers"] = body["__modifiers"] or {}
+                    table.insert(body["__modifiers"], modifierName)
+                    return body
+                end
+            end
+        end
+
+        -- Add syntax things
+        local targetTable = simploo.config["baseSyntaxTable"]
+        for k, v in pairs(syntax) do
+            if k ~= "init" and k ~= "destroy" then
+                targetTable[k] = v
+            end
+        end
+
+        initialized = true
     end
 
     function syntax.destroy()
+        if not initialized then
+            return
+        end
+
+        local targetTable = simploo.config["baseSyntaxTable"]
         for k, v in pairs(syntax) do
             if k ~= "init" and k ~= "destroy" then
-                _G[k] = nil
-    			
-    			-- Restore existing globals
-                if overwrittenGlobals[k] then
-                    _G[k] = overwrittenGlobals[k]
-                end
+                targetTable[k] = nil
             end
         end
-        overwrittenGlobals = {}
-    end
 
-    -- Add modifiers as global functions
-    for _, modifierName in pairs(simploo.parser.modifiers) do
-        syntax[modifierName] = function(body)
-            body["__modifiers"] = body["__modifiers"] or {}
-            table.insert(body["__modifiers"], modifierName)
-
-            return body
-        end
+        initialized = false
     end
 
     if simploo.config["exposeSyntax"] then
