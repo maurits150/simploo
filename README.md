@@ -67,12 +67,6 @@ Instantiation involves deep-copying your class members, so it scales linearly wi
 
 At runtime, member access goes through metatables rather than direct table access. This overhead is not unnoticeable in practise, but becomes practically zero with LuaJIT - the JIT optimizes everything beautifully. For vanilla Lua, production mode disables safety checks (private access, const enforcement, etc.) for an extra speedup.
 
-### Why Raw Lua is Faster
-
-Raw Lua "classes" are just code that builds tables - there's no class structure to copy. SIMPLOO is data-driven: your class definition becomes a table describing members, modifiers, and ownership. This enables features like runtime introspection, access modifiers, serialization, and hotswap - but that data structure needs to be copied on each instantiation.
-
-This is a fundamental trade-off. SIMPLOO will never match raw Lua instantiation speed, but method calls in production mode are essentially free (especially on LuaJIT).
-
 ### Benchmarks
 
 AMD Ryzen 9 5950X, LuaJIT 2.1, Lua 5.4, Lua 5.1
@@ -86,6 +80,12 @@ AMD Ryzen 9 5950X, LuaJIT 2.1, Lua 5.4, Lua 5.1
 | Raw Lua                    | 0.067s  | 0.055s  | ~0s    |
 | SIMPLOO (dev)              | 1.171s  | 0.812s  | 0.361s |
 | SIMPLOO (prod)             | 0.289s  | 0.218s  | ~0s    |
+
+### Why Raw Lua is Faster
+
+Raw Lua "classes" are just code that builds tables - there's no class structure to copy. SIMPLOO is data-driven: your class definition becomes a table describing members, modifiers, and ownership. This enables features like runtime introspection, access modifiers, serialization, and hotswap - but that data structure needs to be copied on each instantiation.
+
+This is a fundamental trade-off. SIMPLOO will never match raw Lua instantiation speed, but method calls in production mode are essentially free (especially on LuaJIT).
 
 ## Documentation
 
