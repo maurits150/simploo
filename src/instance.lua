@@ -4,10 +4,11 @@
     Key concepts:
     
     1. Member lookup (instance.member):
-       - Check _base._metadata[key] for member info (owner, modifiers)
-       - If static: read from _base._values (shared across all instances)
-       - If own member (owner == _base): read from _values
-       - If inherited: use _ownerLookup to find parent instance, read from its _values
+       - Check _base._owners[key] for owner info
+       - If owner == base: own member, read from _values
+       - If owner is another class: inherited, use _ownerLookup to find parent instance
+       - If owner == false: static, read from _base._values
+       - If owner == nil: not a member, fall through to instancemethods
     
     2. _ownerLookup table:
        - Maps parent class (base instance) -> parent instance
@@ -32,7 +33,7 @@
            _ownerLookup = {...}       -- Maps parent class -> parent instance for O(1) inherited member access
        }
        
-       The key optimization: _metadata is NOT copied to instances. It's accessed via _base._metadata.
+       The key optimization: _owners/_modifiers are NOT copied to instances. They're accessed via _base.
        Only _values are copied, and for inherited members, we use _ownerLookup to find the right
        parent instance to read/write from.
 ]]
@@ -111,7 +112,7 @@ function instancemethods:serialize(customPerMemberFn)
     data["_name"] = self._name
 
     local base = self._base
-    local metadata = base._metadata
+    local modifiers = base._modifiers
 
     -- Serialize parent instances
     for parentBase, memberName in pairs(base._parentMembers) do
@@ -121,7 +122,7 @@ function instancemethods:serialize(customPerMemberFn)
     -- Serialize own non-static, non-transient, non-function members
     for i = 1, #base._ownMembers do
         local memberName = base._ownMembers[i]
-        local mods = metadata[memberName].modifiers
+        local mods = modifiers[memberName]
         if not mods.transient then
             local value = self._values[memberName]
             if type(value) ~= "function" then
@@ -165,14 +166,14 @@ end
 local function wrapMethodsForScope(instance, ogchild)
     local base = instance._base
     local values = instance._values
-    local metadata = base._metadata
+    local owners = base._owners
     
     for i = 1, #base._ownMembers do
         local memberName = base._ownMembers[i]
         local value = values[memberName]
         if type(value) == "function" then
             local fn = value
-            local declaringClass = metadata[memberName].owner
+            local declaringClass = owners[memberName]
 
             values[memberName] = function(selfOrData, ...)
                 -- Check if called on the instance (self:method()) vs standalone (fn())
@@ -275,13 +276,13 @@ function instancemethods:new(...)
     local copy = createRawInstance(self)
 
     -- Call constructor if defined
-    if copy._base._metadata["__construct"] then
+    if copy._base._owners["__construct"] then
         copy:__construct(...)
         copy._values["__construct"] = nil  -- Free memory - constructor won't be called again
     end
 
     -- Set up finalizer (destructor) if defined
-    if copy._base._metadata["__finalize"] then
+    if copy._base._owners["__finalize"] then
         util.addGcCallback(copy, function()
             copy:__finalize()
         end)
@@ -292,13 +293,13 @@ end
 
 local function deserializeIntoValues(instance, data, customPerMemberFn)
     for dataKey, dataVal in pairs(data) do
-        local metadata = instance._base._metadata[dataKey]
-        if metadata and not metadata.modifiers.transient then
+        local mods = instance._base._modifiers[dataKey]
+        if mods and not mods.transient then
             if type(dataVal) == "table" and dataVal._name then
                 -- Recurse into parent instance
                 deserializeIntoValues(instance._values[dataKey], dataVal, customPerMemberFn)
             else
-                instance._values[dataKey] = (customPerMemberFn and customPerMemberFn(dataKey, dataVal, metadata.modifiers, instance)) or dataVal
+                instance._values[dataKey] = (customPerMemberFn and customPerMemberFn(dataKey, dataVal, mods, instance)) or dataVal
             end
         end
     end
@@ -320,10 +321,10 @@ instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__
     __index metamethod - handles all member reads (instance.member)
     
     Production mode path (optimized for speed):
-    1. Look up metadata from _base._metadata
-    2. If static: return from _base._values (shared)
-    3. If own member: return from _values
-    4. If inherited: find parent via _ownerLookup, return from parent's _values
+    1. Look up owner from _base._owners[key]
+    2. If owner == base: own member, return from _values
+    3. If owner is class: inherited, return from _ownerLookup[owner]._values
+    4. If owner == false: static, return from _base._values
     
     Development mode path (includes access control):
     1. Get current scope (the class whose method is executing)
@@ -334,22 +335,20 @@ instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__
 if config.production then
     function instancemt:__index(key)
         local base = self._base
-        local metadata = base._metadata[key]
+        local owner = base._owners[key]
 
-        if metadata then
-            local owner = metadata.owner
-            
-            -- Own member
-            if owner == base then
-                return self._values[key]
-            end
-            
-            -- Inherited member
-            if owner then
-                return self._ownerLookup[owner]._values[key]
-            end
-            
-            -- Static member (owner is nil)
+        -- Own member
+        if owner == base then
+            return self._values[key]
+        end
+        
+        -- Inherited member
+        if owner then
+            return self._ownerLookup[owner]._values[key]
+        end
+        
+        -- Static member (owner is false)
+        if owner == false then
             return base._values[key]
         end
 
@@ -359,14 +358,15 @@ if config.production then
         end
 
         -- Custom __index metamethod defined by user
-        if base._metadata["__index"] then
+        if base._owners["__index"] then
             return self:__index(key)
         end
     end
 else
     function instancemt:__index(key)
-        -- Get member metadata (shared across all instances of this class)
-        local metadata = self._base._metadata[key]
+        local base = self._base
+        local owner = base._owners[key]
+        local mods = base._modifiers[key]
 
         -- DEVELOPMENT PATH: Full access control and scope tracking
         local lookupInstance = self
@@ -375,18 +375,17 @@ else
         -- For private/protected members, we need to look up from the scope's perspective
         -- This ensures parent methods access parent's privates, not child's
         if scope then
-            local scopeMetadata = scope._base._metadata[key]
-            if scopeMetadata and (scopeMetadata.modifiers.private or scopeMetadata.modifiers.protected) then
-                metadata = scopeMetadata
+            local scopeOwner = scope._base._owners[key]
+            local scopeMods = scope._base._modifiers[key]
+            if scopeOwner and scopeMods and (scopeMods.private or scopeMods.protected) then
+                owner = scopeOwner
+                mods = scopeMods
                 -- Find the instance corresponding to this scope (could be a parent instance)
                 lookupInstance = self._ownerLookup and self._ownerLookup[scope] or self
             end
         end
 
-        if metadata then
-            local mods = metadata.modifiers
-            local owner = metadata.owner
-            
+        if owner then
             -- Check for ambiguous members (same name from multiple parents)
             if mods.ambiguous then
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
@@ -404,7 +403,7 @@ else
             
             -- Static member: value lives on the class
             if mods.static then
-                return self._base._values[key]
+                return base._values[key]
             end
             
             -- Own member
@@ -422,7 +421,7 @@ else
         end
 
         -- Custom __index metamethod defined by user
-        if self._base._metadata["__index"] then
+        if base._owners["__index"] then
             return self:__index(key)
         end
     end
@@ -431,24 +430,22 @@ end
 if config.production then
     function instancemt:__newindex(key, value)
         local base = self._base
-        local metadata = base._metadata[key]
+        local owner = base._owners[key]
 
-        if metadata then
-            local owner = metadata.owner
-            
-            -- Own member
-            if owner == base then
-                self._values[key] = value
-                return
-            end
-            
-            -- Inherited member
-            if owner then
-                self._ownerLookup[owner]._values[key] = value
-                return
-            end
-            
-            -- Static member (owner is nil)
+        -- Own member
+        if owner == base then
+            self._values[key] = value
+            return
+        end
+        
+        -- Inherited member
+        if owner then
+            self._ownerLookup[owner]._values[key] = value
+            return
+        end
+        
+        -- Static member (owner is false)
+        if owner == false then
             base._values[key] = value
             return
         end
@@ -457,7 +454,7 @@ if config.production then
             error("cannot change instance methods")
         end
 
-        if base._metadata["__newindex"] then
+        if base._owners["__newindex"] then
             return self:__newindex(key, value)
         end
 
@@ -465,24 +462,25 @@ if config.production then
     end
 else
     function instancemt:__newindex(key, value)
-        local metadata = self._base._metadata[key]
+        local base = self._base
+        local owner = base._owners[key]
+        local mods = base._modifiers[key]
 
         -- Development: full access control
         local lookupInstance = self
         local scope = util.getScope()
         
         if scope then
-            local scopeMetadata = scope._base._metadata[key]
-            if scopeMetadata and (scopeMetadata.modifiers.private or scopeMetadata.modifiers.protected) then
-                metadata = scopeMetadata
+            local scopeOwner = scope._base._owners[key]
+            local scopeMods = scope._base._modifiers[key]
+            if scopeOwner and scopeMods and (scopeMods.private or scopeMods.protected) then
+                owner = scopeOwner
+                mods = scopeMods
                 lookupInstance = self._ownerLookup and self._ownerLookup[scope] or self
             end
         end
 
-        if metadata then
-            local mods = metadata.modifiers
-            local owner = metadata.owner
-            
+        if owner then
             if mods.const then
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
             end
@@ -495,7 +493,7 @@ else
             
             -- Static member
             if mods.static then
-                self._base._values[key] = value
+                base._values[key] = value
                 return
             end
             
@@ -514,7 +512,7 @@ else
             error("cannot change instance methods")
         end
 
-        if self._base._metadata["__newindex"] then
+        if base._owners["__newindex"] then
             return self:__newindex(key, value)
         end
 
@@ -532,8 +530,8 @@ function instancemt:__tostring()
     -- Grap the definition string.
     local str = string.format("SimplooObject: %s <%s> {%s}", self._name, self._base == self and "class" or "instance", tostring(self):sub(8))
 
-    local metadata = self._base._metadata["__tostring"]
-    if metadata and metadata.modifiers.meta then  -- lookup via metadata to prevent infinite loop
+    local mods = self._base._modifiers["__tostring"]
+    if mods and mods.meta then  -- lookup via modifiers to prevent infinite loop
         str = self:__tostring()
     end
 
@@ -564,7 +562,7 @@ function instancemt:__call(...)
     end
 
     -- For child instances, we can just redirect to __call, because __construct has already been called from the 'new' method.
-    if self._base._metadata["__call"] then  -- lookup via metadata to prevent infinite loop
+    if self._base._owners["__call"] then  -- lookup via _owners to prevent infinite loop
         -- call the construct fn
         return self:__call(...) -- call via metatable, because method may be static!
     end

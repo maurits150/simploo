@@ -3,14 +3,15 @@
     
     Key data structures on the base instance:
     
-    _metadata: Table mapping member names to {owner, modifiers}
-               - owner: the base instance (class) that declared this member
-               - modifiers: {public=true, static=true, ...}
-               This is SHARED - not copied to instances. Accessed via instance._base._metadata.
+    _owners: Table mapping member names to owning class (or false for static, nil for non-member)
+             This is SHARED - not copied to instances. Accessed via instance._base._owners.
+    
+    _modifiers: Table mapping member names to {public=true, static=true, ...}
+                This is SHARED - not copied to instances. Used for access control in dev mode.
     
     _values: Table mapping member names to their actual values (functions, strings, etc.)
              For the base instance, these are the default values.
-             When instantiating, only _values is copied (not _metadata).
+             When instantiating, only _values is copied (not _owners/_modifiers).
     
     _ownMembers: Array of member names declared by THIS class (not inherited).
                  Used by copyValues() to quickly iterate only what needs copying.
@@ -42,10 +43,11 @@ function instancer:initClass(class)
     baseInstance._base = baseInstance
     baseInstance._name = class.name
     
-    -- _metadata stores {owner, modifiers} per member - shared across all instances
-    -- Static members have owner = nil (allows skipping static check in hot path)
+    -- _owners maps member name -> owning class (or false for static, nil for non-member)
+    -- _modifiers maps member name -> {public=true, static=true, ...} (only used in dev mode)
     -- _values stores actual member values - copied to each instance (non-static) or shared (static)
-    baseInstance._metadata = {}
+    baseInstance._owners = {}
+    baseInstance._modifiers = {}
     baseInstance._values = {}
 
     -- Process parent classes (inheritance)
@@ -63,37 +65,40 @@ function instancer:initClass(class)
         -- Add parent reference so child can access parent via self.ParentName
         -- The value is the parent's base instance; at instantiation, this becomes a parent instance
         local parentModifiers = {parent = true}
-        baseInstance._metadata[parentName] = {owner = baseInstance, modifiers = parentModifiers}
+        baseInstance._owners[parentName] = baseInstance
+        baseInstance._modifiers[parentName] = parentModifiers
         baseInstance._values[parentName] = parentBaseInstance
 
         -- Also add short name (e.g., "Child" for "namespace.Child")
         local shortName = self:classNameFromFullPath(parentName)
         if shortName ~= parentName then
-            baseInstance._metadata[shortName] = {owner = baseInstance, modifiers = parentModifiers}
+            baseInstance._owners[shortName] = baseInstance
+            baseInstance._modifiers[shortName] = parentModifiers
             baseInstance._values[shortName] = parentBaseInstance
         end
 
         -- Inherit all non-static members from parent
-        -- We reference the parent's metadata directly (not a copy) - this is key for the optimization
-        -- The metadata.owner still points to the parent class, which is used for:
+        -- We reference the parent's owner/modifiers directly (not a copy) - this is key for the optimization
+        -- The owner still points to the parent class, which is used for:
         -- 1. Access control (private members only accessible within declaring class)
         -- 2. Finding the right instance to read/write values from via _ownerLookup
-        for parentMemberName, parentMetadata in pairs(parentBaseInstance._metadata) do
-            local existingMetadata = baseInstance._metadata[parentMemberName]
+        for parentMemberName, parentOwner in pairs(parentBaseInstance._owners) do
+            local existingOwner = baseInstance._owners[parentMemberName]
+            local existingModifiers = baseInstance._modifiers[parentMemberName]
+            local parentModifiers = parentBaseInstance._modifiers[parentMemberName]
             
             -- Handle diamond inheritance: same member name from multiple parents
-            if existingMetadata
-                    and not existingMetadata.modifiers.parent
-                    and not parentMetadata.modifiers.parent then
+            if existingOwner
+                    and not (existingModifiers and existingModifiers.parent)
+                    and not (parentModifiers and parentModifiers.parent) then
                 -- Mark as ambiguous - child must override to resolve
-                baseInstance._metadata[parentMemberName] = {
-                    owner = baseInstance,
-                    modifiers = {ambiguous = true}
-                }
+                baseInstance._owners[parentMemberName] = baseInstance
+                baseInstance._modifiers[parentMemberName] = {ambiguous = true}
                 baseInstance._values[parentMemberName] = nil
             else
-                -- Reference parent's metadata (not a copy!)
-                baseInstance._metadata[parentMemberName] = parentMetadata
+                -- Reference parent's owner/modifiers (not a copy!)
+                baseInstance._owners[parentMemberName] = parentOwner
+                baseInstance._modifiers[parentMemberName] = parentModifiers
                 baseInstance._values[parentMemberName] = parentBaseInstance._values[parentMemberName]
             end
         end
@@ -116,39 +121,42 @@ function instancer:initClass(class)
             end
         end
 
-        -- Own members have owner = this class (important for access control)
-        -- Static members have owner = nil in production (skips static check in hot path)
-        -- In dev mode, statics keep owner for access control
+        -- Own members have owner = this class
+        -- Static members have owner = false in production, so __index can distinguish:
+        --   owner == base  -> own member, read from self._values
+        --   owner == class -> inherited member, read from _ownerLookup[owner]._values
+        --   owner == false -> static member, read from base._values
+        --   owner == nil   -> not a member, fall through to instancemethods
+        -- In dev mode, statics keep owner = baseInstance for access control checks
         local owner = baseInstance
         if formatMember.modifiers.static and config["production"] then
-            owner = nil
+            owner = false
         end
-        baseInstance._metadata[formatMemberName] = {
-            owner = owner,
-            modifiers = formatMember.modifiers
-        }
+        baseInstance._owners[formatMemberName] = owner
+        baseInstance._modifiers[formatMemberName] = formatMember.modifiers
         baseInstance._values[formatMemberName] = value
     end
 
     -- Precompute member lists for fast instantiation in copyValues()
-    -- This avoids iterating all metadata and checking conditions on every new()
+    -- This avoids iterating all owners/modifiers and checking conditions on every new()
     local ownMembers = {}      -- Members declared by THIS class (need to copy values)
     local parentMembers = {}   -- Parent base -> member name (dedupes short name vs full name)
     local hasAbstract = false  -- Quick check to prevent instantiation
     
-    for memberName, meta in pairs(baseInstance._metadata) do
-        if meta.modifiers.parent then
+    for memberName, owner in pairs(baseInstance._owners) do
+        local mods = baseInstance._modifiers[memberName]
+        if mods and mods.parent then
             -- Use parent base as key to avoid duplicates (both "Parent" and "namespace.Parent" point to same base)
             local parentBase = baseInstance._values[memberName]
             if parentBase and not parentMembers[parentBase] then
                 parentMembers[parentBase] = memberName
             end
-        elseif meta.owner == baseInstance and not meta.modifiers.static then
+        elseif owner == baseInstance and not (mods and mods.static) then
             -- Own non-static members need their values copied to each instance
             -- Static members are accessed via _base, so not copied
             ownMembers[#ownMembers + 1] = memberName
         end
-        if meta.modifiers.abstract then
+        if mods and mods.abstract then
             hasAbstract = true
         end
     end
@@ -188,9 +196,9 @@ function instancer:registerBaseInstance(baseInstance)
     -- Assign a proper deep table entry as well.
     self:namespaceToTable(baseInstance._name, config["baseInstanceTable"], baseInstance)
 
-    if baseInstance._metadata["__declare"] then
+    if baseInstance._owners["__declare"] then
         local fn = baseInstance._values["__declare"]
-        fn(baseInstance._metadata["__declare"].owner) -- no metamethod exists to call member directly
+        fn(baseInstance._owners["__declare"]) -- no metamethod exists to call member directly
     end
 end
 

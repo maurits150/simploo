@@ -25,15 +25,15 @@ end
 
 function hotswap:syncMembers(hotInstance, baseInstance)
     -- Add values that do not exist in the current instance.
-    for baseMemberName, baseMetadata in pairs(baseInstance._metadata) do
-        if hotInstance._values[baseMemberName] == nil and not baseMetadata.modifiers.parent then
+    for baseMemberName, baseMods in pairs(baseInstance._modifiers) do
+        if hotInstance._values[baseMemberName] == nil and not baseMods.parent then
             hotInstance._values[baseMemberName] = simploo.util.deepCopyValue(baseInstance._values[baseMemberName])
         end
     end
 
     -- Remove values from the current instance that are not in the new base.
     for hotMemberName, _ in pairs(hotInstance._values) do
-        if baseInstance._metadata[hotMemberName] == nil then
+        if baseInstance._owners[hotMemberName] == nil then
             hotInstance._values[hotMemberName] = nil
         end
     end
