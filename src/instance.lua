@@ -271,7 +271,7 @@ local function createRawInstance(baseInstance)
 end
 
 -- Note: abstract class check is handled in instancer.lua by replacing this method
-function instancemt:new(...)
+function instancemethods:new(...)
     local copy = createRawInstance(self)
 
     -- Call constructor if defined
@@ -304,7 +304,7 @@ local function deserializeIntoValues(instance, data, customPerMemberFn)
     end
 end
 
-function instancemt:deserialize(data, customPerMemberFn)
+function instancemethods:deserialize(data, customPerMemberFn)
     local copy = createRawInstance(self)
     deserializeIntoValues(copy, data, customPerMemberFn)
     return hook:fire("afterInstancerInstanceNew", copy) or copy
@@ -333,28 +333,24 @@ instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__
 ]]
 if config.production then
     function instancemt:__index(key)
-        -- Get member metadata (shared across all instances of this class)
-        local metadata = self._base._metadata[key]
+        local base = self._base
+        local metadata = base._metadata[key]
 
-        -- PRODUCTION PATH: No access checks, minimal overhead
-        -- This path is simple enough for LuaJIT to fully optimize
         if metadata then
             local owner = metadata.owner
             
-            -- Own member: declared by this class, stored in this instance
-            if owner == self._base then
+            -- Own member
+            if owner == base then
                 return self._values[key]
             end
             
-            -- Inherited member: find the parent instance that owns it
-            -- _ownerLookup maps parent class -> parent instance (O(1) lookup)
-            -- If owner exists, we must have parents, so _ownerLookup exists
+            -- Inherited member
             if owner then
                 return self._ownerLookup[owner]._values[key]
             end
             
-            -- Static member: owner is nil, value lives on the class
-            return self._base._values[key]
+            -- Static member (owner is nil)
+            return base._values[key]
         end
 
         -- Built-in instance methods (get_name, get_class, instance_of, etc.)
@@ -363,7 +359,7 @@ if config.production then
         end
 
         -- Custom __index metamethod defined by user
-        if self._base._metadata["__index"] then
+        if base._metadata["__index"] then
             return self:__index(key)
         end
     end
@@ -434,14 +430,14 @@ end
 
 if config.production then
     function instancemt:__newindex(key, value)
-        local metadata = self._base._metadata[key]
+        local base = self._base
+        local metadata = base._metadata[key]
 
-        -- Production: minimal overhead
         if metadata then
             local owner = metadata.owner
             
             -- Own member
-            if owner == self._base then
+            if owner == base then
                 self._values[key] = value
                 return
             end
@@ -453,7 +449,7 @@ if config.production then
             end
             
             -- Static member (owner is nil)
-            self._base._values[key] = value
+            base._values[key] = value
             return
         end
 
@@ -461,7 +457,7 @@ if config.production then
             error("cannot change instance methods")
         end
 
-        if self._base._metadata["__newindex"] then
+        if base._metadata["__newindex"] then
             return self:__newindex(key, value)
         end
 

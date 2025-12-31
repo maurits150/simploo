@@ -24,6 +24,7 @@
 
 -- Cache globals as locals for faster lookup and LuaJIT optimization
 local instancemt = simploo.instancemt
+local instancemethods = simploo.instancemethods
 local config = simploo.config
 local hook = simploo.hook
 
@@ -161,9 +162,9 @@ function instancer:initClass(class)
             error(string.format("class %s: can not instantiate because it has unimplemented abstract members", class.name))
         end or function(selfOrData, ...)
             if selfOrData == baseInstance then
-                return instancemt[method](baseInstance, ...)
+                return instancemethods[method](baseInstance, ...)
             else
-                return instancemt[method](baseInstance, selfOrData, ...)
+                return instancemethods[method](baseInstance, selfOrData, ...)
             end
         end
     end
