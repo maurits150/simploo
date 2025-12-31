@@ -55,6 +55,17 @@ function build:execute(outputFile)
 		return false, tostring(err)
 	end
 
+	-- Create directory if it doesn't exist
+	local sep = package.config:sub(1, 1)
+	local dir = outputFile:match("(.+)" .. sep .. "[^" .. sep .. "]+$")
+	if dir then
+		if sep == "\\" then
+			os.execute('if not exist "' .. dir .. '" mkdir "' .. dir .. '"')
+		else
+			os.execute("mkdir -p " .. dir)
+		end
+	end
+
 	local file, err = io.open(outputFile, "w")
 	
 	if not file then

@@ -1,118 +1,90 @@
-# SIMPLOO `3.x.x` - Simple Lua Object Orientation
----
+# SIMPLOO
 
-### Introduction
-SIMPLOO is a library for the Lua programming language. Its goal is to simplify class based object-oriented programming inside Lua. 
+**Simple Lua Object Orientation** - A library that brings class-based OOP to Lua.
 
-Lua is generally considered to be prototype-based language, which means that it's possible to define individual objects with their own states and behaviors. However, more advanced concepts such as inheritance and encapsulations are harder to achieve because Lua lacks the syntax to formally express these concepts.
+## Introduction
 
-The general workaround for these limitations is to modify the behavior of the object itself to include these concepts instead of relying on the language. Unfortunately this is often challenging and time consuming, especially when you have many different types of objects and behaviors.
+Lua is generally considered a prototype-based language, which means you can define individual objects with their own states and behaviors. However, more advanced concepts like inheritance and encapsulation are harder to achieve because Lua lacks the syntax to formally express them.
 
-This library is designed to help with this process by using the freedom of Lua to emulate the same class-based programming syntax that's so often seen in other languages. After you've provided a class definition you can easily derive new objects from it, and SIMPLOO will handle everything that's required to make your objects behave the way you'd expect.
+The general workaround is to modify the behavior of objects to include these concepts, but this is often challenging and time consuming - especially with many different types of objects.
 
-### Example
+SIMPLOO helps by using the freedom of Lua to emulate class-based programming syntax. After you've provided a class definition, you can easily derive new objects from it, and SIMPLOO handles everything required to make your objects behave the way you'd expect.
 
-Here's an initial impression of the library.
+## Example
 
-```Lua
--------------
--- Syntax 1
--- looks like normal Lua
--------------
+```lua
+dofile("simploo.lua")
 
-local diagonal = class("Diagonal", {namespace = "math.trigonometry"})
-
-function diagonal.public.static:calculate(width, height)
-    return math.sqrt(math.pow(width, 2) + math.pow(height, 2))
-end
-
-diagonal:register()
-
--------------
--- Syntax 2
--- looks more like other languages
--------------
-
-namespace "math.geometry.shapes"
-using "math.trigonometry.Diagonal"
+namespace "math.geometry"
 
 class "Rectangle" {
     private {
-        m_width = 0;
-        m_height = 0;
+        width = 0;
+        height = 0;
     };
     public {
-        __construct = function(self, initialWidth, initialheight)
-            self.m_width = initialWidth
-            self.m_height = initialheight
-        end;
-
-        getWidth = function(self)
-            return self.m_width
-        end;
-
-        getHeight = function(self)
-            return self.m_height
+        __construct = function(self, w, h)
+            self.width = w
+            self.height = h
         end;
 
         getArea = function(self)
-            return self.m_width * self.m_height
+            return self.width * self.height
         end;
 
-        getDiameter = function(self)
-            return Diagonal:calculate(self.m_width, self.m_height);
+        getDiagonal = function(self)
+            return math.sqrt(self.width^2 + self.height^2)
         end;
     };
 }
 
-local square = math.geometry.shapes.Rectangle.new(5, 10)
-print(square:getWidth()) -- 5
-print(square:getHeight()) -- 10
-print(square:getArea()) -- 50
-print(square:getDiameter()) -- 11.18034
+local rect = math.geometry.Rectangle.new(3, 4)
+print(rect:getArea())      -- 12
+print(rect:getDiagonal())  -- 5
 ```
 
-### Features
+## Features
 
-* Define classes using a familiar syntax, including keywords such as `private`, `public`, `abstract`, `static`, `const` and `meta` for metamethods.
-* Supports multiple inheritance to define complex relational trees between classes.
-* Supports constructor and *finalizer* methods (using __gc).
-* Allows you to define your own metamethods for your classes.
-* Support for namespaces.
-* Supports two syntaxes.
+- Access modifiers: `public`, `private`, `protected`, `static`, `const`, `abstract`
+- Multiple inheritance
+- Constructors (`__construct`) and finalizers (`__finalize`)
+- Metamethods (`__tostring`, `__call`, `__add`, etc.)
+- Namespaces with `namespace` and `using`
+- Serialization
+- Two syntax styles
 
-### Changes compared to `1.0`
-* Rewritten and split into multiple files.
-* Support for namespacing to improve your project organisation.
-* Performance has been increased by lowering internal overhead.
+## Installation
 
-### Requirements
-* This library has been developed and tested on Lua 5.1, Lua 5.2 and LuaJIT.
-* The availability of the debug library (specifically debug.getupvalue and debug.setupvalue) is only required for Lua 5.2, in order to support the 'using' keyword. 
+Download `simploo.lua` from [releases](https://github.com/maurits150/simploo/releases) or build from source with `lua menu.lua`.
 
-### Expectations
-This library attempts to emulate classes as closely as possible. However, code is still interpreted in real-time and instantiating a new instance will take a little bit of time - most of it spend on deep copying data.
+## Requirements
 
-This means that the library is best used to keep track of long lived objects- for example entities in a game world. It is not suitable for a use case that requires thousands of new objects every seconds, such as networking packets.
+Lua 5.1, Lua 5.4, or LuaJIT. The `debug` library is required in Lua 5.2+ for the `using` keyword.
 
-Instantiation time scales linearly with the number of attributes, methods and parents that a class has. For function call performance, this library has a 'production mode' setting which makes it bypass all sanity checks. This setting boosts runtime performance significantly.
+## Performance
 
-### Benchmarks 
-AMD Ryzen 7 1800X (~3.6GHz), 3200MHz CL14 DDR4 RAM
+Instantiation involves deep-copying your class members and wrapping methods for polymorphism, so it scales linearly with the number of members and parents. This is a one-time cost when creating an object. I don't recommend creating and destroying thousands of instances per second - tables are better suited for that. These classes are supposed to represent application logic.
 
-Mode | Lua 5.1 | Lua 5.2 | Lua JIT
---- | --- | --- | ---
-Development - 10k instantiations | 0.871 | 1.038 | 0.308
-Production - 10k instantiations | 0.894 | 1.048 | 0.313
-Development - 2M fn calls | 2.129 | 2.647 | 0.547
-Production - 2M fn calls | 0.619 | 0.642 | 0
+At runtime, member access goes through metatables rather than direct table access. This overhead is not unnoticeable in practise, but becomes practically zero with LuaJIT - the JIT optimizes everything beautifully. For vanilla Lua, production mode disables safety checks (private access, const enforcement, etc.) for an extra speedup.
 
-*Performance is by far superior on LuaJIT based environments.*
+### Benchmarks
 
-### Documentation
+AMD Ryzen 9 5950X, LuaJIT 2.1, Lua 5.4, Lua 5.1
 
- [Wiki](https://github.com/maurits150/simploo/wiki)
+|                            | Lua 5.1 | Lua 5.4 | LuaJIT |
+|----------------------------|---------|---------|--------|
+| **10,000 instantiations**  |         |         |        |
+| Raw Lua                    | 0.018s  | 0.012s  | 0.010s |
+| SIMPLOO                    | 0.334s  | 0.237s  | 0.126s |
+| **2,000,000 method calls** |         |         |        |
+| Raw Lua                    | 0.069s  | 0.048s  | ~0s    |
+| SIMPLOO (dev)              | 1.171s  | 0.812s  | 0.361s |
+| SIMPLOO (prod)             | 0.409s  | 0.279s  | ~0s    |
 
-### Feedback
+## Documentation
 
-You can submit an issue, create a pull request or contact me directly using the email listed on my profile page.
+https://maurits150.github.io/simploo/
+
+## Feedback
+
+Submit an issue, create a pull request, or contact me directly.
