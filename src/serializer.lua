@@ -2,16 +2,22 @@ function simploo.serialize(instance, customPerMemberFn)
     local data = {}
     data["_name"] = instance._name
 
-    for k, v in pairs(instance._members) do
-        if v.modifiers and v.owner == instance then
-            if not v.modifiers.transient and not v.modifiers.parent and not v.modifiers.static then
-                if type(v.value) ~= "function" then
-                    data[k] = (customPerMemberFn and customPerMemberFn(k, v.value, v.modifiers, instance)) or v.value
-                end
-            end
+    -- Track which parent keys we've already serialized (to avoid duplicates for short name vs full name)
+    local serializedParents = {}
 
-            if v.modifiers.parent then
-                data[k] = simploo.serialize(v.value, customPerMemberFn)
+    for k, metadata in pairs(instance._base._metadata) do
+        if metadata.owner == instance._base then
+            if metadata.modifiers.parent then
+                local parentInstance = instance._values[k]
+                if not serializedParents[parentInstance] then
+                    serializedParents[parentInstance] = true
+                    data[k] = simploo.serialize(parentInstance, customPerMemberFn)
+                end
+            elseif not metadata.modifiers.transient and not metadata.modifiers.static then
+                local value = instance._values[k]
+                if type(value) ~= "function" then
+                    data[k] = (customPerMemberFn and customPerMemberFn(k, value, metadata.modifiers, instance)) or value
+                end
             end
         end
     end

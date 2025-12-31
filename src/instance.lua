@@ -24,16 +24,17 @@ function instancemethods:instance_of(otherInstance)
     end
 
     -- Check all parents (not just the first one)
-    for memberName, member in pairs(self._members) do
-        if member.modifiers.parent then
-            if member.value == otherInstance or
-                    member.value == otherInstance._base or
-                    member.value._base == otherInstance or
-                    member.value._base == otherInstance._base then
+    for memberName, metadata in pairs(self._base._metadata) do
+        if metadata.modifiers.parent then
+            local parentInstance = self._values[memberName]
+            if parentInstance == otherInstance or
+                    parentInstance == otherInstance._base or
+                    parentInstance._base == otherInstance or
+                    parentInstance._base == otherInstance._base then
                 return true
             end
 
-            if member.value:instance_of(otherInstance) then
+            if parentInstance:instance_of(otherInstance) then
                 return true
             end
         end
@@ -45,9 +46,9 @@ end
 function instancemethods:get_parents()
     local t = {}
 
-    for memberName, member in pairs(self._members) do
-        if member.modifiers.parent then
-            t[memberName] = member.value
+    for memberName, metadata in pairs(self._base._metadata) do
+        if metadata.modifiers.parent then
+            t[memberName] = self._values[memberName]
         end
     end
 
@@ -77,7 +78,7 @@ simploo.instancemt = instancemt
 instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
 
 function instancemt:__index(key)
-    local member = self._members[key]
+    local metadata = self._base._metadata[key]
     local lookupInstance = self
 
     --------development--------
@@ -87,48 +88,56 @@ function instancemt:__index(key)
         -- For private/protected, redirect lookup to scope's members.
         -- This ensures parent methods access parent's privates, not child's.
         if scope then
-            local scopeMember = scope._members[key]
-            if scopeMember and (scopeMember.modifiers.private or scopeMember.modifiers.protected) then
-                member = scopeMember
-                lookupInstance = scope
+            local scopeMetadata = scope._base._metadata[key]
+            if scopeMetadata and (scopeMetadata.modifiers.private or scopeMetadata.modifiers.protected) then
+                metadata = scopeMetadata
+                -- scope is the base class, find the corresponding instance
+                lookupInstance = self._ownerLookup and self._ownerLookup[scope] or self
             end
         end
 
-        if member then
-            if member.modifiers.ambiguous then
+        if metadata then
+            if metadata.modifiers.ambiguous then
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
             end
 
-            if member.modifiers.private and (not scope or member.owner._name ~= scope._name) then
+            if metadata.modifiers.private and (not scope or metadata.owner._name ~= scope._name) then
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            if member.modifiers.protected and (not scope or not scope:instance_of(member.owner)) then
+            if metadata.modifiers.protected and (not scope or not scope:instance_of(metadata.owner)) then
                 error(string.format("class %s: accessing protected member %s", tostring(self), key))
             end
         end
     end
     --------development--------
 
-    if member then
-        if member.modifiers.static and lookupInstance._base then
-            return lookupInstance._base._members[key].value
+    if metadata then
+        if metadata.modifiers.static then
+            return self._base._values[key]
         end
 
-        return member.value
+        -- Fast path: member is owned by the lookup instance's class
+        if metadata.owner == lookupInstance._base then
+            return lookupInstance._values[key]
+        end
+
+        -- O(1) lookup for inherited members via _ownerLookup
+        local ownerInstance = self._ownerLookup and self._ownerLookup[metadata.owner]
+        return ownerInstance and ownerInstance._values[key]
     end
 
     if instancemethods[key] then
         return instancemethods[key]
     end
 
-    if self._members["__index"] then
+    if self._base._metadata["__index"] then
         return self:__index(key) -- call via metamethod, because method may be static!
     end
 end
 
 function instancemt:__newindex(key, value)
-    local member = self._members[key]
+    local metadata = self._base._metadata[key]
     local lookupInstance = self
 
     --------development--------
@@ -138,34 +147,42 @@ function instancemt:__newindex(key, value)
         -- For private/protected, redirect lookup to scope's members.
         -- This ensures parent methods access parent's privates, not child's.
         if scope then
-            local scopeMember = scope._members[key]
-            if scopeMember and (scopeMember.modifiers.private or scopeMember.modifiers.protected) then
-                member = scopeMember
-                lookupInstance = scope
+            local scopeMetadata = scope._base._metadata[key]
+            if scopeMetadata and (scopeMetadata.modifiers.private or scopeMetadata.modifiers.protected) then
+                metadata = scopeMetadata
+                -- scope is the base class, find the corresponding instance
+                lookupInstance = self._ownerLookup and self._ownerLookup[scope] or self
             end
         end
 
-        if member then
-            if member.modifiers.const then
+        if metadata then
+            if metadata.modifiers.const then
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
             end
 
-            if member.modifiers.private and (not scope or member.owner._name ~= scope._name) then
+            if metadata.modifiers.private and (not scope or metadata.owner._name ~= scope._name) then
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
 
-            if member.modifiers.protected and (not scope or not scope:instance_of(member.owner)) then
+            if metadata.modifiers.protected and (not scope or not scope:instance_of(metadata.owner)) then
                 error(string.format("class %s: accessing protected member %s", tostring(self), key))
             end
         end
     end
     --------development--------
 
-    if member then
-        if member.modifiers.static and lookupInstance._base then
-            lookupInstance._base._members[key].value = value
+    if metadata then
+        if metadata.modifiers.static then
+            self._base._values[key] = value
+        elseif metadata.owner == lookupInstance._base then
+            -- Fast path: member is owned by the lookup instance's class
+            lookupInstance._values[key] = value
         else
-            member.value = value
+            -- O(1) lookup for inherited members via _ownerLookup
+            local ownerInstance = self._ownerLookup and self._ownerLookup[metadata.owner]
+            if ownerInstance then
+                ownerInstance._values[key] = value
+            end
         end
 
         return
@@ -175,16 +192,12 @@ function instancemt:__newindex(key, value)
         error("cannot change instance methods")
     end
 
-    if self._members["__newindex"] then -- lookup via members to prevent infinite loop
+    if self._base._metadata["__newindex"] then -- lookup via metadata to prevent infinite loop
         return self:__newindex(key, value) -- call via metatable, because method may be static
     end
 
-    -- Assign new member at runtime if we couldn't put it anywhere else.
-    self._members[key] = {
-        owner = self,
-        value = value,
-        modifiers = {public = true, transient = true} -- Do not serialize these runtime members yet.. deserialize will fail on them.
-    }
+    -- No runtime member creation - error instead
+    error(string.format("class %s: member %s does not exist", tostring(self), key))
 end
 
 function instancemt:__tostring()
@@ -197,7 +210,8 @@ function instancemt:__tostring()
     -- Grap the definition string.
     local str = string.format("SimplooObject: %s <%s> {%s}", self._name, self._base == self and "class" or "instance", tostring(self):sub(8))
 
-    if self._members["__tostring"] and self._members["__tostring"].modifiers.meta then  -- lookup via members to prevent infinite loop
+    local metadata = self._base._metadata["__tostring"]
+    if metadata and metadata.modifiers.meta then  -- lookup via metadata to prevent infinite loop
         str = self:__tostring()
     end
 
@@ -216,14 +230,14 @@ function instancemt:__call(...)
 
         -- unset __construct after it has been ran... it should not run twice
         -- also saves some memory
-        self._members["__construct"] = nil
+        self._values["__construct"] = nil
 
         -- call the construct fn
         return fn(self, ...) -- call via metatable, because method may be static!
     end
 
     -- For child instances, we can just redirect to __call, because __construct has already been called from the 'new' method.
-    if self._members["__call"] then  -- lookup via members to prevent infinite loop
+    if self._base._metadata["__call"] then  -- lookup via metadata to prevent infinite loop
         -- call the construct fn
         return self:__call(...) -- call via metatable, because method may be static!
     end
@@ -233,7 +247,8 @@ end
 for _, metaName in pairs(instancemt.metafunctions) do
     if not instancemt[metaName] then
         instancemt[metaName] = function(self, ...)
-            return self._members[metaName] and self._members[metaName].value(self, ...)
+            local value = self._values[metaName]
+            return value and value(self, ...)
         end
     end
 end

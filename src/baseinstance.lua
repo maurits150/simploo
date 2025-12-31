@@ -1,4 +1,7 @@
-local baseinstancemethods = simploo.util.duplicateTable(simploo.instancemethods)
+local baseinstancemethods = {}
+for k, v in pairs(simploo.instancemethods) do
+    baseinstancemethods[k] = v
+end
 simploo.baseinstancemethods = baseinstancemethods
 
 -- Production: only set metatables (no wrapping, polymorphism works through __index)
@@ -6,24 +9,25 @@ simploo.baseinstancemethods = baseinstancemethods
 local markInstanceRecursively
 markInstanceRecursively = simploo.config["production"] and function(instance)
     setmetatable(instance, simploo.instancemt)
-    for _, memberData in pairs(instance._members) do
-        if memberData.modifiers.parent then
-            markInstanceRecursively(memberData.value)
+    for memberName, metadata in pairs(instance._base._metadata) do
+        if metadata.modifiers.parent then
+            markInstanceRecursively(instance._values[memberName])
         end
     end
 end or function(instance, ogchild)
     setmetatable(instance, simploo.instancemt)
 
-    for _, memberData in pairs(instance._members) do
-        if memberData.modifiers.parent then
-            markInstanceRecursively(memberData.value, ogchild)
+    for memberName, metadata in pairs(instance._base._metadata) do
+        if metadata.modifiers.parent then
+            markInstanceRecursively(instance._values[memberName], ogchild)
         end
 
-        if memberData.value and type(memberData.value) == "function" then
-            local fn = memberData.value
-            local declaringClass = memberData.owner
+        local value = instance._values[memberName]
+        if value and type(value) == "function" then
+            local fn = value
+            local declaringClass = metadata.owner
 
-            memberData.value = function(selfOrData, ...)
+            instance._values[memberName] = function(selfOrData, ...)
                 local calledOnInstance = selfOrData == ogchild or selfOrData == instance
                 if not calledOnInstance then
                     return fn(selfOrData, ...)
@@ -37,24 +41,31 @@ end or function(instance, ogchild)
 end
 
 function baseinstancemethods:new(...)
-    for memberName, member in pairs(self._members) do
-        if member.modifiers.abstract then
-            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", self._name))
-        end
+    if self._hasAbstract then
+        error(string.format("class %s: can not instantiate because it has unimplemented abstract members", self._name))
     end
 
     -- Clone and construct new instance
-    local copy = simploo.util.duplicateTable(self)
+    local values, ownerLookup = simploo.util.copyValues(self)
+    local copy = {
+        _base = self,
+        _name = self._name,
+        _values = values,
+        _ownerLookup = ownerLookup
+    }
+    if ownerLookup then
+        ownerLookup[self] = copy  -- Register self in the lookup too
+    end
 
     markInstanceRecursively(copy, copy)
 
     -- call constructor and create finalizer
-    if copy._members["__construct"] then
+    if copy._base._metadata["__construct"] then
         copy:__construct(...) -- call via metamethod, because method may be static!
-        copy._members["__construct"] = nil -- remove __construct.. no longer needed in memory
+        copy._values["__construct"] = nil -- remove __construct.. no longer needed in memory
     end
 
-    if copy._members["__finalize"] then
+    if copy._base._metadata["__finalize"] then
         simploo.util.addGcCallback(copy, function()
             copy:__finalize() -- call via metamethod, because method may be static!
         end)
@@ -64,39 +75,50 @@ function baseinstancemethods:new(...)
     return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
 end
 
-local function deserializeIntoMembers(instance, data, customPerMemberFn)
+local function deserializeIntoValues(instance, data, customPerMemberFn)
     for dataKey, dataVal in pairs(data) do
-        local member = instance._members[dataKey]
-        if member and member.modifiers and not member.modifiers.transient then
+        local metadata = instance._base._metadata[dataKey]
+        if metadata and not metadata.modifiers.transient then
             if type(dataVal) == "table" and dataVal._name then
-                deserializeIntoMembers(member.value, dataVal, customPerMemberFn)
+                -- Recurse into parent instance
+                deserializeIntoValues(instance._values[dataKey], dataVal, customPerMemberFn)
             else
-                member.value = (customPerMemberFn and customPerMemberFn(dataKey, dataVal, member.modifiers, instance)) or dataVal
+                instance._values[dataKey] = (customPerMemberFn and customPerMemberFn(dataKey, dataVal, metadata.modifiers, instance)) or dataVal
             end
         end
     end
 end
 
 function baseinstancemethods:deserialize(data, customPerMemberFn)
-    for memberName, member in pairs(self._members) do
-        if member.modifiers.abstract then
-            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", self._name))
-        end
+    if self._hasAbstract then
+        error(string.format("class %s: can not instantiate because it has unimplemented abstract members", self._name))
     end
 
     -- Clone and construct new instance
-    local copy = simploo.util.duplicateTable(self)
+    local values, ownerLookup = simploo.util.copyValues(self)
+    local copy = {
+        _base = self,
+        _name = self._name,
+        _values = values,
+        _ownerLookup = ownerLookup
+    }
+    if ownerLookup then
+        ownerLookup[self] = copy  -- Register self in the lookup too
+    end
 
     markInstanceRecursively(copy, copy)
 
     -- restore serializable data
-    deserializeIntoMembers(copy, data, customPerMemberFn)
+    deserializeIntoValues(copy, data, customPerMemberFn)
 
     -- If our hook returns a different object, use that instead.
     return simploo.hook:fire("afterInstancerInstanceNew", copy) or copy
 end
 
-local baseinstancemt = simploo.util.duplicateTable(simploo.instancemt)
+local baseinstancemt = {}
+for k, v in pairs(simploo.instancemt) do
+    baseinstancemt[k] = v
+end
 simploo.baseinstancemt = baseinstancemt
 
 function baseinstancemt:__call(...)

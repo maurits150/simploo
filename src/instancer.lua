@@ -11,7 +11,8 @@ function instancer:initClass(class)
     -- Base variables
     baseInstance._base = baseInstance
     baseInstance._name = class.name
-    baseInstance._members = {}
+    baseInstance._metadata = {}
+    baseInstance._values = {}
 
     -- Copy members from provided parents
     for _, parentName in pairs(class.parents) do
@@ -23,56 +24,78 @@ function instancer:initClass(class)
             error(string.format("class %s: could not find parent %s", baseInstance._name, parentName))
         end
 
-        -- Add parent members
-        local baseMember = {}
-        baseMember.owner = baseInstance
-        baseMember.value = parentBaseInstance
-        baseMember.modifiers = { parent = true}
+        -- Add parent reference (both full path and short name)
+        local parentModifiers = {parent = true}
+        baseInstance._metadata[parentName] = {owner = baseInstance, modifiers = parentModifiers}
+        baseInstance._values[parentName] = parentBaseInstance
 
-        baseInstance._members[parentName] = baseMember
-        baseInstance._members[self:classNameFromFullPath(parentName)] = baseMember
+        local shortName = self:classNameFromFullPath(parentName)
+        if shortName ~= parentName then
+            baseInstance._metadata[shortName] = {owner = baseInstance, modifiers = parentModifiers}
+            baseInstance._values[shortName] = parentBaseInstance
+        end
 
-        -- Add variables from parents to child
-        for parentMemberName, parentMember in pairs(parentBaseInstance._members) do
-            local existingMember = baseInstance._members[parentMemberName]
+        -- Add members from parents to child
+        for parentMemberName, parentMetadata in pairs(parentBaseInstance._metadata) do
+            local existingMetadata = baseInstance._metadata[parentMemberName]
             -- Check for ambiguous members: same name from different parents (not parent references).
             -- We don't compare values - even if they're equal now, they could diverge later,
             -- and the child should explicitly choose which parent's member to use (via self.ParentName.member).
-            if existingMember
-                    and not existingMember.modifiers.parent
-                    and not parentMember.modifiers.parent then
+            if existingMetadata
+                    and not existingMetadata.modifiers.parent
+                    and not parentMetadata.modifiers.parent then
                 -- Mark as ambiguous - child must override to resolve
-                baseInstance._members[parentMemberName] = {
+                baseInstance._metadata[parentMemberName] = {
                     owner = baseInstance,
-                    value = nil,
-                    modifiers = { ambiguous = true }
+                    modifiers = {ambiguous = true}
                 }
+                baseInstance._values[parentMemberName] = nil
             else
-                baseInstance._members[parentMemberName] = parentMember
+                baseInstance._metadata[parentMemberName] = parentMetadata
+                baseInstance._values[parentMemberName] = parentBaseInstance._values[parentMemberName]
             end
         end
     end
 
     -- Init own members from class format
     for formatMemberName, formatMember in pairs(class.members) do
-        local baseMember = {}
-        baseMember.owner = baseInstance
-        baseMember.modifiers = formatMember.modifiers
-        baseMember.value = formatMember.value
+        local value = formatMember.value
 
         -- Wrap static functions to track scope for private/protected access
-        if not simploo.config["production"] and formatMember.modifiers.static and type(baseMember.value) == "function" then
-            local fn = baseMember.value
+        if not simploo.config["production"] and formatMember.modifiers.static and type(value) == "function" then
+            local fn = value
             local declaringClass = baseInstance
-            baseMember.value = function(selfOrData, ...)
+            value = function(selfOrData, ...)
                 local prevScope = simploo.util.getScope()
                 simploo.util.setScope(declaringClass)
                 return simploo.util.restoreScope(prevScope, fn(selfOrData, ...))
             end
         end
 
-        baseInstance._members[formatMemberName] = baseMember
+        baseInstance._metadata[formatMemberName] = {
+            owner = baseInstance,
+            modifiers = formatMember.modifiers
+        }
+        baseInstance._values[formatMemberName] = value
     end
+
+    -- Precompute member lists for fast instantiation
+    local ownMembers = {}
+    local parentMembers = {}
+    local hasAbstract = false
+    for memberName, meta in pairs(baseInstance._metadata) do
+        if meta.modifiers.parent then
+            parentMembers[#parentMembers + 1] = memberName
+        elseif meta.owner == baseInstance and not meta.modifiers.static then
+            ownMembers[#ownMembers + 1] = memberName
+        end
+        if meta.modifiers.abstract then
+            hasAbstract = true
+        end
+    end
+    baseInstance._ownMembers = ownMembers
+    baseInstance._parentMembers = parentMembers
+    baseInstance._hasAbstract = hasAbstract
 
     function baseInstance.new(selfOrData, ...)
         if selfOrData == baseInstance then -- called with :
@@ -109,9 +132,9 @@ function instancer:registerBaseInstance(baseInstance)
     -- Assign a proper deep table entry as well.
     self:namespaceToTable(baseInstance._name, simploo.config["baseInstanceTable"], baseInstance)
 
-    if baseInstance._members["__declare"] then
-        local fn = baseInstance._members["__declare"].value
-        fn(baseInstance._members["__declare"].owner) -- no metamethod exists to call member directly
+    if baseInstance._metadata["__declare"] then
+        local fn = baseInstance._values["__declare"]
+        fn(baseInstance._metadata["__declare"].owner) -- no metamethod exists to call member directly
     end
 end
 

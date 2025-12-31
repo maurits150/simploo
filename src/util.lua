@@ -19,32 +19,78 @@ function util.restoreScope(prevScope, ...)
     return ...
 end
 
-function util.duplicateTable(tbl, lookup)
+-- Deep copy a table value (for non-static member values that are tables)
+function util.deepCopyValue(value, lookup)
+    if type(value) ~= "table" then
+        return value
+    end
+
+    lookup = lookup or {}
+    if lookup[value] then
+        return lookup[value]
+    end
+
     local copy = {}
+    lookup[value] = copy
 
-    -- Check if this table is a static member (has modifiers.static)
-    -- If so, we copy the structure but skip deep-copying the value
-    local isStaticMember = tbl.modifiers and tbl.modifiers.static
-
-    for k, v in pairs(tbl) do
-        -- Skip copying value for static members - it's accessed via _base anyway
-        if isStaticMember and k == "value" then
-            copy[k] = v
-        elseif type(v) == "table" and k ~= "_base" then
-            lookup = lookup or {}
-            lookup[tbl] = copy
-
-            if lookup[v] then
-                copy[k] = lookup[v] -- we already copied this table. reuse the copy.
-            else
-                copy[k] = util.duplicateTable(v, lookup) -- not yet copied. copy it.
-            end
+    for k, v in pairs(value) do
+        if type(v) == "table" then
+            copy[k] = util.deepCopyValue(v, lookup)
         else
-            copy[k] = rawget(tbl, k)
+            copy[k] = v
         end
     end
 
     return copy
+end
+
+-- Copy _values from a base instance to create a new instance
+-- Parent instances are created recursively
+-- Only own members are stored in _values; inherited members are accessed via parent instances
+-- Also builds ownerLookup for O(1) access to parent instances by owner class
+function util.copyValues(baseInstance, lookup, ownerLookup)
+    lookup = lookup or {}
+    local values = {}
+    local srcValues = baseInstance._values
+    local parentMembers = baseInstance._parentMembers
+    local ownMembers = baseInstance._ownMembers
+
+    -- Process parent members (if any)
+    if #parentMembers > 0 then
+        ownerLookup = ownerLookup or {}
+        for i = 1, #parentMembers do
+            local memberName = parentMembers[i]
+            local parentBase = srcValues[memberName]
+            if parentBase and not lookup[parentBase] then
+                local parentInstance = {
+                    _base = parentBase,
+                    _name = parentBase._name,
+                    _values = nil,
+                    _ownerLookup = nil
+                }
+                lookup[parentBase] = parentInstance
+                ownerLookup[parentBase] = parentInstance
+                parentInstance._values = util.copyValues(parentBase, lookup, ownerLookup)
+                parentInstance._ownerLookup = ownerLookup
+            end
+            if parentBase then
+                values[memberName] = lookup[parentBase]
+            end
+        end
+    end
+
+    -- Copy own members (fast path - just iterate the precomputed list)
+    for i = 1, #ownMembers do
+        local memberName = ownMembers[i]
+        local value = srcValues[memberName]
+        if type(value) == "table" then
+            values[memberName] = util.deepCopyValue(value, lookup)
+        else
+            values[memberName] = value
+        end
+    end
+
+    return values, ownerLookup
 end
 
 

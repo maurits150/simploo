@@ -24,38 +24,28 @@ function hotswap:swap(newBase)
 end
 
 function hotswap:syncMembers(hotInstance, baseInstance)
-    -- Add members that do not exist in the current instance.
-    for baseMemberName, baseMember in pairs(baseInstance._members) do
-        local contains = false
-
-        for hotMemberName, hotMember in pairs(hotInstance._members) do
-            if hotMemberName == baseMemberName then
-                contains = true
+    -- Add values that do not exist in the current instance.
+    for baseMemberName, baseMetadata in pairs(baseInstance._metadata) do
+        if hotInstance._values[baseMemberName] == nil and not baseMetadata.modifiers.parent then
+            -- Copy the value from the new base instance
+            local value = baseInstance._values[baseMemberName]
+            if type(value) == "table" then
+                hotInstance._values[baseMemberName] = simploo.util.deepCopyValue(value)
+            else
+                hotInstance._values[baseMemberName] = value
             end
-        end
-
-        if not contains then
-            baseMember = simploo.util.duplicateTable(baseMember)
-            baseMember.owner = hotInstance
-
-            hotInstance._members[baseMemberName] = baseMember
         end
     end
 
-    -- Remove members from the current instance that are not in the new instance.
-    for hotMemberName, hotMember in pairs(hotInstance._members) do
-        local exists = false
-
-        for baseMemberName, baseMember in pairs(baseInstance._members) do
-            if hotMemberName == baseMemberName then
-                exists = true
-            end
-        end
-
-        if not exists then
-            hotInstance._members[hotMemberName] = nil
+    -- Remove values from the current instance that are not in the new base.
+    for hotMemberName, _ in pairs(hotInstance._values) do
+        if baseInstance._metadata[hotMemberName] == nil then
+            hotInstance._values[hotMemberName] = nil
         end
     end
+
+    -- Update _base to point to the new base instance (for metadata lookup)
+    hotInstance._base = baseInstance
 end
 
 if simploo.config["classHotswap"] then

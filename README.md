@@ -63,29 +63,32 @@ Lua 5.1, Lua 5.4, or LuaJIT. The `debug` library is required in Lua 5.2+ for the
 
 ## Performance
 
-Instantiation involves deep-copying your class members, so it scales linearly with the number of members and parents. In development mode, methods are also wrapped for scope tracking. This is a one-time cost when creating an object. I don't recommend creating and destroying thousands of instances per second - tables are better suited for that. These classes are supposed to represent application logic.
+Instantiation involves copying member values from your class definition. In development mode, methods are also wrapped for scope tracking. This is a one-time cost when creating an object. I don't recommend creating and destroying thousands of instances per second - tables are better suited for that. These classes are supposed to represent application logic.
 
-At runtime, member access goes through metatables rather than direct table access. This overhead is not unnoticeable in practise, but becomes practically zero with LuaJIT - the JIT optimizes everything beautifully. For vanilla Lua, production mode disables safety checks (private access, const enforcement, etc.) for an extra speedup.
+At runtime, member access goes through metatables rather than direct table access. This overhead is noticeable in micro-benchmarks, but becomes practically zero with LuaJIT. For vanilla Lua, production mode disables safety checks (private access, const enforcement, etc.) for an extra speedup.
 
 ### Benchmarks
 
-AMD Ryzen 9 5950X, LuaJIT 2.1, Lua 5.4, Lua 5.1
+AMD Ryzen 9 5950X. Times in seconds.
 
-|                            | Lua 5.1 | Lua 5.4 | LuaJIT |
-|----------------------------|---------|---------|--------|
-| **10,000 instantiations**  |         |         |        |
-| Raw Lua                    | 0.016s  | 0.012s  | 0.010s |
-| SIMPLOO                    | 0.305s  | 0.224s  | 0.111s |
-| **2,000,000 method calls** |         |         |        |
-| Raw Lua                    | 0.067s  | 0.055s  | ~0s    |
-| SIMPLOO (dev)              | 1.171s  | 0.812s  | 0.361s |
-| SIMPLOO (prod)             | 0.289s  | 0.218s  | ~0s    |
+| Benchmark                        | Lua 5.1 |       |       | Lua 5.4 |       |       | LuaJIT |       |       |
+|----------------------------------|---------|-------|-------|---------|-------|-------|--------|-------|-------|
+|                                  | Raw     | Dev   | Prod  | Raw     | Dev   | Prod  | Raw    | Dev   | Prod  |
+| **Simple class (20 members)**    |         |       |       |         |       |       |        |       |       |
+| 10k instantiations               | 0.016   | 0.077 | 0.079 | 0.019   | 0.073 | 0.073 | 0.009  | 0.027 | 0.025 |
+| 1M method calls                  | 0.072   | 1.493 | 0.885 | 0.081   | 1.505 | 0.852 | ~0     | 0.458 | 0.248 |
+| **Deep inheritance (5 levels)**  |         |       |       |         |       |       |        |       |       |
+| 10k instantiations               | 0.008   | 0.241 | 0.196 | 0.007   | 0.193 | 0.210 | ~0     | 0.067 | 0.067 |
+| 100k method chain calls          | 0.031   | 0.903 | 0.632 | 0.028   | 0.798 | 0.613 | ~0     | 0.282 | 0.242 |
+| 1M calls to parent method (5 up) | 0.077   | 5.033 | 4.213 | 0.071   | 4.498 | 4.156 | ~0     | 1.909 | 1.897 |
+| 1M inherited member access       | 0.010   | 0.306 | 0.203 | 0.009   | 0.323 | 0.180 | ~0     | 0.067 | ~0    |
+| 1M own member access             | 0.009   | 0.245 | 0.126 | 0.009   | 0.261 | 0.114 | ~0     | 0.046 | ~0    |
 
 ### Why Raw Lua is Faster
 
-Raw Lua "classes" are just code that builds tables - there's no class structure to copy. SIMPLOO is data-driven: your class definition becomes a table describing members, modifiers, and ownership. This enables features like runtime introspection, access modifiers, serialization, and hotswap - but that data structure needs to be copied on each instantiation.
+Raw Lua "classes" are just code that builds tables - there's no class structure to copy. SIMPLOO is data-driven: your class definition becomes a table describing members, modifiers, and ownership. This enables features like access modifiers, serialization, and hotswap - but member values need to be copied on each instantiation.
 
-This is a fundamental trade-off. SIMPLOO will never match raw Lua instantiation speed, but method calls in production mode are essentially free (especially on LuaJIT).
+This is a fundamental trade-off. SIMPLOO will never match raw Lua instantiation speed, but the gap is reasonable for most applications.
 
 ## Documentation
 

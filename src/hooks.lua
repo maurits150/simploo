@@ -20,6 +20,11 @@ function hook:remove(hookName, callbackFn)
 end
 
 function hook:fire(hookName, ...)
+    -- Fast path: no hooks registered
+    if #self.hooks == 0 then
+        return ...
+    end
+
     local args = {...}
     for _, v in ipairs(self.hooks) do
         if v[1] == hookName then

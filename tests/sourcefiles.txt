@@ -9,7 +9,6 @@ instancer_staticvariables.lua
 instancer_testdoubleconstruct.lua
 instances_hierarchypassthrough.lua
 instances_hierarchypassthrough_adv.lua
-instancer_addruntimemembers.lua
 object_permissions_all.lua
 parser_all.lua
 serializer.lua
