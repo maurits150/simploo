@@ -22,12 +22,17 @@
                   Precomputed to avoid iterating metadata on every new().
 ]]
 
+-- Cache globals as locals for faster lookup and LuaJIT optimization
+local instancemt = simploo.instancemt
+local config = simploo.config
+local hook = simploo.hook
+
 local instancer = {}
 simploo.instancer = instancer
 
 function instancer:initClass(class)
     -- Call the beforeInitClass hook
-    class = simploo.hook:fire("beforeInstancerInitClass", class) or class
+    class = hook:fire("beforeInstancerInitClass", class) or class
 
     -- Create the base instance (this becomes the "class" object users interact with)
     local baseInstance = {}
@@ -46,8 +51,8 @@ function instancer:initClass(class)
     -- 1. Add a "parent reference" member (e.g., self.ParentClass returns the parent instance)
     -- 2. Copy all parent's members to this class (metadata references, not copies)
     for _, parentName in pairs(class.parents) do
-        local parentBaseInstance = simploo.config["baseInstanceTable"][parentName]
-            or (class.resolved_usings[parentName] and simploo.config["baseInstanceTable"][class.resolved_usings[parentName]])
+        local parentBaseInstance = config["baseInstanceTable"][parentName]
+            or (class.resolved_usings[parentName] and config["baseInstanceTable"][class.resolved_usings[parentName]])
 
         if not parentBaseInstance then
             error(string.format("class %s: could not find parent %s", baseInstance._name, parentName))
@@ -98,7 +103,7 @@ function instancer:initClass(class)
 
         -- In dev mode, wrap static functions to track scope for private/protected access
         -- (Non-static methods are wrapped per-instance in markInstanceRecursively)
-        if not simploo.config["production"] and formatMember.modifiers.static and type(value) == "function" then
+        if not config["production"] and formatMember.modifiers.static and type(value) == "function" then
             local fn = value
             local declaringClass = baseInstance
             value = function(selfOrData, ...)
@@ -143,28 +148,25 @@ function instancer:initClass(class)
     baseInstance._parentMembers = parentMembers
     baseInstance._hasAbstract = hasAbstract
 
-    function baseInstance.new(selfOrData, ...)
-        if selfOrData == baseInstance then -- called with :
-            return simploo.baseinstancemethods.new(baseInstance, ...)
-        else -- called with .
-            return simploo.baseinstancemethods.new(baseInstance, selfOrData, ...)
+    -- Wrapper functions to handle both Class.method() and Class:method() calling conventions
+    local classMethods = {"new", "deserialize"}
+    for _, method in ipairs(classMethods) do
+        local fn = instancemt[method]
+        baseInstance[method] = function(selfOrData, ...)
+            if selfOrData == baseInstance then
+                return fn(baseInstance, ...)
+            else
+                return fn(baseInstance, selfOrData, ...)
+            end
         end
     end
 
-    function baseInstance.deserialize(selfOrData, ...)
-        if selfOrData == baseInstance then -- called with :
-            return simploo.baseinstancemethods.deserialize(baseInstance, ...)
-        else -- called with .
-            return simploo.baseinstancemethods.deserialize(baseInstance, selfOrData, ...)
-        end
-    end
-
-    setmetatable(baseInstance, simploo.baseinstancemt)
+    setmetatable(baseInstance, instancemt)
 
     -- Initialize the instance for use as a class
     self:registerBaseInstance(baseInstance)
 
-    simploo.hook:fire("afterInstancerInitClass", class, baseInstance)
+    hook:fire("afterInstancerInitClass", class, baseInstance)
 
     return baseInstance
 end
@@ -173,10 +175,10 @@ end
 function instancer:registerBaseInstance(baseInstance)
     -- Assign a quick entry, to facilitate easy look-up for parent classes, for higher-up in this file.
     -- !! Also used to quickly resolve keys in the method fenv based on localized 'using' classes.
-    simploo.config["baseInstanceTable"][baseInstance._name] = baseInstance
+    config["baseInstanceTable"][baseInstance._name] = baseInstance
 
     -- Assign a proper deep table entry as well.
-    self:namespaceToTable(baseInstance._name, simploo.config["baseInstanceTable"], baseInstance)
+    self:namespaceToTable(baseInstance._name, config["baseInstanceTable"], baseInstance)
 
     if baseInstance._metadata["__declare"] then
         local fn = baseInstance._values["__declare"]

@@ -1,5 +1,5 @@
 --[[
-    Instance metatable and methods.
+    Instance and base instance metatables and methods.
     
     Key concepts:
     
@@ -23,10 +23,38 @@
        - Each method call sets "scope" to the declaring class
        - Private members only accessible when scope._name == owner._name
        - Protected members accessible when scope:instance_of(owner)
+    
+    5. Instance structure after new():
+       {
+           _base = <class>,           -- Reference to the base instance (class) for metadata lookup
+           _name = "ClassName",       -- Class name for debugging/serialization
+           _values = {...},           -- This instance's member values (own + copied from parents)
+           _ownerLookup = {...}       -- Maps parent class -> parent instance for O(1) inherited member access
+       }
+       
+       The key optimization: _metadata is NOT copied to instances. It's accessed via _base._metadata.
+       Only _values are copied, and for inherited members, we use _ownerLookup to find the right
+       parent instance to read/write from.
 ]]
+
+-- Cache globals as locals for faster lookup and LuaJIT optimization
+local config = simploo.config
+local util = simploo.util
+local hook = simploo.hook
+
+-------------------------------------------------------------------------------
+-- Tables (defined early so functions can reference them)
+-------------------------------------------------------------------------------
 
 local instancemethods = {}
 simploo.instancemethods = instancemethods
+
+local instancemt = {}
+simploo.instancemt = instancemt
+
+-------------------------------------------------------------------------------
+-- Instance methods (available on all instances and classes)
+-------------------------------------------------------------------------------
 
 function instancemethods:get_name()
     return self._name
@@ -78,30 +106,190 @@ function instancemethods:get_parents()
     return t
 end
 
+function instancemethods:serialize(customPerMemberFn)
+    local data = {}
+    data["_name"] = self._name
+
+    local base = self._base
+    local metadata = base._metadata
+
+    -- Serialize parent instances
+    for parentBase, memberName in pairs(base._parentMembers) do
+        data[memberName] = self._values[memberName]:serialize(customPerMemberFn)
+    end
+
+    -- Serialize own non-static, non-transient, non-function members
+    for i = 1, #base._ownMembers do
+        local memberName = base._ownMembers[i]
+        local mods = metadata[memberName].modifiers
+        if not mods.transient then
+            local value = self._values[memberName]
+            if type(value) ~= "function" then
+                data[memberName] = (customPerMemberFn and customPerMemberFn(memberName, value, mods, self)) or value
+            end
+        end
+    end
+
+    return data
+end
+
 -- Binds a function to the current scope, allowing callbacks to access private/protected members.
 -- Similar to JavaScript's Function.prototype.bind() but for scope instead of 'this'.
 -- Usage: self:onEvent(self:bind(function() print(self.secret) end))
 -- Note: In production mode, this is a no-op since scope tracking is disabled.
 function instancemethods:bind(fn)
-    if simploo.config["production"] then
+    if config.production then
         return fn  -- No scope tracking in production, just return the function as-is
     end
-    local capturedScope = simploo.util.getScope()
+    local capturedScope = util.getScope()
     return function(...)
-        local prevScope = simploo.util.getScope()
-        simploo.util.setScope(capturedScope)
-        return simploo.util.restoreScope(prevScope, fn(...))
+        local prevScope = util.getScope()
+        util.setScope(capturedScope)
+        return util.restoreScope(prevScope, fn(...))
     end
 end
 
----
+--[[
+    markInstanceRecursively: Called after copyValues() to finalize instance setup.
+    
+    In production mode:
+    - Just sets metatables on instance and all parent instances
+    - Methods are NOT wrapped - __index handles everything
+    - This allows LuaJIT to fully optimize method calls
+    
+    In development mode:
+    - Also wraps every method in a scope-tracking function
+    - The wrapper sets the "current scope" to the declaring class before calling the method
+    - This enables private/protected access control in __index/__newindex
+    
+    Parameters:
+    - instance: The instance being marked (could be child or parent)
+    - ogchild: The original (top-level) instance, used to redirect self references
+]]
+local function markInstanceRecursively(instance, ogchild)
+    setmetatable(instance, instancemt)
 
-local instancemt = {}
-simploo.instancemt = instancemt
+    local base = instance._base
+    local values = instance._values
+
+    -- Recursively process parent instances
+    for parentBase, memberName in pairs(base._parentMembers) do
+        markInstanceRecursively(values[memberName], ogchild)
+    end
+
+    -- Development only: wrap methods for scope tracking
+    -- This wrapper is what enables private/protected access control
+    if not config.production then
+        local metadata = base._metadata
+        for i = 1, #base._ownMembers do
+            local memberName = base._ownMembers[i]
+            local value = values[memberName]
+            if type(value) == "function" then
+                local fn = value
+                local declaringClass = metadata[memberName].owner
+
+                values[memberName] = function(selfOrData, ...)
+                    -- Check if called on the instance (self:method()) vs standalone (fn())
+                    local calledOnInstance = selfOrData == ogchild or selfOrData == instance
+                    if not calledOnInstance then
+                        return fn(selfOrData, ...)
+                    end
+                    -- Set scope to declaring class, call method, restore scope
+                    local prevScope = util.getScope()
+                    util.setScope(declaringClass)
+                    return util.restoreScope(prevScope, fn(ogchild, ...))
+                end
+            end
+        end
+    end
+end
+
+function instancemt:new(...)
+    -- Quick check using precomputed flag (avoids iterating all metadata)
+    if self._hasAbstract then
+        error(string.format("class %s: can not instantiate because it has unimplemented abstract members", self._name))
+    end
+
+    -- Create new instance:
+    -- 1. copyValues() creates _values (own member values) and _ownerLookup (parent instance map)
+    -- 2. Parent instances are created recursively inside copyValues()
+    local values, ownerLookup = util.copyValues(self)
+    local copy = {
+        _base = self,              -- Reference to class for metadata lookup
+        _name = self._name,        -- Cached for tostring/serialization
+        _values = values,          -- This instance's member values
+        _ownerLookup = ownerLookup -- Maps parent class -> parent instance (nil if no parents)
+    }
+    
+    -- Register this instance in ownerLookup so child can find it
+    if ownerLookup then
+        ownerLookup[self] = copy
+    end
+
+    -- Set metatables and wrap methods (dev mode only)
+    markInstanceRecursively(copy, copy)
+
+    -- Call constructor if defined
+    if copy._base._metadata["__construct"] then
+        copy:__construct(...)
+        copy._values["__construct"] = nil  -- Free memory - constructor won't be called again
+    end
+
+    -- Set up finalizer (destructor) if defined
+    if copy._base._metadata["__finalize"] then
+        util.addGcCallback(copy, function()
+            copy:__finalize()
+        end)
+    end
+
+    return hook:fire("afterInstancerInstanceNew", copy) or copy
+end
+
+local function deserializeIntoValues(instance, data, customPerMemberFn)
+    for dataKey, dataVal in pairs(data) do
+        local metadata = instance._base._metadata[dataKey]
+        if metadata and not metadata.modifiers.transient then
+            if type(dataVal) == "table" and dataVal._name then
+                -- Recurse into parent instance
+                deserializeIntoValues(instance._values[dataKey], dataVal, customPerMemberFn)
+            else
+                instance._values[dataKey] = (customPerMemberFn and customPerMemberFn(dataKey, dataVal, metadata.modifiers, instance)) or dataVal
+            end
+        end
+    end
+end
+
+function instancemt:deserialize(data, customPerMemberFn)
+    if self._hasAbstract then
+        error(string.format("class %s: can not instantiate because it has unimplemented abstract members", self._name))
+    end
+
+    -- Clone and construct new instance
+    local values, ownerLookup = util.copyValues(self)
+    local copy = {
+        _base = self,
+        _name = self._name,
+        _values = values,
+        _ownerLookup = ownerLookup
+    }
+    if ownerLookup then
+        ownerLookup[self] = copy
+    end
+
+    markInstanceRecursively(copy, copy)
+
+    -- restore serializable data
+    deserializeIntoValues(copy, data, customPerMemberFn)
+
+    -- If our hook returns a different object, use that instead.
+    return hook:fire("afterInstancerInstanceNew", copy) or copy
+end
+
+-------------------------------------------------------------------------------
+-- Instance metatable (for instances created via new())
+-------------------------------------------------------------------------------
+
 instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
-
--- Cache config table reference for faster access (avoids repeated global lookup)
-local config = simploo.config
 
 --[[
     __index metamethod - handles all member reads (instance.member)
@@ -151,7 +339,7 @@ function instancemt:__index(key)
     else
         -- DEVELOPMENT PATH: Full access control and scope tracking
         local lookupInstance = self
-        local scope = simploo.util.getScope()  -- The class whose method is currently running
+        local scope = util.getScope()  -- The class whose method is currently running
         
         -- For private/protected members, we need to look up from the scope's perspective
         -- This ensures parent methods access parent's privates, not child's
@@ -235,7 +423,7 @@ function instancemt:__newindex(key, value)
     else
         -- Development: full access control
         local lookupInstance = self
-        local scope = simploo.util.getScope()
+        local scope = util.getScope()
         
         if scope then
             local scopeMetadata = scope._base._metadata[key]
@@ -307,6 +495,11 @@ function instancemt:__tostring()
 end
 
 function instancemt:__call(...)
+    -- For classes (not instances), Player() is shorthand for Player.new()
+    if self._base == self then
+        return self:new(...)
+    end
+
     -- We need this when calling parent constructors from within a child constructor
     if self.__construct then
         -- cache reference because we unassign it before calling it
@@ -339,3 +532,5 @@ for _, metaName in pairs(instancemt.metafunctions) do
         end
     end
 end
+
+

@@ -4,7 +4,6 @@ util.lua
 hooks.lua
 serializer.lua
 instance.lua
-baseinstance.lua
 instancer.lua
 parser.lua
 syntax.lua
