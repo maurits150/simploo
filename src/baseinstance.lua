@@ -1,7 +1,17 @@
 local baseinstancemethods = simploo.util.duplicateTable(simploo.instancemethods)
 simploo.baseinstancemethods = baseinstancemethods
 
-local function markInstanceRecursively(instance, ogchild)
+-- Production: only set metatables (no wrapping, polymorphism works through __index)
+-- Development: also wrap methods for scope tracking (private/protected access)
+local markInstanceRecursively
+markInstanceRecursively = simploo.config["production"] and function(instance)
+    setmetatable(instance, simploo.instancemt)
+    for _, memberData in pairs(instance._members) do
+        if memberData.modifiers.parent then
+            markInstanceRecursively(memberData.value)
+        end
+    end
+end or function(instance, ogchild)
     setmetatable(instance, simploo.instancemt)
 
     for _, memberData in pairs(instance._members) do
@@ -9,7 +19,6 @@ local function markInstanceRecursively(instance, ogchild)
             markInstanceRecursively(memberData.value, ogchild)
         end
 
-        -- Wrap methods to support polymorphism (and scope tracking in dev mode)
         if memberData.value and type(memberData.value) == "function" then
             local fn = memberData.value
             local declaringClass = memberData.owner
@@ -18,13 +27,10 @@ local function markInstanceRecursively(instance, ogchild)
                 local calledOnInstance = selfOrData == ogchild or selfOrData == instance
                 if not calledOnInstance then
                     return fn(selfOrData, ...)
-                elseif simploo.config["production"] then
-                    return fn(ogchild, ...)
-                else
-                    local prevScope = simploo.util.getScope()
-                    simploo.util.setScope(declaringClass)
-                    return simploo.util.restoreScope(prevScope, fn(ogchild, ...))
                 end
+                local prevScope = simploo.util.getScope()
+                simploo.util.setScope(declaringClass)
+                return simploo.util.restoreScope(prevScope, fn(ogchild, ...))
             end
         end
     end
