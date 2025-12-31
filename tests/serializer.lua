@@ -84,3 +84,65 @@ function Test:testSerializerParentAccess()
     assertEquals(restored.SerParent.parentValue, "modified")
     assertEquals(restored.childValue, "also modified")
 end
+
+-- Tests serialization with deep inheritance (grandparent -> parent -> child).
+-- All levels of the hierarchy should be serialized and restored correctly.
+function Test:testSerializerDeepInheritance()
+    class "SerGrandparent" {
+        public { grandparentValue = "gp" }
+    }
+
+    class "SerParent2" extends "SerGrandparent" {
+        public { parentValue2 = "p" }
+    }
+
+    class "SerGrandchild" extends "SerParent2" {
+        public { grandchildValue = "gc" }
+    }
+
+    local instance = SerGrandchild.new()
+    instance.grandparentValue = "modified gp"
+    instance.parentValue2 = "modified p"
+    instance.grandchildValue = "modified gc"
+
+    local data = simploo.serialize(instance)
+    local restored = simploo.deserialize(data)
+
+    assertEquals(restored.grandparentValue, "modified gp")
+    assertEquals(restored.parentValue2, "modified p")
+    assertEquals(restored.grandchildValue, "modified gc")
+    
+    -- Parent references should work
+    assertIsTable(restored.SerParent2)
+    assertEquals(restored.SerParent2.parentValue2, "modified p")
+    assertIsTable(restored.SerParent2.SerGrandparent)
+    assertEquals(restored.SerParent2.SerGrandparent.grandparentValue, "modified gp")
+end
+
+-- Tests serialization with multiple inheritance.
+-- Both parent branches should be serialized correctly.
+function Test:testSerializerMultipleInheritance()
+    class "SerBranch1" {
+        public { branch1Value = "b1" }
+    }
+
+    class "SerBranch2" {
+        public { branch2Value = "b2" }
+    }
+
+    class "SerMultiChild" extends "SerBranch1, SerBranch2" {
+        public { multiChildValue = "mc" }
+    }
+
+    local instance = SerMultiChild.new()
+    instance.branch1Value = "modified b1"
+    instance.branch2Value = "modified b2"
+    instance.multiChildValue = "modified mc"
+
+    local data = simploo.serialize(instance)
+    local restored = simploo.deserialize(data)
+
+    assertEquals(restored.branch1Value, "modified b1")
+    assertEquals(restored.branch2Value, "modified b2")
+    assertEquals(restored.multiChildValue, "modified mc")
+end

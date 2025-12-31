@@ -78,14 +78,12 @@ function util.copyValues(baseInstance, lookup, ownerLookup)
 
     -- Step 1: Create parent instances (if this class has parents)
     -- Each parent gets its own instance with its own _values
-    if #parentMembers > 0 then
+    -- parentMembers is a map: parentBase -> memberName (already deduped)
+    if next(parentMembers) then
         ownerLookup = ownerLookup or {}
-        for i = 1, #parentMembers do
-            local memberName = parentMembers[i]
-            local parentBase = srcValues[memberName]  -- The parent class (base instance)
-            
+        for parentBase, memberName in pairs(parentMembers) do
             -- Only create if not already created (handles diamond inheritance)
-            if parentBase and not lookup[parentBase] then
+            if not lookup[parentBase] then
                 local parentInstance = {
                     _base = parentBase,
                     _name = parentBase._name,
@@ -102,9 +100,7 @@ function util.copyValues(baseInstance, lookup, ownerLookup)
             end
             
             -- Store reference to parent instance (e.g., self.ParentClass)
-            if parentBase then
-                values[memberName] = lookup[parentBase]
-            end
+            values[memberName] = lookup[parentBase]
         end
     end
 

@@ -119,12 +119,16 @@ function instancer:initClass(class)
     -- Precompute member lists for fast instantiation in copyValues()
     -- This avoids iterating all metadata and checking conditions on every new()
     local ownMembers = {}      -- Members declared by THIS class (need to copy values)
-    local parentMembers = {}   -- Parent references (need to create parent instances)
+    local parentMembers = {}   -- Parent base -> member name (dedupes short name vs full name)
     local hasAbstract = false  -- Quick check to prevent instantiation
     
     for memberName, meta in pairs(baseInstance._metadata) do
         if meta.modifiers.parent then
-            parentMembers[#parentMembers + 1] = memberName
+            -- Use parent base as key to avoid duplicates (both "Parent" and "namespace.Parent" point to same base)
+            local parentBase = baseInstance._values[memberName]
+            if parentBase and not parentMembers[parentBase] then
+                parentMembers[parentBase] = memberName
+            end
         elseif meta.owner == baseInstance and not meta.modifiers.static then
             -- Own non-static members need their values copied to each instance
             -- Static members are accessed via _base, so not copied

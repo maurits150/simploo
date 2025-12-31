@@ -43,20 +43,24 @@ local config = simploo.config
 local function markInstanceRecursively(instance, ogchild)
     setmetatable(instance, simploo.instancemt)
 
-    local metadata = instance._base._metadata
+    local base = instance._base
     local values = instance._values
 
-    for memberName, meta in pairs(metadata) do
-        if meta.modifiers.parent then
-            -- Recursively process parent instances
-            markInstanceRecursively(values[memberName], ogchild)
-        elseif not config.production then
-            -- Development only: wrap methods for scope tracking
-            -- This wrapper is what enables private/protected access control
+    -- Recursively process parent instances
+    for parentBase, memberName in pairs(base._parentMembers) do
+        markInstanceRecursively(values[memberName], ogchild)
+    end
+
+    -- Development only: wrap methods for scope tracking
+    -- This wrapper is what enables private/protected access control
+    if not config.production then
+        local metadata = base._metadata
+        for i = 1, #base._ownMembers do
+            local memberName = base._ownMembers[i]
             local value = values[memberName]
-            if value and type(value) == "function" then
+            if type(value) == "function" then
                 local fn = value
-                local declaringClass = meta.owner  -- The class that declared this method
+                local declaringClass = metadata[memberName].owner
 
                 values[memberName] = function(selfOrData, ...)
                     -- Check if called on the instance (self:method()) vs standalone (fn())

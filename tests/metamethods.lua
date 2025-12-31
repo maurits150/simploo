@@ -321,3 +321,62 @@ function Test:testCustomLe()
     a.value = 10
     assertFalse(a <= b)
 end
+
+-- Tests that metamethods defined on a parent class work on child instances.
+-- When a child inherits from a parent with __add, using + on the child
+-- should invoke the parent's __add metamethod correctly.
+function Test:testInheritedMetamethod()
+    class "MetaParent" {
+        public {
+            value = 0;
+            
+            meta {
+                __add = function(self, other)
+                    return self.value + other
+                end;
+            }
+        }
+    }
+
+    class "MetaChild" extends "MetaParent" {
+        public {
+            childValue = "child";
+        }
+    }
+
+    local child = MetaChild.new()
+    child.value = 10
+    assertEquals(child + 5, 15)
+end
+
+-- Tests that metamethods inherited through multiple levels work correctly.
+-- Grandchild should be able to use __mul defined on grandparent.
+function Test:testDeeplyInheritedMetamethod()
+    class "MetaGrandparent" {
+        public {
+            value = 0;
+            
+            meta {
+                __mul = function(self, other)
+                    return self.value * other
+                end;
+            }
+        }
+    }
+
+    class "MetaParent2" extends "MetaGrandparent" {
+        public {
+            parentValue = "parent";
+        }
+    }
+
+    class "MetaGrandchild" extends "MetaParent2" {
+        public {
+            grandchildValue = "grandchild";
+        }
+    }
+
+    local grandchild = MetaGrandchild.new()
+    grandchild.value = 6
+    assertEquals(grandchild * 7, 42)
+end

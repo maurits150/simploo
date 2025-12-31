@@ -50,20 +50,18 @@ function instancemethods:instance_of(otherInstance)
         return true
     end
 
-    -- Check all parents (not just the first one)
-    for memberName, metadata in pairs(self._base._metadata) do
-        if metadata.modifiers.parent then
-            local parentInstance = self._values[memberName]
-            if parentInstance == otherInstance or
-                    parentInstance == otherInstance._base or
-                    parentInstance._base == otherInstance or
-                    parentInstance._base == otherInstance._base then
-                return true
-            end
+    -- Check all parents using precomputed _parentMembers map
+    for parentBase, memberName in pairs(self._base._parentMembers) do
+        local parentInstance = self._values[memberName]
+        if parentInstance == otherInstance or
+                parentInstance == otherInstance._base or
+                parentInstance._base == otherInstance or
+                parentInstance._base == otherInstance._base then
+            return true
+        end
 
-            if parentInstance:instance_of(otherInstance) then
-                return true
-            end
+        if parentInstance:instance_of(otherInstance) then
+            return true
         end
     end
 
@@ -73,10 +71,8 @@ end
 function instancemethods:get_parents()
     local t = {}
 
-    for memberName, metadata in pairs(self._base._metadata) do
-        if metadata.modifiers.parent then
-            t[memberName] = self._values[memberName]
-        end
+    for parentBase, memberName in pairs(self._base._parentMembers) do
+        t[memberName] = self._values[memberName]
     end
 
     return t
@@ -332,11 +328,14 @@ function instancemt:__call(...)
 end
 
 -- Add support for meta methods as class members.
+-- Use __index to find the metamethod (handles inheritance via _ownerLookup).
 for _, metaName in pairs(instancemt.metafunctions) do
     if not instancemt[metaName] then
         instancemt[metaName] = function(self, ...)
-            local value = self._values[metaName]
-            return value and value(self, ...)
+            local value = instancemt.__index(self, metaName)
+            if value then
+                return value(self, ...)
+            end
         end
     end
 end

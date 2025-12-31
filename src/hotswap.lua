@@ -46,6 +46,20 @@ function hotswap:syncMembers(hotInstance, baseInstance)
 
     -- Update _base to point to the new base instance (for metadata lookup)
     hotInstance._base = baseInstance
+    
+    -- Recursively sync parent instances and rebuild _ownerLookup
+    -- The _ownerLookup maps parent class -> parent instance for O(1) inherited member access
+    if hotInstance._ownerLookup then
+        for newParentBase, memberName in pairs(baseInstance._parentMembers) do
+            local parentInstance = hotInstance._values[memberName]
+            if parentInstance then
+                -- Update the lookup to point to new parent base
+                hotInstance._ownerLookup[newParentBase] = parentInstance
+                -- Recursively sync parent's members
+                hotswap:syncMembers(parentInstance, newParentBase)
+            end
+        end
+    end
 end
 
 if simploo.config["classHotswap"] then
