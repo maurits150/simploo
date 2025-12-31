@@ -12,3 +12,5 @@
       dofile("src/" .. name)
   end
   ```
+- ALWAYS read all files in src/ before you start working - unless explicitly told not to.
+- If asked to benchmark, READ the existing benchmark in README.md and give a COMPARISON to those numbers. We always benchmark to see if code became better or worse, not on its own. If printing tables, ensure the spacing is right.

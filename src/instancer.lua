@@ -42,7 +42,8 @@ function instancer:initClass(class)
     baseInstance._name = class.name
     
     -- _metadata stores {owner, modifiers} per member - shared across all instances
-    -- _values stores actual member values - copied to each instance
+    -- Static members have owner = nil (allows skipping static check in hot path)
+    -- _values stores actual member values - copied to each instance (non-static) or shared (static)
     baseInstance._metadata = {}
     baseInstance._values = {}
 
@@ -71,7 +72,7 @@ function instancer:initClass(class)
             baseInstance._values[shortName] = parentBaseInstance
         end
 
-        -- Inherit all members from parent
+        -- Inherit all non-static members from parent
         -- We reference the parent's metadata directly (not a copy) - this is key for the optimization
         -- The metadata.owner still points to the parent class, which is used for:
         -- 1. Access control (private members only accessible within declaring class)
@@ -95,6 +96,7 @@ function instancer:initClass(class)
                 baseInstance._values[parentMemberName] = parentBaseInstance._values[parentMemberName]
             end
         end
+
     end
 
     -- Add this class's own members (overrides any inherited members with same name)
@@ -114,8 +116,14 @@ function instancer:initClass(class)
         end
 
         -- Own members have owner = this class (important for access control)
+        -- Static members have owner = nil in production (skips static check in hot path)
+        -- In dev mode, statics keep owner for access control
+        local owner = baseInstance
+        if formatMember.modifiers.static and config["production"] then
+            owner = nil
+        end
         baseInstance._metadata[formatMemberName] = {
-            owner = baseInstance,
+            owner = owner,
             modifiers = formatMember.modifiers
         }
         baseInstance._values[formatMemberName] = value
@@ -146,17 +154,16 @@ function instancer:initClass(class)
     
     baseInstance._ownMembers = ownMembers
     baseInstance._parentMembers = parentMembers
-    baseInstance._hasAbstract = hasAbstract
 
     -- Wrapper functions to handle both Class.method() and Class:method() calling conventions
-    local classMethods = {"new", "deserialize"}
-    for _, method in ipairs(classMethods) do
-        local fn = instancemt[method]
-        baseInstance[method] = function(selfOrData, ...)
+    for _, method in ipairs({"new", "deserialize"}) do
+        baseInstance[method] = hasAbstract and function()
+            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", class.name))
+        end or function(selfOrData, ...)
             if selfOrData == baseInstance then
-                return fn(baseInstance, ...)
+                return instancemt[method](baseInstance, ...)
             else
-                return fn(baseInstance, selfOrData, ...)
+                return instancemt[method](baseInstance, selfOrData, ...)
             end
         end
     end

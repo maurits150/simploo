@@ -153,8 +153,8 @@ function menu:tests()
 		print("===================================================")
 
 		for k, v in pairs(testfiles) do
-			-- Wipe simploo reference
-			simploo = nil
+			-- Wipe simploo reference but preserve config for next load
+			simploo = {config = {production = testproduction}}
 
 			Test = {}
 
@@ -180,9 +180,6 @@ function menu:tests()
 					file:close()
 				end
 			end
-
-			-- Set production mode
-			simploo.config["production"] = testproduction
 
 			-- Execute the test files
 			dofile("tests/" .. v)
