@@ -6,35 +6,33 @@ simploo.baseinstancemethods = baseinstancemethods
 
 -- Production: only set metatables (no wrapping, polymorphism works through __index)
 -- Development: also wrap methods for scope tracking (private/protected access)
-local markInstanceRecursively
-markInstanceRecursively = simploo.config["production"] and function(instance)
-    setmetatable(instance, simploo.instancemt)
-    for memberName, metadata in pairs(instance._base._metadata) do
-        if metadata.modifiers.parent then
-            markInstanceRecursively(instance._values[memberName])
-        end
-    end
-end or function(instance, ogchild)
+local config = simploo.config
+
+local function markInstanceRecursively(instance, ogchild)
     setmetatable(instance, simploo.instancemt)
 
-    for memberName, metadata in pairs(instance._base._metadata) do
-        if metadata.modifiers.parent then
-            markInstanceRecursively(instance._values[memberName], ogchild)
-        end
+    local metadata = instance._base._metadata
+    local values = instance._values
 
-        local value = instance._values[memberName]
-        if value and type(value) == "function" then
-            local fn = value
-            local declaringClass = metadata.owner
+    for memberName, meta in pairs(metadata) do
+        if meta.modifiers.parent then
+            markInstanceRecursively(values[memberName], ogchild)
+        elseif not config.production then
+            -- Development only: wrap methods for scope tracking
+            local value = values[memberName]
+            if value and type(value) == "function" then
+                local fn = value
+                local declaringClass = meta.owner
 
-            instance._values[memberName] = function(selfOrData, ...)
-                local calledOnInstance = selfOrData == ogchild or selfOrData == instance
-                if not calledOnInstance then
-                    return fn(selfOrData, ...)
+                values[memberName] = function(selfOrData, ...)
+                    local calledOnInstance = selfOrData == ogchild or selfOrData == instance
+                    if not calledOnInstance then
+                        return fn(selfOrData, ...)
+                    end
+                    local prevScope = simploo.util.getScope()
+                    simploo.util.setScope(declaringClass)
+                    return simploo.util.restoreScope(prevScope, fn(ogchild, ...))
                 end
-                local prevScope = simploo.util.getScope()
-                simploo.util.setScope(declaringClass)
-                return simploo.util.restoreScope(prevScope, fn(ogchild, ...))
             end
         end
     end
