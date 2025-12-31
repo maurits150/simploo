@@ -44,45 +44,77 @@ function util.deepCopyValue(value, lookup)
     return copy
 end
 
--- Copy _values from a base instance to create a new instance
--- Parent instances are created recursively
--- Only own members are stored in _values; inherited members are accessed via parent instances
--- Also builds ownerLookup for O(1) access to parent instances by owner class
+--[[
+    copyValues: Creates _values table for a new instance.
+    
+    This is the core of the instantiation optimization. Instead of copying
+    the entire instance structure (old approach), we only copy:
+    1. Values for members declared by THIS class (from _ownMembers list)
+    2. Parent instances (recursively, from _parentMembers list)
+    
+    Inherited members are NOT copied - they're accessed through parent instances
+    via _ownerLookup. This is what makes instantiation fast.
+    
+    Parameters:
+    - baseInstance: The class being instantiated
+    - lookup: Tracks created instances to handle diamond inheritance (shared reference)
+    - ownerLookup: Maps parent class -> parent instance for O(1) member lookup
+    
+    Returns:
+    - values: The new instance's _values table
+    - ownerLookup: The lookup table (nil if no parents)
+    
+    Example for class C extends B extends A:
+    - C's _values contains only C's own members + parent references
+    - When accessing c.aValue (inherited from A), __index uses:
+      ownerLookup[A] -> parentInstance -> parentInstance._values["aValue"]
+]]
 function util.copyValues(baseInstance, lookup, ownerLookup)
     lookup = lookup or {}
     local values = {}
     local srcValues = baseInstance._values
-    local parentMembers = baseInstance._parentMembers
-    local ownMembers = baseInstance._ownMembers
+    local parentMembers = baseInstance._parentMembers  -- Precomputed list of parent reference names
+    local ownMembers = baseInstance._ownMembers        -- Precomputed list of own member names
 
-    -- Process parent members (if any)
+    -- Step 1: Create parent instances (if this class has parents)
+    -- Each parent gets its own instance with its own _values
     if #parentMembers > 0 then
         ownerLookup = ownerLookup or {}
         for i = 1, #parentMembers do
             local memberName = parentMembers[i]
-            local parentBase = srcValues[memberName]
+            local parentBase = srcValues[memberName]  -- The parent class (base instance)
+            
+            -- Only create if not already created (handles diamond inheritance)
             if parentBase and not lookup[parentBase] then
                 local parentInstance = {
                     _base = parentBase,
                     _name = parentBase._name,
-                    _values = nil,
-                    _ownerLookup = nil
+                    _values = nil,       -- Will be filled by recursive call
+                    _ownerLookup = nil   -- Will share the same lookup table
                 }
+                -- Register BEFORE recursing to handle circular references
                 lookup[parentBase] = parentInstance
                 ownerLookup[parentBase] = parentInstance
+                
+                -- Recursively create parent's values (and grandparent instances)
                 parentInstance._values = util.copyValues(parentBase, lookup, ownerLookup)
-                parentInstance._ownerLookup = ownerLookup
+                parentInstance._ownerLookup = ownerLookup  -- All instances share same lookup
             end
+            
+            -- Store reference to parent instance (e.g., self.ParentClass)
             if parentBase then
                 values[memberName] = lookup[parentBase]
             end
         end
     end
 
-    -- Copy own members (fast path - just iterate the precomputed list)
+    -- Step 2: Copy own member values (non-static, declared by this class)
+    -- Uses precomputed _ownMembers list for speed (no condition checking)
     for i = 1, #ownMembers do
         local memberName = ownMembers[i]
         local value = srcValues[memberName]
+        
+        -- Tables need deep copying, primitives and functions are copied by value/reference
         if type(value) == "table" then
             values[memberName] = util.deepCopyValue(value, lookup)
         else

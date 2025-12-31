@@ -1,3 +1,27 @@
+--[[
+    The instancer converts parsed class definitions into base instances (class objects).
+    
+    Key data structures on the base instance:
+    
+    _metadata: Table mapping member names to {owner, modifiers}
+               - owner: the base instance (class) that declared this member
+               - modifiers: {public=true, static=true, ...}
+               This is SHARED - not copied to instances. Accessed via instance._base._metadata.
+    
+    _values: Table mapping member names to their actual values (functions, strings, etc.)
+             For the base instance, these are the default values.
+             When instantiating, only _values is copied (not _metadata).
+    
+    _ownMembers: Array of member names declared by THIS class (not inherited).
+                 Used by copyValues() to quickly iterate only what needs copying.
+    
+    _parentMembers: Array of parent reference names (e.g., "ParentClass").
+                    Used by copyValues() to create parent instances.
+    
+    _hasAbstract: Boolean flag - if true, class cannot be instantiated.
+                  Precomputed to avoid iterating metadata on every new().
+]]
+
 local instancer = {}
 simploo.instancer = instancer
 
@@ -5,18 +29,23 @@ function instancer:initClass(class)
     -- Call the beforeInitClass hook
     class = simploo.hook:fire("beforeInstancerInitClass", class) or class
 
-    -- Create instance
+    -- Create the base instance (this becomes the "class" object users interact with)
     local baseInstance = {}
 
-    -- Base variables
+    -- _base points to self for base instances, or to the class for regular instances
     baseInstance._base = baseInstance
     baseInstance._name = class.name
+    
+    -- _metadata stores {owner, modifiers} per member - shared across all instances
+    -- _values stores actual member values - copied to each instance
     baseInstance._metadata = {}
     baseInstance._values = {}
 
-    -- Copy members from provided parents
+    -- Process parent classes (inheritance)
+    -- For each parent:
+    -- 1. Add a "parent reference" member (e.g., self.ParentClass returns the parent instance)
+    -- 2. Copy all parent's members to this class (metadata references, not copies)
     for _, parentName in pairs(class.parents) do
-        -- Retrieve parent from an earlier defined base instance that's global, or from the usings table.
         local parentBaseInstance = simploo.config["baseInstanceTable"][parentName]
             or (class.resolved_usings[parentName] and simploo.config["baseInstanceTable"][class.resolved_usings[parentName]])
 
@@ -24,23 +53,28 @@ function instancer:initClass(class)
             error(string.format("class %s: could not find parent %s", baseInstance._name, parentName))
         end
 
-        -- Add parent reference (both full path and short name)
+        -- Add parent reference so child can access parent via self.ParentName
+        -- The value is the parent's base instance; at instantiation, this becomes a parent instance
         local parentModifiers = {parent = true}
         baseInstance._metadata[parentName] = {owner = baseInstance, modifiers = parentModifiers}
         baseInstance._values[parentName] = parentBaseInstance
 
+        -- Also add short name (e.g., "Child" for "namespace.Child")
         local shortName = self:classNameFromFullPath(parentName)
         if shortName ~= parentName then
             baseInstance._metadata[shortName] = {owner = baseInstance, modifiers = parentModifiers}
             baseInstance._values[shortName] = parentBaseInstance
         end
 
-        -- Add members from parents to child
+        -- Inherit all members from parent
+        -- We reference the parent's metadata directly (not a copy) - this is key for the optimization
+        -- The metadata.owner still points to the parent class, which is used for:
+        -- 1. Access control (private members only accessible within declaring class)
+        -- 2. Finding the right instance to read/write values from via _ownerLookup
         for parentMemberName, parentMetadata in pairs(parentBaseInstance._metadata) do
             local existingMetadata = baseInstance._metadata[parentMemberName]
-            -- Check for ambiguous members: same name from different parents (not parent references).
-            -- We don't compare values - even if they're equal now, they could diverge later,
-            -- and the child should explicitly choose which parent's member to use (via self.ParentName.member).
+            
+            -- Handle diamond inheritance: same member name from multiple parents
             if existingMetadata
                     and not existingMetadata.modifiers.parent
                     and not parentMetadata.modifiers.parent then
@@ -51,17 +85,19 @@ function instancer:initClass(class)
                 }
                 baseInstance._values[parentMemberName] = nil
             else
+                -- Reference parent's metadata (not a copy!)
                 baseInstance._metadata[parentMemberName] = parentMetadata
                 baseInstance._values[parentMemberName] = parentBaseInstance._values[parentMemberName]
             end
         end
     end
 
-    -- Init own members from class format
+    -- Add this class's own members (overrides any inherited members with same name)
     for formatMemberName, formatMember in pairs(class.members) do
         local value = formatMember.value
 
-        -- Wrap static functions to track scope for private/protected access
+        -- In dev mode, wrap static functions to track scope for private/protected access
+        -- (Non-static methods are wrapped per-instance in markInstanceRecursively)
         if not simploo.config["production"] and formatMember.modifiers.static and type(value) == "function" then
             local fn = value
             local declaringClass = baseInstance
@@ -72,6 +108,7 @@ function instancer:initClass(class)
             end
         end
 
+        -- Own members have owner = this class (important for access control)
         baseInstance._metadata[formatMemberName] = {
             owner = baseInstance,
             modifiers = formatMember.modifiers
@@ -79,20 +116,25 @@ function instancer:initClass(class)
         baseInstance._values[formatMemberName] = value
     end
 
-    -- Precompute member lists for fast instantiation
-    local ownMembers = {}
-    local parentMembers = {}
-    local hasAbstract = false
+    -- Precompute member lists for fast instantiation in copyValues()
+    -- This avoids iterating all metadata and checking conditions on every new()
+    local ownMembers = {}      -- Members declared by THIS class (need to copy values)
+    local parentMembers = {}   -- Parent references (need to create parent instances)
+    local hasAbstract = false  -- Quick check to prevent instantiation
+    
     for memberName, meta in pairs(baseInstance._metadata) do
         if meta.modifiers.parent then
             parentMembers[#parentMembers + 1] = memberName
         elseif meta.owner == baseInstance and not meta.modifiers.static then
+            -- Own non-static members need their values copied to each instance
+            -- Static members are accessed via _base, so not copied
             ownMembers[#ownMembers + 1] = memberName
         end
         if meta.modifiers.abstract then
             hasAbstract = true
         end
     end
+    
     baseInstance._ownMembers = ownMembers
     baseInstance._parentMembers = parentMembers
     baseInstance._hasAbstract = hasAbstract
