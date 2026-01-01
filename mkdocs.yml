@@ -1,6 +1,8 @@
 site_name: SIMPLOO Documentation
 site_description: Simple Lua Object Orientation - A class-based OOP library for Lua
 site_url: https://github.com/maurits150/simploo
+repo_url: https://github.com/maurits150/simploo
+repo_name: maurits150/simploo
 
 theme:
   name: material
@@ -9,6 +11,8 @@ theme:
     - content.code.copy
     - navigation.sections
     - navigation.expand
+  icon:
+    repo: fontawesome/brands/github
 
 markdown_extensions:
   - pymdownx.highlight:
