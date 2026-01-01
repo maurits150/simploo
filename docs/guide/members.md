@@ -108,6 +108,37 @@ player:takeDamage(50)         -- Call method that modifies
 print(player.health)          -- 150
 ```
 
+## Constant Members
+
+Use the `const` modifier to prevent a member from being changed:
+
+=== "Block Syntax"
+
+    ```lua
+    class "Config" {
+        const {
+            MAX_HEALTH = 100;
+        };
+        
+        health = 100;
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    local config = class("Config")
+    config.const.MAX_HEALTH = 100
+    config.health = 100
+    config:register()
+    ```
+
+```lua
+local c = Config.new()
+c.health = 50        -- OK
+c.MAX_HEALTH = 200   -- Error: can not modify const variable MAX_HEALTH
+```
+
 ## Instance Independence
 
 Each instance has its own copy of all members:

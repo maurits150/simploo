@@ -6,55 +6,12 @@ Complete list of all modifiers available in SIMPLOO.
 |----------|-------------|-----|
 | `public` | Accessible from anywhere (default) | [Access Control](../guide/access-control.md) |
 | `private` | Only accessible within the declaring class | [Access Control](../guide/access-control.md) |
-| `protected` | Accessible within the class and subclasses | [Access Control](../guide/access-control.md) |
+| `protected` | Accessible within class and subclasses | [Access Control](../guide/access-control.md) |
 | `static` | Shared across all instances | [Static](../guide/static.md) |
-| `const` | Cannot be modified after initialization | See below |
+| `const` | Cannot be modified after initialization | [Members](../guide/members.md#constant-members) |
 | `transient` | Excluded from serialization | [Serialization](../features/serialization.md) |
 | `meta` | Marks a method as a Lua metamethod | [Metamethods](../features/metamethods.md) |
 | `default` | Interface method with default implementation | [Interfaces](../guide/interfaces.md) |
-
-## const
-
-The `const` modifier prevents a member from being changed after initialization:
-
-=== "Block Syntax"
-
-    ```lua
-    class "Circle" {
-        const {
-            PI = 3.14159;
-        };
-
-        radius = 1;
-
-        getArea = function(self)
-            return self.PI * self.radius * self.radius
-        end;
-    }
-    ```
-
-=== "Builder Syntax"
-
-    ```lua
-    local circle = class("Circle")
-    circle.const.PI = 3.14159
-    circle.radius = 1
-
-    function circle:getArea()
-        return self.PI * self.radius * self.radius
-    end
-
-    circle:register()
-    ```
-
-```lua
-local c = Circle.new()
-print(c.PI)         -- 3.14159
-print(c:getArea())  -- 3.14159
-
-c.radius = 5        -- OK: radius is not const
-c.PI = 3            -- Error: can not modify const variable PI
-```
 
 ## Combining Modifiers
 
