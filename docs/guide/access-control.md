@@ -105,8 +105,7 @@ p:takeDamage(25)       -- OK: public access
 
     vehicle:register()
 
-    local sportsCar = class("SportsCar")
-    sportsCar:extends("Vehicle")
+    local sportsCar = class("SportsCar", {extends = "Vehicle"})
 
     function sportsCar.public:__construct()
         self.maxSpeed = 200  -- Can access parent's protected member

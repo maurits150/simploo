@@ -81,34 +81,36 @@ end
 
 Members marked `transient` are not serialized:
 
-```lua
-class "Connection" {
+=== "Block Syntax"
+
+    ```lua
+    class "Connection" {
+        -- Serialized
+        serverAddress = "";
+        port = 8080;
+
+        transient {
+            -- Not serialized
+            socket = null;
+            lastPing = 0;
+            isConnected = false;
+        };
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    local conn = class("Connection")
     -- Serialized
-    serverAddress = "";
-    port = 8080;
-
-    transient {
-        -- Not serialized
-        socket = null;
-        lastPing = 0;
-        isConnected = false;
-    };
-}
-
-local conn = Connection.new()
-conn.serverAddress = "localhost"
-conn.socket = createSocket()  -- Not saved
-conn.isConnected = true       -- Not saved
-
-local data = simploo.serialize(conn)
--- data contains: serverAddress, port
--- data does NOT contain: socket, lastPing, isConnected
-
-local restored = simploo.deserialize(data)
-print(restored.serverAddress)  -- localhost
-print(restored.socket)         -- nil (default value)
-print(restored.isConnected)    -- false (default value)
-```
+    conn.serverAddress = ""
+    conn.port = 8080
+    -- Not serialized
+    conn.transient.socket = null
+    conn.transient.lastPing = 0
+    conn.transient.isConnected = false
+    conn:register()
+    ```
 
 ## Serializing Inheritance
 

@@ -59,23 +59,46 @@ Mark metamethods with the `meta` modifier:
 
 Customize string representation:
 
-```lua
-class "Person" {
-    name = "";
-    age = 0;
+=== "Block Syntax"
 
-    __construct = function(self, name, age)
+    ```lua
+    class "Person" {
+        name = "";
+        age = 0;
+
+        __construct = function(self, name, age)
+            self.name = name
+            self.age = age
+        end;
+
+        meta {
+            __tostring = function(self)
+                return self.name .. " (age " .. self.age .. ")"
+            end;
+        };
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    local person = class("Person")
+    person.name = ""
+    person.age = 0
+
+    function person:__construct(name, age)
         self.name = name
         self.age = age
-    end;
+    end
 
-    meta {
-        __tostring = function(self)
-            return self.name .. " (age " .. self.age .. ")"
-        end;
-    };
-}
+    function person.meta:__tostring()
+        return self.name .. " (age " .. self.age .. ")"
+    end
 
+    person:register()
+    ```
+
+```lua
 local p = Person.new("Alice", 30)
 print(p)  -- Alice (age 30)
 ```
@@ -84,21 +107,42 @@ print(p)  -- Alice (age 30)
 
 Make instances callable like functions:
 
-```lua
-class "Multiplier" {
-    factor = 1;
+=== "Block Syntax"
 
-    __construct = function(self, f)
-        self.factor = f
-    end;
+    ```lua
+    class "Multiplier" {
+        factor = 1;
 
-    meta {
-        __call = function(self, value)
-            return value * self.factor
+        __construct = function(self, f)
+            self.factor = f
         end;
-    };
-}
 
+        meta {
+            __call = function(self, value)
+                return value * self.factor
+            end;
+        };
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    local mult = class("Multiplier")
+    mult.factor = 1
+
+    function mult:__construct(f)
+        self.factor = f
+    end
+
+    function mult.meta:__call(value)
+        return value * self.factor
+    end
+
+    mult:register()
+    ```
+
+```lua
 local double = Multiplier.new(2)
 local triple = Multiplier.new(3)
 
