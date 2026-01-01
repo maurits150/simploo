@@ -186,6 +186,9 @@ function definition:new()
             end
         end
 
+        -- Clear definition instance before firing hook, so errors in instancer don't leave dirty state
+        simploo.definition.instance = nil
+
         simploo.hook:fire("onDefinitionFinished", self._simploo)
 
         if self._simploo.onFinished then

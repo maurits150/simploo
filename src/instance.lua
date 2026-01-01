@@ -79,6 +79,19 @@ function instancemethods:instance_of(otherInstance)
         return true
     end
 
+    -- Check implemented interfaces
+    local otherBase = otherInstance._base or otherInstance
+    if otherBase._type == "interface" then
+        local implements = self._base._implements
+        if implements then
+            for _, iface in ipairs(implements) do
+                if iface == otherBase then
+                    return true
+                end
+            end
+        end
+    end
+
     -- Check all parents using precomputed _parentMembers map
     for parentBase, memberName in pairs(self._base._parentMembers) do
         local parentInstance = self._values[memberName]
