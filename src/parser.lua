@@ -1,21 +1,64 @@
+--[[
+    Parser Output Format (object._simploo)
+    ======================================
+    
+    The parser converts simploo syntax into a normalized table structure that the
+    instancer uses to create base instances (classes/interfaces).
+    
+    Common fields (both classes and interfaces):
+    --------------------------------------------
+    {
+        name = "FullName",              -- Full name including namespace (e.g., "game.Player")
+        ns = "game",                    -- Namespace only (e.g., "game"), or "" if none
+        parents = {"Parent1", "Parent2"}, -- From 'extends' keyword, names as written in source
+        members = {                     -- All declared members (functions and variables)
+            memberName = {
+                value = <any>,          -- The member's value (function, number, string, table, nil, etc.)
+                modifiers = {           -- Boolean flags for each modifier
+                    public = true,
+                    static = true,
+                    -- ... other modifiers: private, protected, const, meta, abstract, transient
+                }
+            },
+            -- ... more members
+        },
+        usings = {                      -- Raw 'using' declarations (before resolution)
+            {path = "other.namespace.*", alias = nil, errorOnFail = false},
+            {path = "other.SomeClass", alias = "SC", errorOnFail = true},
+        },
+        resolved_usings = {             -- Resolved short name -> full name mapping
+            ["SomeClass"] = "other.SomeClass",
+            ["Player"] = "game.Player",  -- Self-reference for short name access
+        },
+        -- When register() completes, fires the "onParserFinished" hook with this table
+        
+        -- Type discriminator:
+        type = "class",                 -- "class" or "interface"
+        
+        -- Class-specific field:
+        implements = {"IFoo", "IBar"},  -- From 'implements' keyword (classes only)
+        
+        -- Interface notes:
+        -- - Interfaces use 'parents' for extends (interface extends interface)
+        -- - Interfaces cannot have 'implements' (parser errors if attempted)
+    }
+    
+    Member value notes:
+    - Functions are stored as-is (environment set later in register())
+    - simploo.syntax.null is converted to nil
+    - Tables are stored by reference (deep copied later by instancer)
+    
+    Modifier notes:
+    - Modifiers are boolean flags, absent = false
+    - Custom modifiers from config["customModifiers"] are also stored here
+    - For interfaces, members are implicitly public (not enforced by parser)
+]]
+
 local parser = {}
 simploo.parser = parser
 
 parser.instance = false
 parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract", "transient"}
-
--- Parses the simploo class syntax into the following table format:
---
--- {
---     name = "ExampleClass",
---     parents = {"ExampleParent1", "ExampleParent2"},
---     functions = {
---         exampleFunction = {value = function() ... end, modifiers = {public = true, static = true, ...}}
---     }
---     variables = {
---         exampleVariablt = {value = 0, modifiers = {public = true, static = true, ...}}
---     }
--- }
 
 function parser:new()
     local object = {}
@@ -28,36 +71,54 @@ function parser:new()
     object._simploo = {
         ns = "",
         name = "",
+        type = "class",
         parents = {},
         members = {},
         usings = {},
-        onFinishedData = false
+        implements = {}
     }
 
+    -- Optional per-parser callback, called after register() completes
     function object:setOnFinished(fn)
-        if self._simploo.onFinishedData then
-            -- Directly call the finished function if we already have a result available
+        if self._simploo.finished then
             fn(self._simploo)
         else
             self._simploo.onFinished = fn
         end
     end
 
-    function object:class(name, classOperation)
+    local function initType(self, type, name, operation)
         self._simploo.name = name
-
-        for k, v in pairs(classOperation or {}) do
+        self._simploo.type = type
+        for k, v in pairs(operation or {}) do
             if self[k] then
                 self[k](self, v)
             else
-                error("unknown class operation " .. k)
+                error("unknown " .. type .. " operation " .. k)
             end
         end
+    end
+
+    function object:class(name, operation)
+        initType(self, "class", name, operation)
+    end
+
+    function object:interface(name, operation)
+        initType(self, "interface", name, operation)
     end
 
     function object:extends(parentsString)
         for name in string.gmatch(parentsString, "([^,^%s*]+)") do
             table.insert(self._simploo.parents, name)
+        end
+    end
+
+    function object:implements(interfacesString)
+        if self._simploo.type == "interface" then
+            error("interfaces cannot implement other interfaces, use 'extends' instead")
+        end
+        for name in string.gmatch(interfacesString, "([^,^%s*]+)") do
+            table.insert(self._simploo.implements, name)
         end
     end
 
@@ -125,10 +186,12 @@ function parser:new()
             end
         end
 
+        simploo.hook:fire("onParserFinished", self._simploo)
+        
         if self._simploo.onFinished then
             self._simploo.onFinished(self._simploo)
         end
-        self._simploo.onFinishedData = true
+        self._simploo.finished = true
     end
 
     -- Recursively compile and pass through all members and modifiers found in a tree like structured table.
@@ -196,6 +259,7 @@ function parser:new()
     -- This method passes through that call.
     function meta:__call(classContent)
         self:register(classContent)
+        return self
     end
 
     return setmetatable(object, meta)

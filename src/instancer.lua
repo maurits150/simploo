@@ -1,7 +1,9 @@
 --[[
-    The instancer converts parsed class definitions into base instances (class objects).
+    The instancer converts parsed class/interface definitions into base instances.
     
     Key data structures on the base instance:
+    
+    _type: String - "class" or "interface".
     
     _owners: Table mapping member names to owning class (or false for static, nil for non-member)
              This is SHARED - not copied to instances. Accessed via instance._base._owners.
@@ -33,8 +35,11 @@ local instancer = {}
 simploo.instancer = instancer
 
 function instancer:initClass(class)
+    local isInterface = class.type == "interface"
+
     -- Call the beforeInitClass hook
-    class = hook:fire("beforeInstancerInitClass", class) or class
+    local hookName = isInterface and "beforeInstancerInitInterface" or "beforeInstancerInitClass"
+    class = hook:fire(hookName, class) or class
 
     -- Create the base instance (this becomes the "class" object users interact with)
     local baseInstance = {}
@@ -42,6 +47,7 @@ function instancer:initClass(class)
     -- _base points to self for base instances, or to the class for regular instances
     baseInstance._base = baseInstance
     baseInstance._name = class.name
+    baseInstance._type = class.type
     
     -- _owners maps member name -> owning class (or false for static, nil for non-member)
     -- _modifiers maps member name -> {public=true, static=true, ...} (only used in dev mode)
@@ -50,16 +56,16 @@ function instancer:initClass(class)
     baseInstance._modifiers = {}
     baseInstance._values = {}
 
-    -- Process parent classes (inheritance)
+    -- Process parent classes/interfaces (inheritance)
     -- For each parent:
     -- 1. Add a "parent reference" member (e.g., self.ParentClass returns the parent instance)
-    -- 2. Copy all parent's members to this class (metadata references, not copies)
+    -- 2. Copy all parent's members to this class/interface (metadata references, not copies)
     for _, parentName in pairs(class.parents) do
         local parentBaseInstance = config["baseInstanceTable"][parentName]
             or (class.resolved_usings[parentName] and config["baseInstanceTable"][class.resolved_usings[parentName]])
 
         if not parentBaseInstance then
-            error(string.format("class %s: could not find parent %s", baseInstance._name, parentName))
+            error(string.format("%s %s: could not find parent %s", class.type, baseInstance._name, parentName))
         end
 
         -- Add parent reference so child can access parent via self.ParentName
@@ -102,7 +108,6 @@ function instancer:initClass(class)
                 baseInstance._values[parentMemberName] = parentBaseInstance._values[parentMemberName]
             end
         end
-
     end
 
     -- Add this class's own members (overrides any inherited members with same name)
@@ -111,7 +116,8 @@ function instancer:initClass(class)
 
         -- In dev mode, wrap static functions to track scope for private/protected access
         -- (Non-static methods are wrapped per-instance in markInstanceRecursively)
-        if not config["production"] and formatMember.modifiers.static and type(value) == "function" then
+        -- Skip for interfaces - they don't have real implementations
+        if not isInterface and not config["production"] and formatMember.modifiers.static and type(value) == "function" then
             local fn = value
             local declaringClass = baseInstance
             value = function(selfOrData, ...)
@@ -129,7 +135,7 @@ function instancer:initClass(class)
         --   owner == nil   -> not a member, fall through to instancemethods
         -- In dev mode, statics keep owner = baseInstance for access control checks
         local owner = baseInstance
-        if formatMember.modifiers.static and config["production"] then
+        if not isInterface and formatMember.modifiers.static and config["production"] then
             owner = false
         end
         baseInstance._owners[formatMemberName] = owner
@@ -164,25 +170,29 @@ function instancer:initClass(class)
     baseInstance._ownMembers = ownMembers
     baseInstance._parentMembers = parentMembers
 
-    -- Wrapper functions to handle both Class.method() and Class:method() calling conventions
-    for _, method in ipairs({"new", "deserialize"}) do
-        baseInstance[method] = hasAbstract and function()
-            error(string.format("class %s: can not instantiate because it has unimplemented abstract members", class.name))
-        end or function(selfOrData, ...)
-            if selfOrData == baseInstance then
-                return instancemethods[method](baseInstance, ...)
-            else
-                return instancemethods[method](baseInstance, selfOrData, ...)
+    -- Interfaces cannot be instantiated - no new() or deserialize()
+    if not isInterface then
+        -- Wrapper functions to handle both Class.method() and Class:method() calling conventions
+        for _, method in ipairs({"new", "deserialize"}) do
+            baseInstance[method] = hasAbstract and function()
+                error(string.format("class %s: can not instantiate because it has unimplemented abstract members", class.name))
+            end or function(selfOrData, ...)
+                if selfOrData == baseInstance then
+                    return instancemethods[method](baseInstance, ...)
+                else
+                    return instancemethods[method](baseInstance, selfOrData, ...)
+                end
             end
         end
-    end
 
-    setmetatable(baseInstance, instancemt)
+        setmetatable(baseInstance, instancemt)
+    end
 
     -- Initialize the instance for use as a class
     self:registerBaseInstance(baseInstance)
 
-    hook:fire("afterInstancerInitClass", class, baseInstance)
+    local afterHookName = isInterface and "afterInstancerInitInterface" or "afterInstancerInitClass"
+    hook:fire(afterHookName, class, baseInstance)
 
     return baseInstance
 end
@@ -225,3 +235,12 @@ end
 function instancer:classNameFromFullPath(fullPath)
     return string.match(fullPath, ".*%.(.+)") or fullPath
 end
+
+-- Register hook to handle parsed class/interface definitions
+hook:add("onParserFinished", function(parserOutput)
+    -- Check simploo.instancer (not local) so tests can disable by setting it to nil
+    if not simploo.instancer then
+        return nil
+    end
+    return instancer:initClass(parserOutput)
+end)

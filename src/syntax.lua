@@ -1,3 +1,29 @@
+--[[
+    Syntax module - provides global functions for defining classes and interfaces.
+    
+    Supports two syntaxes:
+    
+    Block syntax:
+        class "Player" extends "Entity" implements "ISerializable" {
+            public { health = 100 };
+            attack = function(self) end;
+        }
+    
+    Builder syntax:
+        local c = class("Player", {extends = "Entity", implements = "ISerializable"})
+        c.public.health = 100
+        c.attack = function(self) end
+        c:register()
+    
+    Call order for block syntax (class "A" extends "B" { ... }):
+        1. class("A") called - creates parser, returns it (this is what gets assigned to local var)
+        2. extends("B") called - modifies simploo.parser.instance, returns it
+        3. {...} passed to extends result via __call - triggers register()
+    
+    The extends/implements return value is needed so the body table can be passed to it.
+    The class/interface return value is needed for builder syntax and tests.
+]]
+
 local syntax = {}
 syntax.null = "NullVariable_WgVtlrvpP194T7wUWDWv2mjB" -- Parsed into nil value when assigned to member variables
 simploo.syntax = syntax
@@ -5,33 +31,38 @@ simploo.syntax = syntax
 local activeNamespace = false
 local activeUsings = {}
 
-function syntax.class(className, classOperation)
+-- Hook handler for when parser finishes - clears parser instance and updates activeUsings
+-- This runs after instancer hook, so we receive the base instance (not parser output)
+simploo.hook:add("onParserFinished", function(baseInstance)
+    -- Clear parser instance
+    simploo.parser.instance = nil
+
+    -- Add to activeUsings so other classes/interfaces in namespace can reference it
+    if baseInstance and baseInstance._name then
+        table.insert(activeUsings, {
+            path = baseInstance._name,
+            alias = nil,
+            errorOnFail = true
+        })
+    end
+    
+    return baseInstance
+end)
+
+local function initParser(name, isInterface, operation)
     if simploo.parser.instance then
-        error(string.format("starting new class named %s when previous class named %s has not yet been registered", className, simploo.parser.instance._simploo.name))
+        local kind = isInterface and "interface" or "class"
+        error(string.format("starting new %s named %s when previous class/interface named %s has not yet been registered", 
+            kind, name, simploo.parser.instance._simploo.name))
     end
 
-    simploo.parser.instance = simploo.parser:new(onFinished)
-    simploo.parser.instance:setOnFinished(function(parserOutput)
-        -- Set parser instance to nil first, before calling the instancer
-		-- That means that if the instancer errors out, at least the bugging instance is cleared and not gonna be used again.
-        simploo.parser.instance = nil
-        
-        if simploo.instancer then
-			-- Create a class instance
-            local newClass = simploo.instancer:initClass(parserOutput)
-
-            -- Add the newly created class to the 'using' list, so that any other classes in this namespace don't have to reference to it will automatically use it.
-            -- This prevents the next class in the namespace from havint to refer to earlier classes by the full path.
-            -- We insert directly into the table, we don't want to call our hook for this, or it may cause a loop.
-            table.insert(activeUsings, {
-                path = newClass._name,
-                alias = nil,
-                errorOnFail = true
-            })
-        end
-    end)
+    simploo.parser.instance = simploo.parser:new()
     
-    simploo.parser.instance:class(className, classOperation)
+    if isInterface then
+        simploo.parser.instance:interface(name, operation)
+    else
+        simploo.parser.instance:class(name, operation)
+    end
 
     if activeNamespace and activeNamespace ~= "" then
         simploo.parser.instance:namespace(activeNamespace)
@@ -46,9 +77,20 @@ function syntax.class(className, classOperation)
     return simploo.parser.instance
 end
 
+-- Returns parser for builder syntax (local c = class("Foo"); c.x = 1; c:register())
+function syntax.class(className, classOperation)
+    return initParser(className, false, classOperation)
+end
+
+-- Returns parser for builder syntax (local i = interface("IFoo"); i.x = function() end; i:register())
+function syntax.interface(interfaceName, interfaceOperation)
+    return initParser(interfaceName, true, interfaceOperation)
+end
+
+-- Returns parser so block syntax body {...} can be passed via __call
 function syntax.extends(parents)
    if not simploo.parser.instance then
-        error("calling extends without calling class first")
+        error("calling extends without calling class or interface first")
     end
 
     simploo.parser.instance:extends(parents)
@@ -56,6 +98,16 @@ function syntax.extends(parents)
     return simploo.parser.instance
 end
 
+-- Returns parser so block syntax body {...} can be passed via __call
+function syntax.implements(interfaces)
+    if not simploo.parser.instance then
+        error("calling implements without calling class first")
+    end
+
+    simploo.parser.instance:implements(interfaces)
+
+    return simploo.parser.instance
+end
 
 function syntax.namespace(namespaceName)
 	if not namespaceName then
