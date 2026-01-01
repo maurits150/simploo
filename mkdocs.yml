@@ -28,7 +28,7 @@ nav:
     - Constructors: guide/constructors.md
     - Instances: guide/instances.md
     - Access Control: guide/access-control.md
-    - Static: guide/static.md
+    - Statics: guide/statics.md
     - Inheritance: guide/inheritance.md
     - Interfaces: guide/interfaces.md
     - Namespaces: guide/namespaces.md

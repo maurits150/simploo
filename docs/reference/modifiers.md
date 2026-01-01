@@ -7,7 +7,7 @@ Complete list of all modifiers available in SIMPLOO.
 | `public` | Accessible from anywhere (default) | [Access Control](../guide/access-control.md) |
 | `private` | Only accessible within the declaring class | [Access Control](../guide/access-control.md) |
 | `protected` | Accessible within class and subclasses | [Access Control](../guide/access-control.md) |
-| `static` | Shared across all instances | [Static](../guide/static.md) |
+| `static` | Shared across all instances | [Statics](../guide/statics.md) |
 | `const` | Cannot be modified after initialization | [Members](../guide/members.md#constant-members) |
 | `transient` | Excluded from serialization | [Serialization](../features/serialization.md) |
 | `meta` | Marks a method as a Lua metamethod | [Metamethods](../features/metamethods.md) |

@@ -220,6 +220,43 @@ print(b.sharedValue)    -- 100 (same value!)
 print(Example.sharedValue)  -- 100
 ```
 
+## Static Initializer: `__static`
+
+The `__static` method runs once when the class is defined. Use it to initialize static members that require computation or to register the class somewhere.
+
+=== "Block Syntax"
+
+    ```lua
+    class "Enemy" {
+        static {
+            allEnemies = {};
+            nextId = 0;
+        };
+        
+        __static = function(self)
+            self.nextId = loadNextIdFromDatabase()
+            registerClass(self)
+        end;
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    local enemy = class("Enemy")
+    enemy.static.allEnemies = {}
+    enemy.static.nextId = 0
+    
+    enemy.__static = function(self)
+        self.nextId = loadNextIdFromDatabase()
+        registerClass(self)
+    end
+    
+    enemy:register()
+    ```
+
+This is similar to Java's `static {}` initializer block. The `self` parameter refers to the class itself, not an instance.
+
 ## Memory Efficiency
 
 Static members are not copied when creating new instances, saving memory for large data:

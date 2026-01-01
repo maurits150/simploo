@@ -164,26 +164,6 @@ local c = Circle.new(5)     -- OK
 local bad = Circle.new(-1)  -- Error: Circle radius must be a positive number
 ```
 
-## Class Initialization: `__declare`
-
-The `__declare` method is called once when the class is first defined (not when instances are created). Use it for class-level setup like registering the class in a system or setting up static state.
-
-```lua
-class "Enemy" {
-    static {
-        allEnemies = {};
-    };
-    
-    __declare = function(self)
-        print("Enemy class registered!")
-    end;
-}
--- Output: Enemy class registered!
-```
-
-!!! note
-    `__declare` runs at class definition time, not instance creation time. The `self` parameter refers to the class itself, not an instance.
-
 ## No Constructor Needed
 
 If you don't need custom initialization, you can omit `__construct`. Instances will use the default values:
