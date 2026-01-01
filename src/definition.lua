@@ -30,7 +30,7 @@
             ["SomeClass"] = "other.SomeClass",
             ["Player"] = "game.Player",  -- Self-reference for short name access
         },
-        -- When register() completes, fires the "onDefinitionFinished" hook with this table
+        -- When register() completes, fires the "afterDefinition" hook with this table
 
         -- Type discriminator:
         type = "class",                 -- "class" or "interface"
@@ -189,7 +189,7 @@ function definition:new()
             end
         end
 
-        simploo.hook:fire("onDefinitionFinished", self._simploo)
+        simploo.hook:fire("afterDefinition", self._simploo)
 
         if self._simploo.onFinished then
             self._simploo.onFinished(self._simploo)

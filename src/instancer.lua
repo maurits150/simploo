@@ -37,9 +37,8 @@ simploo.instancer = instancer
 function instancer:initClass(class)
     local isInterface = class.type == "interface"
 
-    -- Call the beforeInitClass hook
-    local hookName = isInterface and "beforeInstancerInitInterface" or "beforeInstancerInitClass"
-    class = hook:fire(hookName, class) or class
+    -- Call the beforeRegister hook
+    class = hook:fire("beforeRegister", class) or class
 
     -- Create the base instance (this becomes the "class" object users interact with)
     local baseInstance = {}
@@ -237,8 +236,7 @@ function instancer:initClass(class)
     -- Initialize the instance for use as a class
     self:registerBaseInstance(baseInstance)
 
-    local afterHookName = isInterface and "afterInstancerInitInterface" or "afterInstancerInitClass"
-    hook:fire(afterHookName, class, baseInstance)
+    hook:fire("afterRegister", class, baseInstance)
 
     return baseInstance
 end
@@ -283,7 +281,7 @@ function instancer:classNameFromFullPath(fullPath)
 end
 
 -- Register hook to handle class/interface definitions
-hook:add("onDefinitionFinished", function(definitionOutput)
+hook:add("afterDefinition", function(definitionOutput)
     -- Check simploo.instancer (not local) so tests can disable by setting it to nil
     if not simploo.instancer then
         return nil

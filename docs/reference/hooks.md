@@ -16,45 +16,48 @@ end)
 ```lua
 -- Remove a specific hook by its callback function
 local myHook = function(instance) ... end
-simploo.hook:add("afterInstancerInstanceNew", myHook)
-simploo.hook:remove("afterInstancerInstanceNew", myHook)
+simploo.hook:add("afterNew", myHook)
+simploo.hook:remove("afterNew", myHook)
 
 -- Remove all hooks for an event
-simploo.hook:remove("afterInstancerInstanceNew")
+simploo.hook:remove("afterNew")
 ```
 
 ## Available Hooks
 
-### beforeInstancerInitClass
+### beforeRegister
 
-Called before a class is initialized, after parsing. Allows modifying the class definition.
+Called before a class or interface is registered. Allows modifying the definition.
 
 **Arguments:**
 
-- `classData` - The parsed class data table
+- `data` - The parsed class/interface data table (check `data.type` for `"class"` or `"interface"`)
 
 **Returns:**
 
-- Modified `classData` (optional)
+- Modified `data` (optional)
 
 ```lua
-simploo.hook:add("beforeInstancerInitClass", function(classData)
-    print("Creating class: " .. classData.name)
+simploo.hook:add("beforeRegister", function(data)
+    print("Creating " .. data.type .. ": " .. data.name)
 
-    -- Modify class data
-    classData.members.createdAt = {
-        value = os.time(),
-        modifiers = {public = true}
-    }
+    if data.type == "class" then
+        -- Modify class data
+        data.members.createdAt = {
+            value = os.time(),
+            modifiers = {public = true}
+        }
+    end
 
-    return classData
+    return data
 end)
 ```
 
-**classData structure:**
+**data structure:**
 
 ```lua
 {
+    type = "class",  -- or "interface"
     name = "ClassName",
     parents = {"Parent1", "Parent2"},
     members = {
@@ -70,81 +73,26 @@ end)
 
 ---
 
-### afterInstancerInitClass
+### afterRegister
 
-Called after a class is fully initialized and registered.
+Called after a class or interface is fully registered.
 
 **Arguments:**
 
-- `classData` - The parsed class data
-- `baseInstance` - The created class instance
+- `data` - The parsed class/interface data
+- `baseInstance` - The created class/interface instance
 
 ```lua
-simploo.hook:add("afterInstancerInitClass", function(classData, baseInstance)
-    print("Class registered: " .. baseInstance:get_name())
+simploo.hook:add("afterRegister", function(data, baseInstance)
+    print(data.type .. " registered: " .. baseInstance:get_name())
 end)
 ```
 
 ---
 
-### beforeInstancerInitInterface
+### afterNew
 
-Called before an interface is initialized, after parsing. Same as `beforeInstancerInitClass` but for interfaces.
-
-**Arguments:**
-
-- `interfaceData` - The parsed interface data table
-
-**Returns:**
-
-- Modified `interfaceData` (optional)
-
-```lua
-simploo.hook:add("beforeInstancerInitInterface", function(interfaceData)
-    print("Creating interface: " .. interfaceData.name)
-    return interfaceData
-end)
-```
-
----
-
-### afterInstancerInitInterface
-
-Called after an interface is fully initialized and registered.
-
-**Arguments:**
-
-- `interfaceData` - The parsed interface data
-- `baseInstance` - The created interface instance
-
-```lua
-simploo.hook:add("afterInstancerInitInterface", function(interfaceData, baseInstance)
-    print("Interface registered: " .. baseInstance:get_name())
-end)
-```
-
----
-
-### onDefinitionFinished
-
-Called when a class or interface definition is completed (after `register()` is called).
-
-**Arguments:**
-
-- `definitionData` - The complete definition data
-
-```lua
-simploo.hook:add("onDefinitionFinished", function(definitionData)
-    print("Finished defining: " .. definitionData.name)
-    print("Type: " .. definitionData.type)  -- "class" or "interface"
-end)
-```
-
----
-
-### afterInstancerInstanceNew
-
-Called after a new instance is created.
+Called after a new instance is created via `new()` or `deserialize()`.
 
 **Arguments:**
 
@@ -155,7 +103,7 @@ Called after a new instance is created.
 - Modified or replacement instance (optional)
 
 ```lua
-simploo.hook:add("afterInstancerInstanceNew", function(instance)
+simploo.hook:add("afterNew", function(instance)
     print("New instance of: " .. instance:get_name())
 
     -- Track all instances
@@ -168,7 +116,7 @@ end)
 
 ---
 
-### onSyntaxNamespace
+### onNamespace
 
 Called when `namespace` is used.
 
@@ -181,7 +129,7 @@ Called when `namespace` is used.
 - Modified namespace name (optional)
 
 ```lua
-simploo.hook:add("onSyntaxNamespace", function(namespaceName)
+simploo.hook:add("onNamespace", function(namespaceName)
     print("Entering namespace: " .. namespaceName)
 
     -- Prefix all namespaces
@@ -191,7 +139,7 @@ end)
 
 ---
 
-### onSyntaxUsing
+### onUsing
 
 Called when `using` is used.
 
@@ -204,7 +152,7 @@ Called when `using` is used.
 - Modified using path (optional)
 
 ```lua
-simploo.hook:add("onSyntaxUsing", function(namespaceName)
+simploo.hook:add("onUsing", function(namespaceName)
     print("Using: " .. namespaceName)
 
     -- Could auto-load the class file here
@@ -227,12 +175,12 @@ local result = simploo.hook:fire("hookName", arg1, arg2, ...)
 Multiple hooks can be registered for the same event. They run in registration order:
 
 ```lua
-simploo.hook:add("afterInstancerInstanceNew", function(instance)
+simploo.hook:add("afterNew", function(instance)
     print("Hook 1")
     return instance
 end)
 
-simploo.hook:add("afterInstancerInstanceNew", function(instance)
+simploo.hook:add("afterNew", function(instance)
     print("Hook 2")
     return instance
 end)
@@ -245,7 +193,7 @@ end)
 ## Example: Auto-Generate Getters/Setters
 
 ```lua
-simploo.hook:add("beforeInstancerInitClass", function(classData)
+simploo.hook:add("beforeRegister", function(classData)
     local newMembers = {}
 
     for memberName, memberData in pairs(classData.members) do
@@ -297,7 +245,7 @@ print(p:getAge())   -- 30
 ```lua
 local instanceLog = {}
 
-simploo.hook:add("afterInstancerInstanceNew", function(instance)
+simploo.hook:add("afterNew", function(instance)
     table.insert(instanceLog, {
         class = instance:get_name(),
         time = os.time(),
@@ -318,7 +266,7 @@ end)
 ## Example: Auto-Load Dependencies
 
 ```lua
-simploo.hook:add("onSyntaxUsing", function(path)
+simploo.hook:add("onUsing", function(path)
     -- Convert namespace path to file path
     local filePath = "classes/" .. path:gsub("%.", "/") .. ".lua"
 

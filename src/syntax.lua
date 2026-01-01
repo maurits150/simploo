@@ -31,12 +31,8 @@ simploo.syntax = syntax
 local activeNamespace = false
 local activeUsings = {}
 
--- Hook handler for when definition finishes - clears definition instance and updates activeUsings
--- This runs after instancer hook, so we receive the base instance (not definition output)
-simploo.hook:add("onDefinitionFinished", function(baseInstance)
-    -- Clear definition instance
-    simploo.definition.instance = nil
-
+-- Hook handler for when class/interface registration completes - updates activeUsings
+simploo.hook:add("afterRegister", function(data, baseInstance)
     -- Add to activeUsings so other classes/interfaces in namespace can reference it
     if baseInstance and baseInstance._name then
         table.insert(activeUsings, {
@@ -45,8 +41,6 @@ simploo.hook:add("onDefinitionFinished", function(baseInstance)
             errorOnFail = true
         })
     end
-    
-    return baseInstance
 end)
 
 local function initDefinition(name, isInterface, operation)
@@ -114,7 +108,7 @@ function syntax.namespace(namespaceName)
         return activeNamespace
     end
 	
-    local returnNamespace = simploo.hook:fire("onSyntaxNamespace", namespaceName)
+    local returnNamespace = simploo.hook:fire("onNamespace", namespaceName)
 
     activeNamespace = returnNamespace or namespaceName
     activeUsings = {}
@@ -139,7 +133,7 @@ function syntax.using(namespaceName)
     activeUsings = {}
 
     -- Fire the hook, you can load other namespaces or classes in this hook because we saved ours above.
-    local returnNamespace = simploo.hook:fire("onSyntaxUsing", namespaceName)
+    local returnNamespace = simploo.hook:fire("onUsing", namespaceName)
 
     -- Restore the previous namespace and usings
     activeNamespace = previousNamespace

@@ -302,7 +302,7 @@ function instancemethods:new(...)
         end)
     end
 
-    return hook:fire("afterInstancerInstanceNew", copy) or copy
+    return hook:fire("afterNew", copy) or copy
 end
 
 local function deserializeIntoValues(instance, data)
@@ -322,7 +322,7 @@ end
 function instancemethods:deserialize(data)
     local copy = createRawInstance(self)
     deserializeIntoValues(copy, data)
-    return hook:fire("afterInstancerInstanceNew", copy) or copy
+    return hook:fire("afterNew", copy) or copy
 end
 
 -------------------------------------------------------------------------------

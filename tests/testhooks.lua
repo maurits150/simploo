@@ -5,13 +5,13 @@
     can chain return values between multiple handlers.
 ]]
 
--- Tests using the beforeInstancerInitClass hook to auto-generate getter/setter methods.
+-- Tests using the beforeRegister hook to auto-generate getter/setter methods.
 -- The hook receives the definition output before the class is finalized, allowing
 -- modification of the members table. This example adds getX/setX methods for
 -- each non-function member, demonstrating metaprogramming capabilities.
-function Test:testHooksBeforeInitClass()
+function Test:testHooksBeforeRegister()
     -- Automatically create getters and setters
-    simploo.hook:add("beforeInstancerInitClass", function(definitionOutput)
+    simploo.hook:add("beforeRegister", function(definitionOutput)
         -- Create new members based on existing ones
         local newMembers = {}
         for memberName, memberData in pairs(definitionOutput.members) do
@@ -61,11 +61,11 @@ end
 -- previous modifications without needing explicit return values.
 function Test:testHookCanModifyInPlace()
     -- Test that multiple hooks can modify the same object
-    simploo.hook:add("beforeInstancerInitClass", function(definitionOutput)
+    simploo.hook:add("beforeRegister", function(definitionOutput)
         definitionOutput.hookValue = 10
     end)
     
-    simploo.hook:add("beforeInstancerInitClass", function(definitionOutput)
+    simploo.hook:add("beforeRegister", function(definitionOutput)
         -- Second hook sees first hook's modification
         assertEquals(definitionOutput.hookValue, 10)
         definitionOutput.hookValue = 20
@@ -82,12 +82,12 @@ end
 -- transform the data being passed through the hook chain.
 function Test:testHookReturnValueChaining()
     -- Test that hook return values are passed to subsequent hooks
-    simploo.hook:add("beforeInstancerInitClass", function(definitionOutput)
+    simploo.hook:add("beforeRegister", function(definitionOutput)
         definitionOutput.chainTest = 100
         return definitionOutput
     end)
     
-    simploo.hook:add("beforeInstancerInitClass", function(definitionOutput)
+    simploo.hook:add("beforeRegister", function(definitionOutput)
         assertEquals(definitionOutput.chainTest, 100)
         return definitionOutput
     end)
@@ -106,54 +106,55 @@ function Test:testHookRemove()
         callCount = callCount + 1
     end
     
-    simploo.hook:add("beforeInstancerInitClass", hookFn)
+    simploo.hook:add("beforeRegister", hookFn)
     
     class "HookRemoveTest1" { value = 0 }
     assertEquals(callCount, 1)
     
-    simploo.hook:remove("beforeInstancerInitClass", hookFn)
+    simploo.hook:remove("beforeRegister", hookFn)
     
     class "HookRemoveTest2" { value = 0 }
     assertEquals(callCount, 1)  -- should not have increased
 end
 
 ---------------------------------------------------------------------
--- afterInstancerInitClass hook tests
+-- afterRegister hook tests
 ---------------------------------------------------------------------
 
--- Tests the afterInstancerInitClass hook which fires after a class is fully registered.
--- From docs: receives classData and baseInstance as arguments.
-function Test:testAfterInstancerInitClass()
-    local capturedClassData = nil
+-- Tests the afterRegister hook which fires after a class is fully registered.
+-- From docs: receives data and baseInstance as arguments.
+function Test:testAfterRegister()
+    local capturedData = nil
     local capturedBaseInstance = nil
     
-    local hookFn = function(classData, baseInstance)
-        capturedClassData = classData
+    local hookFn = function(data, baseInstance)
+        capturedData = data
         capturedBaseInstance = baseInstance
     end
     
-    simploo.hook:add("afterInstancerInitClass", hookFn)
+    simploo.hook:add("afterRegister", hookFn)
     
     class "AfterInitTest" {
         value = 42;
     }
     
-    simploo.hook:remove("afterInstancerInitClass", hookFn)
+    simploo.hook:remove("afterRegister", hookFn)
     
     -- Verify hook was called with correct arguments
-    assertTrue(capturedClassData ~= nil)
+    assertTrue(capturedData ~= nil)
     assertTrue(capturedBaseInstance ~= nil)
-    assertEquals(capturedClassData.name, "AfterInitTest")
+    assertEquals(capturedData.name, "AfterInitTest")
+    assertEquals(capturedData.type, "class")
     assertEquals(capturedBaseInstance._name, "AfterInitTest")
 end
 
 ---------------------------------------------------------------------
--- afterInstancerInstanceNew hook tests
+-- afterNew hook tests
 ---------------------------------------------------------------------
 
--- Tests the afterInstancerInstanceNew hook which fires after an instance is created.
+-- Tests the afterNew hook which fires after an instance is created.
 -- From docs: receives instance as argument and can return a modified/replacement instance.
-function Test:testAfterInstancerInstanceNew()
+function Test:testAfterNew()
     local capturedInstance = nil
     
     local hookFn = function(instance)
@@ -161,25 +162,25 @@ function Test:testAfterInstancerInstanceNew()
         return instance
     end
     
-    simploo.hook:add("afterInstancerInstanceNew", hookFn)
+    simploo.hook:add("afterNew", hookFn)
     
-    class "InstanceNewTest" {
+    class "AfterNewTest" {
         value = 100;
     }
     
-    local inst = InstanceNewTest.new()
+    local inst = AfterNewTest.new()
     
-    simploo.hook:remove("afterInstancerInstanceNew", hookFn)
+    simploo.hook:remove("afterNew", hookFn)
     
     -- Verify hook was called
     assertTrue(capturedInstance ~= nil)
-    assertEquals(capturedInstance._name, "InstanceNewTest")
+    assertEquals(capturedInstance._name, "AfterNewTest")
     assertEquals(capturedInstance.value, 100)
 end
 
--- Tests that afterInstancerInstanceNew can track all instances.
+-- Tests that afterNew can track all instances.
 -- From docs example: storing instances in allInstances table.
-function Test:testAfterInstancerInstanceNewTracking()
+function Test:testAfterNewTracking()
     local allInstances = {}
     
     local hookFn = function(instance)
@@ -187,28 +188,28 @@ function Test:testAfterInstancerInstanceNewTracking()
         return instance
     end
     
-    simploo.hook:add("afterInstancerInstanceNew", hookFn)
+    simploo.hook:add("afterNew", hookFn)
     
-    class "TrackedClass" {
+    class "TrackedClass2" {
         id = 0;
     }
     
-    local a = TrackedClass.new()
-    local b = TrackedClass.new()
-    local c = TrackedClass.new()
+    local a = TrackedClass2.new()
+    local b = TrackedClass2.new()
+    local c = TrackedClass2.new()
     
-    simploo.hook:remove("afterInstancerInstanceNew", hookFn)
+    simploo.hook:remove("afterNew", hookFn)
     
     assertEquals(#allInstances, 3)
 end
 
 ---------------------------------------------------------------------
--- onSyntaxNamespace hook tests
+-- onNamespace hook tests
 ---------------------------------------------------------------------
 
--- Tests the onSyntaxNamespace hook which fires when namespace is used.
+-- Tests the onNamespace hook which fires when namespace is used.
 -- From docs: receives namespaceName and can return a modified namespace name.
-function Test:testOnSyntaxNamespace()
+function Test:testOnNamespace()
     local capturedNamespace = nil
     
     local hookFn = function(namespaceName)
@@ -216,31 +217,31 @@ function Test:testOnSyntaxNamespace()
         return namespaceName
     end
     
-    simploo.hook:add("onSyntaxNamespace", hookFn)
+    simploo.hook:add("onNamespace", hookFn)
     
     namespace "test.hooks.ns"
     
-    simploo.hook:remove("onSyntaxNamespace", hookFn)
+    simploo.hook:remove("onNamespace", hookFn)
     
     assertEquals(capturedNamespace, "test.hooks.ns")
     
     namespace ""
 end
 
--- Tests that onSyntaxNamespace can modify the namespace.
+-- Tests that onNamespace can modify the namespace.
 -- From docs: "return 'myapp.' .. namespaceName" to prefix namespaces.
-function Test:testOnSyntaxNamespaceModify()
+function Test:testOnNamespaceModify()
     local hookFn = function(namespaceName)
         return "prefixed." .. namespaceName
     end
     
-    simploo.hook:add("onSyntaxNamespace", hookFn)
+    simploo.hook:add("onNamespace", hookFn)
     
     namespace "original"
     
     class "NamespaceModifyTest" {}
     
-    simploo.hook:remove("onSyntaxNamespace", hookFn)
+    simploo.hook:remove("onNamespace", hookFn)
     
     -- The class should be in prefixed.original namespace
     assertTrue(prefixed ~= nil)
@@ -251,11 +252,11 @@ function Test:testOnSyntaxNamespaceModify()
 end
 
 ---------------------------------------------------------------------
--- onSyntaxUsing hook tests
+-- onUsing hook tests
 ---------------------------------------------------------------------
 
--- Tests the onSyntaxUsing hook which fires when using is used.
-function Test:testOnSyntaxUsing()
+-- Tests the onUsing hook which fires when using is used.
+function Test:testOnUsing()
     local capturedUsing = nil
     
     local hookFn = function(usingPath)
@@ -263,7 +264,7 @@ function Test:testOnSyntaxUsing()
         return usingPath
     end
     
-    simploo.hook:add("onSyntaxUsing", hookFn)
+    simploo.hook:add("onUsing", hookFn)
     
     namespace "usinghook.test"
     class "UsingTarget" {}
@@ -271,7 +272,7 @@ function Test:testOnSyntaxUsing()
     
     using "usinghook.test.UsingTarget"
     
-    simploo.hook:remove("onSyntaxUsing", hookFn)
+    simploo.hook:remove("onUsing", hookFn)
     
     assertEquals(capturedUsing, "usinghook.test.UsingTarget")
 end

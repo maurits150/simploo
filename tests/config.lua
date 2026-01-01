@@ -225,7 +225,7 @@ function Test:testCustomModifiersWithHook()
         return definitionOutput
     end
     
-    simploo.hook:add("beforeInstancerInitClass", hookFn)
+    simploo.hook:add("beforeRegister", hookFn)
     
     myLib.class "LoggedClass" {
         myLib.logged {
@@ -235,7 +235,7 @@ function Test:testCustomModifiersWithHook()
         normalValue = 10;
     }
     
-    simploo.hook:remove("beforeInstancerInitClass", hookFn)
+    simploo.hook:remove("beforeRegister", hookFn)
     
     -- Hook should have captured the logged member
     assertEquals(#loggedMembers, 1)

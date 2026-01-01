@@ -6,11 +6,13 @@ function hotswap:init()
     -- Using a weak table so that we don't prevent instances from being garbage collected.
     simploo_hotswap_instances = simploo_hotswap_instances or setmetatable({}, {__mode = "v"})
 
-    simploo.hook:add("afterInstancerInitClass", function(classFormat, globalInstance)
-        hotswap:swap(globalInstance)
+    simploo.hook:add("afterRegister", function(data, globalInstance)
+        if data.type == "class" then
+            hotswap:swap(globalInstance)
+        end
     end)
 
-    simploo.hook:add("afterInstancerInstanceNew", function(instance)
+    simploo.hook:add("afterNew", function(instance)
         table.insert(simploo_hotswap_instances, instance)
     end)
 end

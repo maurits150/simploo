@@ -12,6 +12,7 @@ interface "Damageable" {
 ```
 
 Interface methods are just signatures - the function bodies are empty. They document:
+
 - The method name
 - Expected arguments
 
