@@ -321,7 +321,7 @@ print(b.value)  -- both
 ```
 
 !!! note "Parents with Same Short Name"
-    When extending two parents from different namespaces that have the same class name (e.g., `ns1.Foo` and `ns2.Foo`), you must use the full name to access them:
+    When extending two parents from different namespaces that have the same class name (e.g., `ns1.Util` and `ns2.Util`), the short name `Util` becomes `nil` (ambiguous). Use `using ... as` to give them unique aliases:
 
     ```lua
     namespace "ns1"
@@ -331,12 +331,25 @@ print(b.value)  -- both
     class "Util" { getValue = function(self) return 2 end; }
 
     namespace ""
+    using "ns1.Util" as "Util1"
+    using "ns2.Util" as "Util2"
+
+    class "MyClass" extends "Util1, Util2" {}
+
+    local m = MyClass.new()
+    m.Util1:getValue()  -- 1
+    m.Util2:getValue()  -- 2
+    m.Util               -- nil (ambiguous)
+    ```
+
+    Alternatively, you can access parents via their full name using bracket notation:
+
+    ```lua
     class "MyClass" extends "ns1.Util, ns2.Util" {}
 
     local m = MyClass.new()
     m["ns1.Util"]:getValue()  -- 1
     m["ns2.Util"]:getValue()  -- 2
-    m.Util                    -- nil (ambiguous)
     ```
 
 ## Deep Inheritance Chains
