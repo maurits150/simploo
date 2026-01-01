@@ -58,7 +58,7 @@ local definition = {}
 simploo.definition = definition
 
 definition.instance = false
-definition.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract", "transient"}
+definition.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract", "transient", "default"}
 
 function definition:new()
     local object = {}

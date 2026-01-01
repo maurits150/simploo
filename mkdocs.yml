@@ -37,6 +37,7 @@ nav:
   - Advanced:
     - advanced/index.md
     - Inheritance: advanced/inheritance.md
+    - Interfaces: advanced/interfaces.md
     - Namespaces: advanced/namespaces.md
     - Metamethods: advanced/metamethods.md
     - Serialization: advanced/serialization.md
