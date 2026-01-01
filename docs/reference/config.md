@@ -68,7 +68,7 @@ Enables hot-reloading of class definitions, updating existing instances when cla
 simploo.config["classHotswap"] = true
 ```
 
-See [Hotswap](../advanced/hotswap.md) for details.
+See [Hotswap](../features/hotswap.md) for details.
 
 ---
 
@@ -132,7 +132,7 @@ class "Model" {
 }
 ```
 
-See [Custom Modifiers](../advanced/custom-modifiers.md) for details.
+Custom modifiers are markers only - implement their behavior via [hooks](hooks.md).
 
 ---
 

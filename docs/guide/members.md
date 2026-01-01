@@ -297,4 +297,4 @@ print(c:calculate())  -- 10
 ---
 
 !!! note "About Access Control"
-    All members shown here are implicitly `public`, meaning they can be accessed from anywhere. To restrict access, see [Access Modifiers](../modifiers/access.md).
+    All members shown here are implicitly `public`, meaning they can be accessed from anywhere. To restrict access, see [Access Control](access-control.md).

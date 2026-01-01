@@ -22,29 +22,23 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - Basics:
-    - basics/index.md
-    - Classes: basics/classes.md
-    - Members: basics/members.md
-    - Constructors: basics/constructors.md
-    - Instances: basics/instances.md
-    - Null Values: basics/null-values.md
-  - Modifiers:
-    - modifiers/index.md
-    - Access Modifiers: modifiers/access.md
-    - Static: modifiers/static.md
-    - Other Modifiers: modifiers/other.md
-  - Advanced:
-    - advanced/index.md
-    - Inheritance: advanced/inheritance.md
-    - Interfaces: advanced/interfaces.md
-    - Namespaces: advanced/namespaces.md
-    - Metamethods: advanced/metamethods.md
-    - Serialization: advanced/serialization.md
-    - Hotswap: advanced/hotswap.md
-    - Custom Modifiers: advanced/custom-modifiers.md
+  - Guide:
+    - Classes: guide/classes.md
+    - Members: guide/members.md
+    - Constructors: guide/constructors.md
+    - Instances: guide/instances.md
+    - Access Control: guide/access-control.md
+    - Static: guide/static.md
+    - Inheritance: guide/inheritance.md
+    - Interfaces: guide/interfaces.md
+    - Namespaces: guide/namespaces.md
+    - Null Values: guide/null-values.md
+  - Features:
+    - Metamethods: features/metamethods.md
+    - Serialization: features/serialization.md
+    - Hotswap: features/hotswap.md
   - Reference:
-    - reference/index.md
     - Configuration: reference/config.md
     - Hooks: reference/hooks.md
     - Instance Methods: reference/instance-methods.md
+    - Modifiers: reference/modifiers.md

@@ -76,6 +76,5 @@ SIMPLOO supports two syntax styles. Use whichever you prefer:
 ## Next Steps
 
 - [Getting Started](getting-started.md) - Installation and your first class
-- [Basics](basics/index.md) - Learn the fundamentals
-- [Modifiers](modifiers/index.md) - Control access and behavior
-- [Advanced](advanced/index.md) - Inheritance, namespaces, and more
+- [Guide](guide/classes.md) - Learn the fundamentals
+- [Reference](reference/modifiers.md) - Complete API reference

@@ -157,7 +157,7 @@ See [Configuration](reference/config.md) for all available options.
 
 ## Next Steps
 
-- [Classes](basics/classes.md) - Learn both syntax styles in detail
-- [Members](basics/members.md) - Variables and methods
-- [Constructors](basics/constructors.md) - Initialization and cleanup
-- [Modifiers](modifiers/index.md) - Add `private`, `static`, and more
+- [Classes](guide/classes.md) - Learn both syntax styles in detail
+- [Members](guide/members.md) - Variables and methods
+- [Constructors](guide/constructors.md) - Initialization and cleanup
+- [Modifiers](reference/modifiers.md) - Add `private`, `static`, and more
