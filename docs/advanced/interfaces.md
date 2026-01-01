@@ -15,6 +15,14 @@ Interface methods are just signatures - the function bodies are empty. They docu
 - The method name
 - Expected arguments
 
+!!! note "Interface Restrictions"
+    Interfaces can only contain:
+    
+    - **Required methods** - must be implemented by classes
+    - **Default methods** - optional, with a default implementation
+    
+    Variables, static methods, and private/protected members are not allowed in interfaces.
+
 ## Implementing an Interface
 
 Use `implements` to declare that a class fulfills an interface contract:

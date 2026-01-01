@@ -284,7 +284,7 @@ local function createRawInstance(baseInstance)
     return copy
 end
 
--- Note: abstract class check is handled in instancer.lua by replacing this method
+
 function instancemethods:new(...)
     local copy = createRawInstance(self)
 

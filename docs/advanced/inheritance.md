@@ -320,6 +320,25 @@ local b = Both.new()
 print(b.value)  -- both
 ```
 
+!!! note "Parents with Same Short Name"
+    When extending two parents from different namespaces that have the same class name (e.g., `ns1.Foo` and `ns2.Foo`), you must use the full name to access them:
+
+    ```lua
+    namespace "ns1"
+    class "Util" { getValue = function(self) return 1 end; }
+
+    namespace "ns2"
+    class "Util" { getValue = function(self) return 2 end; }
+
+    namespace ""
+    class "MyClass" extends "ns1.Util, ns2.Util" {}
+
+    local m = MyClass.new()
+    m["ns1.Util"]:getValue()  -- 1
+    m["ns2.Util"]:getValue()  -- 2
+    m.Util                    -- nil (ambiguous)
+    ```
+
 ## Deep Inheritance Chains
 
 Inheritance can go multiple levels deep:

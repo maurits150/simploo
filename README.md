@@ -45,7 +45,8 @@ print(rect:getDiagonal())  -- 5
 
 ## Features
 
-- Access modifiers: `public`, `private`, `protected`, `static`, `const`, `abstract`
+- Access modifiers: `public`, `private`, `protected`, `static`, `const`
+- Interfaces with `default` methods
 - Multiple inheritance
 - Constructors (`__construct`) and finalizers (`__finalize`)
 - Metamethods (`__tostring`, `__call`, `__add`, etc.)

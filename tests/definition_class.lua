@@ -165,7 +165,6 @@ function Test:testAllModifiersBlockSyntax()
         protected { protVar = 3; };
         static { staticVar = 4; };
         const { constVar = 5; };
-        abstract { abstractFn = function(self) end; };
         transient { transientVar = 6; };
     }
 
@@ -175,7 +174,6 @@ function Test:testAllModifiersBlockSyntax()
         assertEquals(output.members.protVar.modifiers["protected"], true)
         assertEquals(output.members.staticVar.modifiers["static"], true)
         assertEquals(output.members.constVar.modifiers["const"], true)
-        assertEquals(output.members.abstractFn.modifiers["abstract"], true)
         assertEquals(output.members.transientVar.modifiers["transient"], true)
     end)
 end
@@ -207,7 +205,6 @@ function Test:testAllModifiersBuilderSyntax()
     c.protected.protVar = 3
     c.static.staticVar = 4
     c.const.constVar = 5
-    c.abstract.abstractFn = function(self) end
     c.transient.transientVar = 6
     c:register()
 
@@ -217,7 +214,6 @@ function Test:testAllModifiersBuilderSyntax()
         assertEquals(output.members.protVar.modifiers["protected"], true)
         assertEquals(output.members.staticVar.modifiers["static"], true)
         assertEquals(output.members.constVar.modifiers["const"], true)
-        assertEquals(output.members.abstractFn.modifiers["abstract"], true)
         assertEquals(output.members.transientVar.modifiers["transient"], true)
     end)
 end

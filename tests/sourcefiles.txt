@@ -23,7 +23,6 @@ fenvupdates.lua
 definition_internal_fields.lua
 metamethods.lua
 modifier_const.lua
-modifier_abstract.lua
 instancer_interface_validation.lua
 finalize.lua
 config.lua

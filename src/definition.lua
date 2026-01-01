@@ -17,7 +17,7 @@
                 modifiers = {           -- Boolean flags for each modifier
                     public = true,
                     static = true,
-                    -- ... other modifiers: private, protected, const, meta, abstract, transient
+                    -- ... other modifiers: private, protected, const, meta, transient
                 }
             },
             -- ... more members
@@ -58,7 +58,7 @@ local definition = {}
 simploo.definition = definition
 
 definition.instance = false
-definition.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract", "transient", "default"}
+definition.modifiers = {"public", "private", "protected", "static", "const", "meta", "transient", "default"}
 
 function definition:new()
     local object = {}
@@ -123,6 +123,9 @@ function definition:new()
     end
 
     function object:register(classContent)
+        -- Clear definition instance immediately so errors don't leave dirty state
+        simploo.definition.instance = nil
+
         if classContent then
             self:addMemberRecursive(classContent)
         end
@@ -186,9 +189,6 @@ function definition:new()
             end
         end
 
-        -- Clear definition instance before firing hook, so errors in instancer don't leave dirty state
-        simploo.definition.instance = nil
-
         simploo.hook:fire("onDefinitionFinished", self._simploo)
 
         if self._simploo.onFinished then
@@ -220,6 +220,20 @@ function definition:new()
     function object:addMember(memberName, memberValue, modifiers)
         if memberValue == simploo.syntax.null then
             memberValue = nil
+        end
+
+        -- Interfaces only allow public methods (required) or public default methods (optional)
+        if self._simploo.type == "interface" then
+            if type(memberValue) ~= "function" then
+                error(string.format("interface %s: member '%s' must be a function", 
+                    self._simploo.name, memberName))
+            end
+            for _, modifier in pairs(modifiers or {}) do
+                if modifier ~= "default" then
+                    error(string.format("interface %s: member '%s' has invalid modifier '%s' (only 'default' allowed)", 
+                        self._simploo.name, memberName, modifier))
+                end
+            end
         end
 
         self._simploo.members[memberName] = {

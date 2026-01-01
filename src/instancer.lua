@@ -60,6 +60,7 @@ function instancer:initClass(class)
     -- For each parent:
     -- 1. Add a "parent reference" member (e.g., self.ParentClass returns the parent instance)
     -- 2. Copy all parent's members to this class/interface (metadata references, not copies)
+    local assignedShortNames = {}
     for _, parentName in pairs(class.parents) do
         local parentBaseInstance = config["baseInstanceTable"][parentName]
             or (class.resolved_usings[parentName] and config["baseInstanceTable"][class.resolved_usings[parentName]])
@@ -75,12 +76,20 @@ function instancer:initClass(class)
         baseInstance._modifiers[parentName] = parentModifiers
         baseInstance._values[parentName] = parentBaseInstance
 
-        -- Also add short name (e.g., "Child" for "namespace.Child")
+        -- Also add short name (e.g., "Foo" for "namespace.Foo")
+        -- If conflict, keep nil - use full name or 'using ... as' instead
         local shortName = self:classNameFromFullPath(parentName)
         if shortName ~= parentName then
-            baseInstance._owners[shortName] = baseInstance
-            baseInstance._modifiers[shortName] = parentModifiers
-            baseInstance._values[shortName] = parentBaseInstance
+            if not assignedShortNames[shortName] then
+                assignedShortNames[shortName] = true
+                baseInstance._owners[shortName] = baseInstance
+                baseInstance._modifiers[shortName] = parentModifiers
+                baseInstance._values[shortName] = parentBaseInstance
+            else
+                baseInstance._owners[shortName] = nil
+                baseInstance._modifiers[shortName] = nil
+                baseInstance._values[shortName] = nil
+            end
         end
 
         -- Inherit all non-static members from parent
@@ -143,77 +152,53 @@ function instancer:initClass(class)
         baseInstance._values[formatMemberName] = value
     end
 
-    -- Process implemented interfaces (for classes only)
-    -- 1. Validate that class has all required interface methods
-    -- 2. Copy default methods from interfaces to the class
-    -- 3. Store resolved interfaces for instance_of checks
-    local implementedInterfaces = {}  -- Array of interface base instances
+    -- Process implemented interfaces
+    -- Validate required methods exist, copy default methods, store for instance_of
+    baseInstance._implements = {}
     
-    if not isInterface and class.implements then
-        for _, interfaceName in ipairs(class.implements) do
-            local interfaceBase = config["baseInstanceTable"][interfaceName]
-                or (class.resolved_usings[interfaceName] and config["baseInstanceTable"][class.resolved_usings[interfaceName]])
+    for _, interfaceName in ipairs(class.implements) do
+        local interfaceBase = config["baseInstanceTable"][interfaceName]
+            or (class.resolved_usings[interfaceName] and config["baseInstanceTable"][class.resolved_usings[interfaceName]])
+        
+        if not interfaceBase then
+            error(string.format("class %s: interface %s not found", class.name, interfaceName))
+        end
+        
+        if interfaceBase._type ~= "interface" then
+            error(string.format("class %s: %s is not an interface", class.name, interfaceName))
+        end
+        
+        -- Check interface and its parents
+        local interfacesToCheck = {interfaceBase}
+        for parentBase in pairs(interfaceBase._parentMembers) do
+            table.insert(interfacesToCheck, parentBase)
+        end
+        
+        for _, iface in ipairs(interfacesToCheck) do
+            table.insert(baseInstance._implements, iface)
             
-            if not interfaceBase then
-                error(string.format("class %s: interface %s not found", class.name, interfaceName))
-            end
-            
-            if interfaceBase._type ~= "interface" then
-                error(string.format("class %s: %s is not an interface", class.name, interfaceName))
-            end
-            
-            -- Collect all interfaces (including inherited ones)
-            local interfacesToCheck = {interfaceBase}
-            for parentBase, _ in pairs(interfaceBase._parentMembers) do
-                table.insert(interfacesToCheck, parentBase)
-            end
-            
-            -- Validate and copy from each interface
-            for _, iface in ipairs(interfacesToCheck) do
-                for memberName, owner in pairs(iface._owners) do
-                    local mods = iface._modifiers[memberName]
-                    -- Skip parent references and non-function members
-                    if not (mods and mods.parent) and type(iface._values[memberName]) == "function" then
-                        local classHasMember = baseInstance._owners[memberName] ~= nil
-                        local isDefault = mods and mods.default
-                        
-                        if not classHasMember then
-                            if isDefault then
-                                -- Copy default method from interface to class
-                                baseInstance._owners[memberName] = baseInstance
-                                baseInstance._modifiers[memberName] = {public = true}
-                                baseInstance._values[memberName] = iface._values[memberName]
-                            else
-                                -- Required method missing
-                                error(string.format("class %s: missing method '%s' required by interface %s", 
-                                    class.name, memberName, iface._name))
-                            end
-                        end
-                    end
-                end
-                
-                -- Add to implemented interfaces list (avoid duplicates)
-                local found = false
-                for _, existing in ipairs(implementedInterfaces) do
-                    if existing == iface then
-                        found = true
-                        break
-                    end
-                end
-                if not found then
-                    table.insert(implementedInterfaces, iface)
+            for memberName, mods in pairs(iface._modifiers) do
+                if mods.parent then
+                    -- Skip parent references
+                elseif baseInstance._owners[memberName] then
+                    -- Class already has this method
+                elseif mods.default then
+                    -- Copy default method
+                    baseInstance._owners[memberName] = baseInstance
+                    baseInstance._modifiers[memberName] = mods
+                    baseInstance._values[memberName] = iface._values[memberName]
+                else
+                    error(string.format("class %s: missing method '%s' required by interface %s", 
+                        class.name, memberName, iface._name))
                 end
             end
         end
     end
-    
-    baseInstance._implements = implementedInterfaces
 
     -- Precompute member lists for fast instantiation in copyValues()
     -- This avoids iterating all owners/modifiers and checking conditions on every new()
     local ownMembers = {}      -- Members declared by THIS class (need to copy values)
     local parentMembers = {}   -- Parent base -> member name (dedupes short name vs full name)
-    local hasAbstract = false  -- Quick check to prevent instantiation
     
     for memberName, owner in pairs(baseInstance._owners) do
         local mods = baseInstance._modifiers[memberName]
@@ -228,9 +213,6 @@ function instancer:initClass(class)
             -- Static members are accessed via _base, so not copied
             ownMembers[#ownMembers + 1] = memberName
         end
-        if mods and mods.abstract then
-            hasAbstract = true
-        end
     end
     
     baseInstance._ownMembers = ownMembers
@@ -240,9 +222,7 @@ function instancer:initClass(class)
     if not isInterface then
         -- Wrapper functions to handle both Class.method() and Class:method() calling conventions
         for _, method in ipairs({"new", "deserialize"}) do
-            baseInstance[method] = hasAbstract and function()
-                error(string.format("class %s: can not instantiate because it has unimplemented abstract members", class.name))
-            end or function(selfOrData, ...)
+            baseInstance[method] = function(selfOrData, ...)
                 if selfOrData == baseInstance then
                     return instancemethods[method](baseInstance, ...)
                 else

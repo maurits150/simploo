@@ -217,21 +217,7 @@ function Test:testMarkerInterface()
     assertEquals(m.value, 42)
 end
 
--- Test: non-function interface members should not require implementation
-function Test:testInterfaceNonFunctionMembersIgnored()
-    interface "IWithConstant" {
-        VERSION = 1;  -- Non-function member
-        getValue = function(self) end;  -- Function member
-    }
 
-    -- Should only need to implement getValue, not VERSION
-    class "ImplWithConstant" implements "IWithConstant" {
-        getValue = function(self) return 42 end;
-    }
-
-    local impl = ImplWithConstant.new()
-    assertEquals(impl:getValue(), 42)
-end
 
 -- Test: default interface methods are optional
 function Test:testDefaultMethodsAreOptional()
@@ -388,3 +374,5 @@ function Test:testImplementsWithUsing()
     local obj = my.ns.LocalImpl.new()
     assertEquals(obj:remoteMethod(), "remote")
 end
+
+

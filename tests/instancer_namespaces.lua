@@ -127,3 +127,32 @@ function Test:testClassCanReferenceSelf()
     assertEquals(v3.x, 4)
     assertEquals(v3.y, 6)
 end
+
+-- Tests extending two parents with the same short name from different namespaces.
+-- When extending ns1.Foo and ns2.Foo, the child should be able to access both
+-- via their full names (self["ns1.Foo"] and self["ns2.Foo"]).
+-- The short name (self.Foo) should be ambiguous and not accessible.
+function Test:testTwoParentsWithSameShortName()
+    namespace "parent1"
+    class "Same" {
+        getValue = function(self) return 1 end;
+    }
+
+    namespace "parent2"
+    class "Same" {
+        getValue = function(self) return 2 end;
+    }
+
+    namespace ""
+    class "ChildOfBoth" extends "parent1.Same, parent2.Same" {
+    }
+
+    local c = ChildOfBoth.new()
+
+    -- Full names should work
+    assertEquals(c["parent1.Same"]:getValue(), 1)
+    assertEquals(c["parent2.Same"]:getValue(), 2)
+
+    -- Short name should be nil (ambiguous - can't know which parent)
+    assertEquals(c.Same, nil)
+end
