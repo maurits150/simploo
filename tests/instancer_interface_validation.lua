@@ -5,6 +5,10 @@
     that the class has all methods declared by the interface.
 ]]
 
+---------------------------------------------------------------------
+-- Tests that work in all modes (success cases)
+---------------------------------------------------------------------
+
 -- Test: class implementing interface with all methods succeeds
 function Test:testImplementsWithAllMethods()
     interface "IMovable" {
@@ -31,27 +35,6 @@ function Test:testImplementsWithAllMethods()
     local x, y = p:getPosition()
     assertEquals(x, 5)
     assertEquals(y, 3)
-end
-
--- Test: class missing interface method fails at definition time
-function Test:testImplementsMissingMethodFails()
-    interface "IDrawable" {
-        draw = function(self) end;
-        setColor = function(self, color) end;
-    }
-
-    local success, err = pcall(function()
-        class "BadShape" implements "IDrawable" {
-            -- Only implements draw, missing setColor
-            draw = function(self)
-                return "drawing"
-            end;
-        }
-    end)
-
-    assertFalse(success)
-    assertStrContains(err, "setColor")
-    assertStrContains(err, "IDrawable")
 end
 
 -- Test: class implementing multiple interfaces
@@ -82,61 +65,6 @@ function Test:testImplementsMultipleInterfaces()
     nc:increment()
     assertEquals(nc:getName(), "MyCounter")
     assertEquals(nc:getCount(), 2)
-end
-
--- Test: class missing method from one of multiple interfaces fails
-function Test:testImplementsMultipleMissingMethodFails()
-    interface "IFirst" {
-        first = function(self) end;
-    }
-
-    interface "ISecond" {
-        second = function(self) end;
-    }
-
-    local success, err = pcall(function()
-        class "PartialImpl" implements "IFirst, ISecond" {
-            -- Only implements first, missing second
-            first = function(self) return 1 end;
-        }
-    end)
-
-    assertFalse(success)
-    assertStrContains(err, "second")
-    assertStrContains(err, "ISecond")
-end
-
--- Test: interface not found error
-function Test:testImplementsInterfaceNotFound()
-    local success, err = pcall(function()
-        class "LonelyClass" implements "INonExistent" {
-            foo = function(self) end;
-        }
-    end)
-
-    assertFalse(success)
-    assertStrContains(err, "INonExistent")
-end
-
--- Test: interface extending interface - class must implement all
-function Test:testImplementsExtendedInterface()
-    interface "IBase" {
-        baseMethod = function(self) end;
-    }
-
-    interface "IDerived" extends "IBase" {
-        derivedMethod = function(self) end;
-    }
-
-    -- Should fail - missing baseMethod from parent interface
-    local success, err = pcall(function()
-        class "PartialDerivedImpl" implements "IDerived" {
-            derivedMethod = function(self) return "derived" end;
-        }
-    end)
-
-    assertFalse(success)
-    assertStrContains(err, "baseMethod")
 end
 
 -- Test: class implementing extended interface with all methods succeeds
@@ -193,7 +121,6 @@ function Test:testInheritedMethodSatisfiesInterface()
         getId = function(self) return self.id end;
     }
 
-    -- ChildWithId inherits getId from BaseWithId, which should satisfy IIdentifiable
     class "ChildWithId" extends "BaseWithId" implements "IIdentifiable" {
         name = "child";
     }
@@ -205,9 +132,7 @@ end
 
 -- Test: interface with no methods (marker interface)
 function Test:testMarkerInterface()
-    interface "IMarker" {
-        -- Empty interface, just for marking
-    }
+    interface "IMarker" {}
 
     class "MarkedClass" implements "IMarker" {
         value = 42;
@@ -216,8 +141,6 @@ function Test:testMarkerInterface()
     local m = MarkedClass.new()
     assertEquals(m.value, 42)
 end
-
-
 
 -- Test: default interface methods are optional
 function Test:testDefaultMethodsAreOptional()
@@ -231,7 +154,6 @@ function Test:testDefaultMethodsAreOptional()
         };
     }
 
-    -- Only implements required, not optional
     class "UsesDefault" implements "IWithDefault" {
         required = function(self) return "required" end;
     }
@@ -259,26 +181,6 @@ function Test:testDefaultMethodsCanBeOverridden()
 
     local obj = CustomGreeting.new()
     assertEquals(obj:greet(), "Hi there!")
-end
-
--- Test: missing required method with default present still fails
-function Test:testMissingRequiredWithDefaultPresent()
-    interface "IMixed" {
-        mustHave = function(self) end;
-
-        default {
-            canSkip = function(self) return "skipped" end;
-        };
-    }
-
-    local success, err = pcall(function()
-        class "MissingRequired" implements "IMixed" {
-            -- missing mustHave, only has canSkip covered by default
-        }
-    end)
-
-    assertFalse(success)
-    assertStrContains(err, "mustHave")
 end
 
 -- Test: instance_of works with interfaces
@@ -322,20 +224,6 @@ function Test:testInstanceOfWithInheritedInterface()
     assertTrue(obj:instance_of(IBaseInterface))
 end
 
--- Test: interfaces cannot be instantiated
-function Test:testInterfaceCannotBeInstantiated()
-    interface "INotInstantiable" {
-        foo = function(self) end;
-    }
-
-    local success, err = pcall(function()
-        INotInstantiable.new()
-    end)
-
-    assertFalse(success)
-    assertStrContains(err, "interface")
-end
-
 -- Test: interface with namespaces
 function Test:testInterfaceWithNamespace()
     namespace "validation.test"
@@ -375,4 +263,153 @@ function Test:testImplementsWithUsing()
     assertEquals(obj:remoteMethod(), "remote")
 end
 
+---------------------------------------------------------------------
+-- Validation tests (skip in production mode)
+---------------------------------------------------------------------
 
+if simploo.config["production"] then
+    print("skipping interface validation tests in production mode")
+    return
+end
+
+-- Test: class missing interface method fails at definition time
+function Test:testImplementsMissingMethodFails()
+    interface "IDrawable" {
+        draw = function(self) end;
+        setColor = function(self, color) end;
+    }
+
+    local success, err = pcall(function()
+        class "BadShape" implements "IDrawable" {
+            draw = function(self)
+                return "drawing"
+            end;
+        }
+    end)
+
+    assertFalse(success)
+    assertStrContains(err, "setColor")
+    assertStrContains(err, "IDrawable")
+end
+
+-- Test: class missing method from one of multiple interfaces fails
+function Test:testImplementsMultipleMissingMethodFails()
+    interface "IFirst" {
+        first = function(self) end;
+    }
+
+    interface "ISecond" {
+        second = function(self) end;
+    }
+
+    local success, err = pcall(function()
+        class "PartialImpl" implements "IFirst, ISecond" {
+            first = function(self) return 1 end;
+        }
+    end)
+
+    assertFalse(success)
+    assertStrContains(err, "second")
+    assertStrContains(err, "ISecond")
+end
+
+-- Test: interface not found error
+function Test:testImplementsInterfaceNotFound()
+    local success, err = pcall(function()
+        class "LonelyClass" implements "INonExistent" {
+            foo = function(self) end;
+        }
+    end)
+
+    assertFalse(success)
+    assertStrContains(err, "INonExistent")
+end
+
+-- Test: interface extending interface - class must implement all
+function Test:testImplementsExtendedInterface()
+    interface "IBase" {
+        baseMethod = function(self) end;
+    }
+
+    interface "IDerived" extends "IBase" {
+        derivedMethod = function(self) end;
+    }
+
+    local success, err = pcall(function()
+        class "PartialDerivedImpl" implements "IDerived" {
+            derivedMethod = function(self) return "derived" end;
+        }
+    end)
+
+    assertFalse(success)
+    assertStrContains(err, "baseMethod")
+end
+
+-- Test: missing required method with default present still fails
+function Test:testMissingRequiredWithDefaultPresent()
+    interface "IMixed" {
+        mustHave = function(self) end;
+
+        default {
+            canSkip = function(self) return "skipped" end;
+        };
+    }
+
+    local success, err = pcall(function()
+        class "MissingRequired" implements "IMixed" {}
+    end)
+
+    assertFalse(success)
+    assertStrContains(err, "mustHave")
+end
+
+-- Test: interfaces cannot be instantiated
+function Test:testInterfaceCannotBeInstantiated()
+    interface "INotInstantiable" {
+        foo = function(self) end;
+    }
+
+    local success, err = pcall(function()
+        INotInstantiable.new()
+    end)
+
+    assertFalse(success)
+    assertStrContains(err, "interface")
+end
+
+-- Test: member with same name but wrong type fails
+function Test:testImplementsWrongTypeFails()
+    interface "ICallable" {
+        call = function(self) end;
+    }
+
+    local success, err = pcall(function()
+        class "NotCallable" implements "ICallable" {
+            call = "not a function";
+        }
+    end)
+
+    assertFalse(success)
+    assertStrContains(err, "call")
+    assertStrContains(err, "must be a function")
+    assertStrContains(err, "got string")
+end
+
+-- Test: strict interfaces disabled - mismatched args allowed
+function Test:testNonStrictInterfaceAllowsMismatch()
+    local originalStrict = simploo.config["strictInterfaces"]
+    simploo.config["strictInterfaces"] = false
+    
+    interface "INonStrict" {
+        action = function(self, a, b, c) end;
+    }
+
+    class "FlexibleImpl" implements "INonStrict" {
+        action = function(self, x) end;
+    }
+
+    simploo.config["strictInterfaces"] = originalStrict
+
+    local obj = FlexibleImpl.new()
+    assertTrue(obj ~= nil)
+end

@@ -136,6 +136,25 @@ Custom modifiers are markers only - implement their behavior via [hooks](hooks.m
 
 ---
 
+### strictInterfaces
+
+When enabled, interface validation also checks that implementing methods have matching argument count, names, and varargs.
+
+| | |
+|---|---|
+| **Type** | `boolean` |
+| **Default** | `false` |
+
+```lua
+simploo.config["strictInterfaces"] = true
+```
+
+**Note:** Requires Lua 5.2+. On Lua 5.1, this setting has no effect because the debug library cannot inspect function arguments without calling the function.
+
+See [Interfaces - Strict Interface Checking](../guide/interfaces.md#strict-interface-checking) for details.
+
+---
+
 ## Configuration Summary
 
 | Option | Type | Default | Description |
@@ -146,6 +165,7 @@ Custom modifiers are markers only - implement their behavior via [hooks](hooks.m
 | `baseInstanceTable` | table | `_G` | Where classes are stored |
 | `baseSyntaxTable` | table | `_G` | Where syntax functions are exposed |
 | `customModifiers` | table | `{}` | Custom modifier keywords |
+| `strictInterfaces` | boolean | `false` | Check interface method signatures (Lua 5.2+) |
 
 ## Recommended Settings
 

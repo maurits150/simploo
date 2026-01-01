@@ -107,3 +107,57 @@ function util.setFunctionEnvironment(fn, env)
         end
     end
 end
+
+-- Get argument names from a function using debug library.
+-- Returns array of argument names and isvararg flag, or nil if not supported.
+-- Note: Requires Lua 5.2+ (debug.getlocal on functions was added in 5.2)
+function util.getFunctionArgs(fn)
+    if type(fn) ~= "function" then
+        return nil
+    end
+    
+    if not debug or not debug.getinfo or not debug.getlocal then
+        return nil
+    end
+    
+    local info = debug.getinfo(fn, "u")
+    if not info or not info.nparams then
+        return nil
+    end
+    
+    local args = {}
+    for i = 1, info.nparams do
+        args[i] = debug.getlocal(fn, i)
+    end
+    
+    return args, info.isvararg or false
+end
+
+-- Compare two function signatures. Returns error message string or nil if match.
+function util.compareFunctionArgs(expected, actual, methodName, ifaceName)
+    local expectedArgs, expectedVararg = util.getFunctionArgs(expected)
+    local actualArgs, actualVararg = util.getFunctionArgs(actual)
+    
+    if not expectedArgs or not actualArgs then
+        return nil
+    end
+    
+    if #actualArgs ~= #expectedArgs then
+        return string.format("method '%s' has %d arguments but interface %s expects %d",
+            methodName, #actualArgs, ifaceName, #expectedArgs)
+    end
+    
+    for i = 1, #expectedArgs do
+        if actualArgs[i] ~= expectedArgs[i] then
+            return string.format("method '%s' argument %d is named '%s' but interface %s expects '%s'",
+                methodName, i, actualArgs[i], ifaceName, expectedArgs[i])
+        end
+    end
+    
+    if expectedVararg and not actualVararg then
+        return string.format("method '%s' must have varargs (...) to satisfy interface %s",
+            methodName, ifaceName)
+    end
+    
+    return nil
+end

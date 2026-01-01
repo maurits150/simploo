@@ -180,7 +180,24 @@ function instancer:initClass(class)
                 if mods.parent then
                     -- Skip parent references
                 elseif baseInstance._owners[memberName] then
-                    -- Class already has this method
+                    -- Class has this member - verify types match (skip in production)
+                    if not config["production"] then
+                        local expectedType = type(iface._values[memberName])
+                        local actualType = type(baseInstance._values[memberName])
+                        if actualType ~= expectedType then
+                            error(string.format("class %s: member '%s' must be a %s to satisfy interface %s (got %s)",
+                                class.name, memberName, expectedType, iface._name, actualType))
+                        end
+                        
+                        -- Strict interface checking: verify argument count, names, and varargs match
+                        if config["strictInterfaces"] and actualType == "function" then
+                            local err = simploo.util.compareFunctionArgs(
+                                iface._values[memberName], baseInstance._values[memberName], memberName, iface._name)
+                            if err then
+                                error(string.format("class %s: %s", class.name, err))
+                            end
+                        end
+                    end
                 elseif mods.default then
                     -- Copy default method
                     baseInstance._owners[memberName] = baseInstance

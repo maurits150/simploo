@@ -230,3 +230,34 @@ class "Player" implements "Damageable" {
 local p = game.combat.Player()
 p:instance_of(game.combat.Damageable)  -- true
 ```
+
+## Strict Interface Checking
+
+By default, SIMPLOO only checks that implementing methods exist and have the correct type. Enable `strictInterfaces` for additional validation:
+
+```lua
+simploo.config["strictInterfaces"] = true
+```
+
+With strict checking enabled, SIMPLOO also verifies:
+
+- **Argument count** matches the interface signature
+- **Argument names** match the interface signature  
+- **Varargs** (`...`) are present if the interface requires them
+
+```lua
+interface "Formatter" {
+    format = function(self, template, ...) end;
+}
+
+-- This fails with strictInterfaces = true:
+class "BadFormatter" implements "Formatter" {
+    format = function(self, str)  -- wrong arg name, missing varargs
+        return str
+    end;
+}
+-- Error: class BadFormatter: method 'format' argument 2 is named 'str' but interface Formatter expects 'template'
+```
+
+!!! note
+    Strict interface checking requires Lua 5.2+. On Lua 5.1, this setting has no effect.

@@ -64,6 +64,15 @@ config["baseSyntaxTable"] = _G
 config["customModifiers"] = {}
 
 --
+-- Strict Interfaces
+--
+-- Description: When enabled, interface validation also checks argument count, names, and varargs. Requires Lua 5.2+.
+-- Default: false
+--
+
+config["strictInterfaces"] = false
+
+--
 -- Apply config variables that aren't defined already.
 --
 for k, v in pairs(config) do
