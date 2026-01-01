@@ -101,7 +101,7 @@ end
 -- Tests that a class method can reference its own class by short name.
 -- When defining Vector in namespace "selfref", methods like add() should
 -- be able to call Vector.new() without using the full path selfref.Vector.
--- The parser automatically adds the class itself to its resolved_usings table.
+-- The definition automatically adds the class itself to its resolved_usings table.
 function Test:testClassCanReferenceSelf()
     namespace "selfref"
 

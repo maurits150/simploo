@@ -16,8 +16,8 @@
         c:register()
     
     Call order for block syntax (class "A" extends "B" { ... }):
-        1. class("A") called - creates parser, returns it (this is what gets assigned to local var)
-        2. extends("B") called - modifies simploo.parser.instance, returns it
+        1. class("A") called - creates definition, returns it (this is what gets assigned to local var)
+        2. extends("B") called - modifies simploo.definition.instance, returns it
         3. {...} passed to extends result via __call - triggers register()
     
     The extends/implements return value is needed so the body table can be passed to it.
@@ -31,11 +31,11 @@ simploo.syntax = syntax
 local activeNamespace = false
 local activeUsings = {}
 
--- Hook handler for when parser finishes - clears parser instance and updates activeUsings
--- This runs after instancer hook, so we receive the base instance (not parser output)
-simploo.hook:add("onParserFinished", function(baseInstance)
-    -- Clear parser instance
-    simploo.parser.instance = nil
+-- Hook handler for when definition finishes - clears definition instance and updates activeUsings
+-- This runs after instancer hook, so we receive the base instance (not definition output)
+simploo.hook:add("onDefinitionFinished", function(baseInstance)
+    -- Clear definition instance
+    simploo.definition.instance = nil
 
     -- Add to activeUsings so other classes/interfaces in namespace can reference it
     if baseInstance and baseInstance._name then
@@ -49,64 +49,64 @@ simploo.hook:add("onParserFinished", function(baseInstance)
     return baseInstance
 end)
 
-local function initParser(name, isInterface, operation)
-    if simploo.parser.instance then
+local function initDefinition(name, isInterface, operation)
+    if simploo.definition.instance then
         local kind = isInterface and "interface" or "class"
         error(string.format("starting new %s named %s when previous class/interface named %s has not yet been registered", 
-            kind, name, simploo.parser.instance._simploo.name))
+            kind, name, simploo.definition.instance._simploo.name))
     end
 
-    simploo.parser.instance = simploo.parser:new()
+    simploo.definition.instance = simploo.definition:new()
     
     if isInterface then
-        simploo.parser.instance:interface(name, operation)
+        simploo.definition.instance:interface(name, operation)
     else
-        simploo.parser.instance:class(name, operation)
+        simploo.definition.instance:class(name, operation)
     end
 
     if activeNamespace and activeNamespace ~= "" then
-        simploo.parser.instance:namespace(activeNamespace)
+        simploo.definition.instance:namespace(activeNamespace)
     end
 
     if activeUsings then
         for _, v in pairs(activeUsings) do
-            simploo.parser.instance:using(v)
+            simploo.definition.instance:using(v)
         end
     end
 
-    return simploo.parser.instance
+    return simploo.definition.instance
 end
 
--- Returns parser for builder syntax (local c = class("Foo"); c.x = 1; c:register())
+-- Returns definition for builder syntax (local c = class("Foo"); c.x = 1; c:register())
 function syntax.class(className, classOperation)
-    return initParser(className, false, classOperation)
+    return initDefinition(className, false, classOperation)
 end
 
--- Returns parser for builder syntax (local i = interface("IFoo"); i.x = function() end; i:register())
+-- Returns definition for builder syntax (local i = interface("IFoo"); i.x = function() end; i:register())
 function syntax.interface(interfaceName, interfaceOperation)
-    return initParser(interfaceName, true, interfaceOperation)
+    return initDefinition(interfaceName, true, interfaceOperation)
 end
 
--- Returns parser so block syntax body {...} can be passed via __call
+-- Returns definition so block syntax body {...} can be passed via __call
 function syntax.extends(parents)
-   if not simploo.parser.instance then
+   if not simploo.definition.instance then
         error("calling extends without calling class or interface first")
     end
 
-    simploo.parser.instance:extends(parents)
+    simploo.definition.instance:extends(parents)
 
-    return simploo.parser.instance
+    return simploo.definition.instance
 end
 
--- Returns parser so block syntax body {...} can be passed via __call
+-- Returns definition so block syntax body {...} can be passed via __call
 function syntax.implements(interfaces)
-    if not simploo.parser.instance then
+    if not simploo.definition.instance then
         error("calling implements without calling class first")
     end
 
-    simploo.parser.instance:implements(interfaces)
+    simploo.definition.instance:implements(interfaces)
 
-    return simploo.parser.instance
+    return simploo.definition.instance
 end
 
 function syntax.namespace(namespaceName)
@@ -171,15 +171,15 @@ do
     local initialized = false
 
     function syntax.init()
-        -- Add custom modifiers to parser.modifiers
+        -- Add custom modifiers to definition.modifiers
         for _, modifierName in pairs(simploo.config["customModifiers"]) do
             if not registeredModifiers[modifierName] then
-                table.insert(simploo.parser.modifiers, modifierName)
+                table.insert(simploo.definition.modifiers, modifierName)
             end
         end
 
         -- Add modifiers as global functions
-        for _, modifierName in pairs(simploo.parser.modifiers) do
+        for _, modifierName in pairs(simploo.definition.modifiers) do
             if not registeredModifiers[modifierName] then
                 registeredModifiers[modifierName] = true
                 syntax[modifierName] = function(body)

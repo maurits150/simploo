@@ -236,11 +236,11 @@ function instancer:classNameFromFullPath(fullPath)
     return string.match(fullPath, ".*%.(.+)") or fullPath
 end
 
--- Register hook to handle parsed class/interface definitions
-hook:add("onParserFinished", function(parserOutput)
+-- Register hook to handle class/interface definitions
+hook:add("onDefinitionFinished", function(definitionOutput)
     -- Check simploo.instancer (not local) so tests can disable by setting it to nil
     if not simploo.instancer then
         return nil
     end
-    return instancer:initClass(parserOutput)
+    return instancer:initClass(definitionOutput)
 end)

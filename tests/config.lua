@@ -216,13 +216,13 @@ function Test:testCustomModifiersWithHook()
     simploo.syntax.init()
     
     -- Hook to process the custom modifier
-    local hookFn = function(parserOutput)
-        for memberName, memberData in pairs(parserOutput.members) do
+    local hookFn = function(definitionOutput)
+        for memberName, memberData in pairs(definitionOutput.members) do
             if memberData.modifiers.logged then
                 table.insert(loggedMembers, memberName)
             end
         end
-        return parserOutput
+        return definitionOutput
     end
     
     simploo.hook:add("beforeInstancerInitClass", hookFn)

@@ -1,10 +1,10 @@
 --[[
-    Parser Output Format (object._simploo)
-    ======================================
-    
-    The parser converts simploo syntax into a normalized table structure that the
-    instancer uses to create base instances (classes/interfaces).
-    
+    Definition Output Format (object._simploo)
+    ==========================================
+
+    The definition module converts simploo syntax into a normalized table structure
+    that the instancer uses to create base instances (classes/interfaces).
+
     Common fields (both classes and interfaces):
     --------------------------------------------
     {
@@ -30,37 +30,37 @@
             ["SomeClass"] = "other.SomeClass",
             ["Player"] = "game.Player",  -- Self-reference for short name access
         },
-        -- When register() completes, fires the "onParserFinished" hook with this table
-        
+        -- When register() completes, fires the "onDefinitionFinished" hook with this table
+
         -- Type discriminator:
         type = "class",                 -- "class" or "interface"
-        
+
         -- Class-specific field:
         implements = {"IFoo", "IBar"},  -- From 'implements' keyword (classes only)
-        
+
         -- Interface notes:
         -- - Interfaces use 'parents' for extends (interface extends interface)
-        -- - Interfaces cannot have 'implements' (parser errors if attempted)
+        -- - Interfaces cannot have 'implements' (errors if attempted)
     }
-    
+
     Member value notes:
     - Functions are stored as-is (environment set later in register())
     - simploo.syntax.null is converted to nil
     - Tables are stored by reference (deep copied later by instancer)
-    
+
     Modifier notes:
     - Modifiers are boolean flags, absent = false
     - Custom modifiers from config["customModifiers"] are also stored here
-    - For interfaces, members are implicitly public (not enforced by parser)
+    - For interfaces, members are implicitly public (not enforced by definition)
 ]]
 
-local parser = {}
-simploo.parser = parser
+local definition = {}
+simploo.definition = definition
 
-parser.instance = false
-parser.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract", "transient"}
+definition.instance = false
+definition.modifiers = {"public", "private", "protected", "static", "const", "meta", "abstract", "transient"}
 
-function parser:new()
+function definition:new()
     local object = {}
 
     -- Store all internal state in a single _simploo table to avoid conflicts with user-defined
@@ -78,7 +78,7 @@ function parser:new()
         implements = {}
     }
 
-    -- Optional per-parser callback, called after register() completes
+    -- Optional per-definition callback, called after register() completes
     function object:setOnFinished(fn)
         if self._simploo.finished then
             fn(self._simploo)
@@ -134,7 +134,7 @@ function parser:new()
             for _, using in pairs(self._simploo.usings) do
                 if using["path"]:sub(-1) == "*" then
                     -- Wildcard import, add quick reference to the whole table
-                    local wildcardTable = parser:deepLookup(simploo.config["baseInstanceTable"], using["path"])
+                    local wildcardTable = definition:deepLookup(simploo.config["baseInstanceTable"], using["path"])
                             or {} -- we always 'use' our own namespace, despite it not even existing, so this is often nil
                     for k, v in pairs(wildcardTable) do
                         if type(v) == "table" and v._name then -- it may not even be a simploo class we hit, so check for that
@@ -144,7 +144,7 @@ function parser:new()
                 else
                     -- Absolute import, add direct reference.
                     -- If an alias is provided use that, else extract the last thing after the last dot, as in "a.b.c.ExtractMe"
-                    local classLookup = parser:deepLookup(simploo.config["baseInstanceTable"], using["path"])
+                    local classLookup = definition:deepLookup(simploo.config["baseInstanceTable"], using["path"])
                     if type(classLookup) == "table" and classLookup._name then -- it may not even be a simploo class we hit, so check for that
                         local k = using["alias"] or using["path"]:match("[^%.]+$")
                         if not k then
@@ -166,11 +166,11 @@ function parser:new()
             local mt = {}
             function mt:__index(key)
                 return
-                    -- If a key is a localized class, we look up the actual instance in our baseInstanceTable
-                    -- Putting this first makes 'using' take prevalence over what already exists in _G.
-                    (resolvedUsings[key] and simploo.config["baseInstanceTable"][resolvedUsings[key]])
-                    -- Unknown keys can refer back to _G
-                    or _G[key]
+                -- If a key is a localized class, we look up the actual instance in our baseInstanceTable
+                -- Putting this first makes 'using' take prevalence over what already exists in _G.
+                (resolvedUsings[key] and simploo.config["baseInstanceTable"][resolvedUsings[key]])
+                        -- Unknown keys can refer back to _G
+                        or _G[key]
             end
             function mt:__newindex(key, value)
                 -- Assignments are always written into _G directly..
@@ -186,8 +186,8 @@ function parser:new()
             end
         end
 
-        simploo.hook:fire("onParserFinished", self._simploo)
-        
+        simploo.hook:fire("onDefinitionFinished", self._simploo)
+
         if self._simploo.onFinished then
             self._simploo.onFinished(self._simploo)
         end
@@ -215,10 +215,10 @@ function parser:new()
 
     -- Adds a member to the class definition
     function object:addMember(memberName, memberValue, modifiers)
-	    if memberValue == simploo.syntax.null then
+        if memberValue == simploo.syntax.null then
             memberValue = nil
         end
-		
+
         self._simploo.members[memberName] = {
             value = memberValue,
             modifiers = {}
@@ -265,7 +265,7 @@ function parser:new()
     return setmetatable(object, meta)
 end
 
-function parser:deepLookup(tbl, usingPath)
+function definition:deepLookup(tbl, usingPath)
     usingPath:gsub("[^.]+", function(k) if k ~= "*" then tbl = type(tbl) == "table" and tbl[k] end end)
     return tbl
 end

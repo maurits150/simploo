@@ -6,15 +6,15 @@
 ]]
 
 -- Tests using the beforeInstancerInitClass hook to auto-generate getter/setter methods.
--- The hook receives the parser output before the class is finalized, allowing
+-- The hook receives the definition output before the class is finalized, allowing
 -- modification of the members table. This example adds getX/setX methods for
 -- each non-function member, demonstrating metaprogramming capabilities.
 function Test:testHooksBeforeInitClass()
     -- Automatically create getters and setters
-    simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
+    simploo.hook:add("beforeInstancerInitClass", function(definitionOutput)
         -- Create new members based on existing ones
         local newMembers = {}
-        for memberName, memberData in pairs(parserOutput.members) do
+        for memberName, memberData in pairs(definitionOutput.members) do
             if type(memberData.value) ~= "function" then -- Create for non-functions only
                 local upperName = memberName:sub(1,1):upper() .. memberName:sub(2)
 
@@ -36,10 +36,10 @@ function Test:testHooksBeforeInitClass()
 
         -- Merge with existing members (after done looping)
         for newMemberName, newMemberData in pairs(newMembers) do
-            parserOutput.members[newMemberName] = newMemberData
+            definitionOutput.members[newMemberName] = newMemberData
         end
 
-        return parserOutput
+        return definitionOutput
     end)
 
     class "A" {
@@ -56,19 +56,19 @@ function Test:testHooksBeforeInitClass()
 end
 
 -- Tests that multiple hooks registered for the same event share the same object.
--- When the first hook adds a property to parserOutput, the second hook should
+-- When the first hook adds a property to definitionOutput, the second hook should
 -- see that modification. This enables hook chaining where each hook builds on
 -- previous modifications without needing explicit return values.
 function Test:testHookCanModifyInPlace()
     -- Test that multiple hooks can modify the same object
-    simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
-        parserOutput.hookValue = 10
+    simploo.hook:add("beforeInstancerInitClass", function(definitionOutput)
+        definitionOutput.hookValue = 10
     end)
     
-    simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
+    simploo.hook:add("beforeInstancerInitClass", function(definitionOutput)
         -- Second hook sees first hook's modification
-        assertEquals(parserOutput.hookValue, 10)
-        parserOutput.hookValue = 20
+        assertEquals(definitionOutput.hookValue, 10)
+        definitionOutput.hookValue = 20
     end)
     
     class "HookModifyTest" {
@@ -77,19 +77,19 @@ function Test:testHookCanModifyInPlace()
 end
 
 -- Tests that when a hook returns a value, it becomes the argument for the next hook.
--- If hook1 returns a modified parserOutput, hook2 receives that modified version.
+-- If hook1 returns a modified definitionOutput, hook2 receives that modified version.
 -- This enables transformational pipelines where each hook can replace or
 -- transform the data being passed through the hook chain.
 function Test:testHookReturnValueChaining()
     -- Test that hook return values are passed to subsequent hooks
-    simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
-        parserOutput.chainTest = 100
-        return parserOutput
+    simploo.hook:add("beforeInstancerInitClass", function(definitionOutput)
+        definitionOutput.chainTest = 100
+        return definitionOutput
     end)
     
-    simploo.hook:add("beforeInstancerInitClass", function(parserOutput)
-        assertEquals(parserOutput.chainTest, 100)
-        return parserOutput
+    simploo.hook:add("beforeInstancerInitClass", function(definitionOutput)
+        assertEquals(definitionOutput.chainTest, 100)
+        return definitionOutput
     end)
     
     class "HookChainTest" {
@@ -102,7 +102,7 @@ end
 -- When called with hookName and callbackFn, removes only that specific hook.
 function Test:testHookRemove()
     local callCount = 0
-    local hookFn = function(parserOutput)
+    local hookFn = function(definitionOutput)
         callCount = callCount + 1
     end
     

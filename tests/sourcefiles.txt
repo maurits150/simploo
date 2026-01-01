@@ -10,8 +10,8 @@ instancer_testdoubleconstruct.lua
 instances_hierarchypassthrough.lua
 instances_hierarchypassthrough_adv.lua
 object_permissions_all.lua
-parser_class.lua
-parser_interface.lua
+definition_class.lua
+definition_interface.lua
 serializer.lua
 testhooks.lua
 testhotswap.lua
@@ -20,7 +20,7 @@ declare.lua
 instancer_testshadowing.lua
 instancer_polymorphism.lua
 fenvupdates.lua
-parser_internal_fields.lua
+definition_internal_fields.lua
 metamethods.lua
 modifier_const.lua
 modifier_abstract.lua

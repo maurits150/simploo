@@ -5,6 +5,6 @@ hooks.lua
 serializer.lua
 instance.lua
 instancer.lua
-parser.lua
+definition.lua
 syntax.lua
 hotswap.lua

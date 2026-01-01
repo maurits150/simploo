@@ -1,8 +1,8 @@
 --[[
-    Tests the parser's output format for class definitions.
+    Tests the definition output format for class definitions.
     
     Verifies that both block syntax and builder syntax produce
-    the correct internal parser output structure.
+    the correct internal definition output structure.
 ]]
 
 simploo.instancer = nil -- Disable the instancer for this test
