@@ -5,24 +5,20 @@
     
     _type: String - "class" or "interface".
     
-    _owners: Table mapping member names to owning class (or false for static, nil for non-member)
-             This is SHARED - not copied to instances. Accessed via instance._base._owners.
+    _members: Table mapping member names to {value, owner, static}
+              - value: the actual member value (function, number, table, etc.)
+              - owner: the base instance (class) that declared this member
+              - static: boolean, true if this is a static member
+              For instances, inherited members share the same table reference as parent.
     
     _modifiers: Table mapping member names to {public=true, static=true, ...}
                 This is SHARED - not copied to instances. Used for access control in dev mode.
     
-    _values: Table mapping member names to their actual values (functions, strings, etc.)
-             For the base instance, these are the default values.
-             When instantiating, only _values is copied (not _owners/_modifiers).
-    
     _ownMembers: Array of member names declared by THIS class (not inherited).
-                 Used by copyValues() to quickly iterate only what needs copying.
+                 Used by copyMembers() to quickly iterate only what needs copying.
     
-    _parentMembers: Array of parent reference names (e.g., "ParentClass").
-                    Used by copyValues() to create parent instances.
-    
-    _hasAbstract: Boolean flag - if true, class cannot be instantiated.
-                  Precomputed to avoid iterating metadata on every new().
+    _parentMembers: Map of parent base -> member name.
+                    Used by copyMembers() to create parent instances.
 ]]
 
 -- Cache globals as locals for faster lookup and LuaJIT optimization
@@ -48,17 +44,15 @@ function instancer:initClass(class)
     baseInstance._name = class.name
     baseInstance._type = class.type
     
-    -- _owners maps member name -> owning class (or false for static, nil for non-member)
+    -- _members maps member name -> {value, owner, static}
     -- _modifiers maps member name -> {public=true, static=true, ...} (only used in dev mode)
-    -- _values stores actual member values - copied to each instance (non-static) or shared (static)
-    baseInstance._owners = {}
+    baseInstance._members = {}
     baseInstance._modifiers = {}
-    baseInstance._values = {}
 
     -- Process parent classes/interfaces (inheritance)
     -- For each parent:
     -- 1. Add a "parent reference" member (e.g., self.ParentClass returns the parent instance)
-    -- 2. Copy all parent's members to this class/interface (metadata references, not copies)
+    -- 2. Copy all parent's members to this class/interface (references to parent's member tables)
     local assignedShortNames = {}
     for _, parentName in pairs(class.parents) do
         local parentBaseInstance = config["baseInstanceTable"][parentName]
@@ -70,10 +64,10 @@ function instancer:initClass(class)
 
         -- Add parent reference so child can access parent via self.ParentName
         -- The value is the parent's base instance; at instantiation, this becomes a parent instance
-        local parentModifiers = {parent = true}
-        baseInstance._owners[parentName] = baseInstance
-        baseInstance._modifiers[parentName] = parentModifiers
-        baseInstance._values[parentName] = parentBaseInstance
+        local parentRefModifiers = {parent = true}
+        local parentRefMember = {value = parentBaseInstance, owner = baseInstance, static = false}
+        baseInstance._members[parentName] = parentRefMember
+        baseInstance._modifiers[parentName] = parentRefModifiers
 
         -- Also add short name (e.g., "Foo" for "namespace.Foo")
         -- If conflict, keep nil - use full name or 'using ... as' instead
@@ -81,39 +75,35 @@ function instancer:initClass(class)
         if shortName ~= parentName then
             if not assignedShortNames[shortName] then
                 assignedShortNames[shortName] = true
-                baseInstance._owners[shortName] = baseInstance
-                baseInstance._modifiers[shortName] = parentModifiers
-                baseInstance._values[shortName] = parentBaseInstance
+                baseInstance._members[shortName] = parentRefMember
+                baseInstance._modifiers[shortName] = parentRefModifiers
             else
-                baseInstance._owners[shortName] = nil
+                baseInstance._members[shortName] = nil
                 baseInstance._modifiers[shortName] = nil
-                baseInstance._values[shortName] = nil
             end
         end
 
-        -- Inherit all non-static members from parent
-        -- We reference the parent's owner/modifiers directly (not a copy) - this is key for the optimization
+        -- Inherit all members from parent
+        -- We reference the parent's member table directly (not a copy) - this is key for the optimization
         -- The owner still points to the parent class, which is used for:
         -- 1. Access control (private members only accessible within declaring class)
-        -- 2. Finding the right instance to read/write values from via _ownerLookup
-        for parentMemberName, parentOwner in pairs(parentBaseInstance._owners) do
-            local existingOwner = baseInstance._owners[parentMemberName]
+        -- 2. Polymorphism - child and parent share same member table, writes affect both
+        for parentMemberName, parentMember in pairs(parentBaseInstance._members) do
+            local existingMember = baseInstance._members[parentMemberName]
             local existingModifiers = baseInstance._modifiers[parentMemberName]
             local parentModifiers = parentBaseInstance._modifiers[parentMemberName]
             
             -- Handle diamond inheritance: same member name from multiple parents
-            if existingOwner
+            if existingMember
                     and not (existingModifiers and existingModifiers.parent)
                     and not (parentModifiers and parentModifiers.parent) then
                 -- Mark as ambiguous - child must override to resolve
-                baseInstance._owners[parentMemberName] = baseInstance
+                baseInstance._members[parentMemberName] = {value = nil, owner = baseInstance, static = false}
                 baseInstance._modifiers[parentMemberName] = {ambiguous = true}
-                baseInstance._values[parentMemberName] = nil
             else
-                -- Reference parent's owner/modifiers (not a copy!)
-                baseInstance._owners[parentMemberName] = parentOwner
+                -- Reference parent's member table directly (not a copy!)
+                baseInstance._members[parentMemberName] = parentMember
                 baseInstance._modifiers[parentMemberName] = parentModifiers
-                baseInstance._values[parentMemberName] = parentBaseInstance._values[parentMemberName]
             end
         end
     end
@@ -121,11 +111,12 @@ function instancer:initClass(class)
     -- Add this class's own members (overrides any inherited members with same name)
     for formatMemberName, formatMember in pairs(class.members) do
         local value = formatMember.value
+        local isStatic = formatMember.modifiers.static or false
 
         -- In dev mode, wrap static functions to track scope for private/protected access
-        -- (Non-static methods are wrapped per-instance in markInstanceRecursively)
+        -- (Non-static methods are wrapped per-instance in wrapMethodsForScope)
         -- Skip for interfaces - they don't have real implementations
-        if not isInterface and not config["production"] and formatMember.modifiers.static and type(value) == "function" then
+        if not isInterface and not config["production"] and isStatic and type(value) == "function" then
             local fn = value
             local declaringClass = baseInstance
             value = function(selfOrData, ...)
@@ -135,20 +126,8 @@ function instancer:initClass(class)
             end
         end
 
-        -- Own members have owner = this class
-        -- Static members have owner = false in production, so __index can distinguish:
-        --   owner == base  -> own member, read from self._values
-        --   owner == class -> inherited member, read from _ownerLookup[owner]._values
-        --   owner == false -> static member, read from base._values
-        --   owner == nil   -> not a member, fall through to instancemethods
-        -- In dev mode, statics keep owner = baseInstance for access control checks
-        local owner = baseInstance
-        if not isInterface and formatMember.modifiers.static and config["production"] then
-            owner = false
-        end
-        baseInstance._owners[formatMemberName] = owner
+        baseInstance._members[formatMemberName] = {value = value, owner = baseInstance, static = isStatic}
         baseInstance._modifiers[formatMemberName] = formatMember.modifiers
-        baseInstance._values[formatMemberName] = value
     end
 
     -- Process implemented interfaces
@@ -179,11 +158,11 @@ function instancer:initClass(class)
             for memberName, mods in pairs(iface._modifiers) do
                 if mods.parent then
                     -- Skip parent references
-                elseif baseInstance._owners[memberName] then
+                elseif baseInstance._members[memberName] then
                     -- Class has this member - verify types match (skip in production)
                     if not config["production"] then
-                        local expectedType = type(iface._values[memberName])
-                        local actualType = type(baseInstance._values[memberName])
+                        local expectedType = type(iface._members[memberName].value)
+                        local actualType = type(baseInstance._members[memberName].value)
                         if actualType ~= expectedType then
                             error(string.format("class %s: member '%s' must be a %s to satisfy interface %s (got %s)",
                                 class.name, memberName, expectedType, iface._name, actualType))
@@ -192,7 +171,7 @@ function instancer:initClass(class)
                         -- Strict interface checking: verify argument count, names, and varargs match
                         if config["strictInterfaces"] and actualType == "function" then
                             local err = simploo.util.compareFunctionArgs(
-                                iface._values[memberName], baseInstance._values[memberName], memberName, iface._name)
+                                iface._members[memberName].value, baseInstance._members[memberName].value, memberName, iface._name)
                             if err then
                                 error(string.format("class %s: %s", class.name, err))
                             end
@@ -200,9 +179,8 @@ function instancer:initClass(class)
                     end
                 elseif mods.default then
                     -- Copy default method
-                    baseInstance._owners[memberName] = baseInstance
+                    baseInstance._members[memberName] = {value = iface._members[memberName].value, owner = baseInstance, static = false}
                     baseInstance._modifiers[memberName] = mods
-                    baseInstance._values[memberName] = iface._values[memberName]
                 else
                     error(string.format("class %s: missing method '%s' required by interface %s", 
                         class.name, memberName, iface._name))
@@ -211,27 +189,33 @@ function instancer:initClass(class)
         end
     end
 
-    -- Precompute member lists for fast instantiation in copyValues()
-    -- This avoids iterating all owners/modifiers and checking conditions on every new()
-    local ownMembers = {}      -- Members declared by THIS class (need to copy values)
+    -- Precompute member lists for fast instantiation in copyMembers()
+    -- This avoids iterating all members and checking conditions on every new()
+    local ownMembers = {}      -- Own non-static members (need to create new member tables)
+    local staticMembers = {}   -- Static members (reference base's table directly)
     local parentMembers = {}   -- Parent base -> member name (dedupes short name vs full name)
     
-    for memberName, owner in pairs(baseInstance._owners) do
+    for memberName, member in pairs(baseInstance._members) do
         local mods = baseInstance._modifiers[memberName]
         if mods and mods.parent then
             -- Use parent base as key to avoid duplicates (both "Parent" and "namespace.Parent" point to same base)
-            local parentBase = baseInstance._values[memberName]
+            local parentBase = member.value
             if parentBase and not parentMembers[parentBase] then
                 parentMembers[parentBase] = memberName
             end
-        elseif owner == baseInstance and not (mods and mods.static) then
-            -- Own non-static members need their values copied to each instance
-            -- Static members are accessed via _base, so not copied
-            ownMembers[#ownMembers + 1] = memberName
+        elseif member.owner == baseInstance then
+            if member.static then
+                -- Static members are accessed via _base, just need reference
+                staticMembers[#staticMembers + 1] = memberName
+            else
+                -- Own non-static members need new member tables created for each instance
+                ownMembers[#ownMembers + 1] = memberName
+            end
         end
     end
     
     baseInstance._ownMembers = ownMembers
+    baseInstance._staticMembers = staticMembers
     baseInstance._parentMembers = parentMembers
 
     -- Interfaces cannot be instantiated - no new() or deserialize()
@@ -267,9 +251,9 @@ function instancer:registerBaseInstance(baseInstance)
     -- Assign a proper deep table entry as well.
     self:namespaceToTable(baseInstance._name, config["baseInstanceTable"], baseInstance)
 
-    if baseInstance._owners["__static"] then
-        local fn = baseInstance._values["__static"]
-        fn(baseInstance._owners["__static"]) -- no metamethod exists to call member directly
+    if baseInstance._members["__static"] then
+        local fn = baseInstance._members["__static"].value
+        fn(baseInstance._members["__static"].owner) -- no metamethod exists to call member directly
     end
 end
 

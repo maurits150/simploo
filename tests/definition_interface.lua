@@ -28,7 +28,7 @@ function Test:testInterfaceWithDefault()
     }
 
     assertNotEquals(IWithDefault, nil)
-    assertNotEquals(IWithDefault._values.optional, nil)
+    assertNotEquals(IWithDefault._members.optional, nil)
 end
 
 -- Test: static methods in interfaces are not allowed
@@ -95,6 +95,6 @@ function Test:testInterfaceExtends()
         childMethod = function(self) end;
     }
 
-    assertNotEquals(IChildDef._values.parentMethod, nil)
-    assertNotEquals(IChildDef._values.childMethod, nil)
+    assertNotEquals(IChildDef._members.parentMethod, nil)
+    assertNotEquals(IChildDef._members.childMethod, nil)
 end

@@ -4,38 +4,38 @@
     Key concepts:
     
     1. Member lookup (instance.member):
-       - Check _base._owners[key] for owner info
-       - If owner == base: own member, read from _values
-       - If owner is another class: inherited, use _ownerLookup to find parent instance
-       - If owner == false: static, read from _base._values
-       - If owner == nil: not a member, fall through to instancemethods
+       - Check _members[key] for member table {value, owner, static}
+       - If member.static: read from _base._members[key].value
+       - Otherwise: read from member.value
+       - If no member: fall through to instancemethods
     
-    2. _ownerLookup table:
-       - Maps parent class (base instance) -> parent instance
-       - Enables O(1) lookup for inherited member access
-       - Example: child._ownerLookup[ParentClass] returns the parent instance
-       - Only exists if class has parents (nil for simple classes)
+    2. Polymorphism via shared member tables:
+       - Inherited members share the same table reference as parent's member
+       - child._members["health"] and child._members["Parent"]._members["health"] are the same table
+       - Writes through either path mutate the same value
     
     3. Production vs Development mode:
        - Production: No access control checks, no scope tracking. LuaJIT can fully optimize.
        - Development: Checks private/protected access, tracks "current scope" for access control.
-       
+        
     4. Scope tracking (dev mode only):
        - Each method call sets "scope" to the declaring class
-       - Private members only accessible when scope._name == owner._name
-       - Protected members accessible when scope:instance_of(owner)
+       - Private members only accessible when scope._name == member.owner._name
+       - Protected members accessible when scope:instance_of(member.owner)
     
     5. Instance structure after new():
        {
            _base = <class>,           -- Reference to the base instance (class) for metadata lookup
            _name = "ClassName",       -- Class name for debugging/serialization
-           _values = {...},           -- This instance's member values (own + copied from parents)
-           _ownerLookup = {...}       -- Maps parent class -> parent instance for O(1) inherited member access
+           _members = {               -- Member tables (inherited members share references with parent)
+               health = {value = 100, owner = ParentBase, static = false},
+               ...
+           }
        }
        
-       The key optimization: _owners/_modifiers are NOT copied to instances. They're accessed via _base.
-       Only _values are copied, and for inherited members, we use _ownerLookup to find the right
-       parent instance to read/write from.
+       The key optimization: _modifiers are NOT copied to instances. They're accessed via _base.
+       Inherited members share the same {value, owner, static} table as the parent instance,
+       so writes are automatically visible through both child and parent.
 ]]
 
 -- Cache globals as locals for faster lookup and LuaJIT optimization
@@ -94,7 +94,7 @@ function instancemethods:instance_of(otherInstance)
 
     -- Check all parents using precomputed _parentMembers map
     for parentBase, memberName in pairs(self._base._parentMembers) do
-        local parentInstance = self._values[memberName]
+        local parentInstance = self._members[memberName].value
         if parentInstance == otherInstance or
                 parentInstance == otherInstance._base or
                 parentInstance._base == otherInstance or
@@ -114,7 +114,7 @@ function instancemethods:get_parents()
     local t = {}
 
     for parentBase, memberName in pairs(self._base._parentMembers) do
-        t[memberName] = self._values[memberName]
+        t[memberName] = self._members[memberName].value
     end
 
     return t
@@ -129,7 +129,7 @@ function instancemethods:serialize()
 
     -- Serialize parent instances
     for parentBase, memberName in pairs(base._parentMembers) do
-        data[memberName] = self._values[memberName]:serialize()
+        data[memberName] = self._members[memberName].value:serialize()
     end
 
     -- Serialize own non-transient, non-function members
@@ -138,7 +138,7 @@ function instancemethods:serialize()
         local memberName = base._ownMembers[i]
         local mods = modifiers[memberName]
         if not mods.transient then
-            local value = self._values[memberName]
+            local value = self._members[memberName].value
             if type(value) ~= "function" then
                 data[memberName] = value
             end
@@ -179,17 +179,16 @@ end
 ]]
 local function wrapMethodsForScope(instance, ogchild)
     local base = instance._base
-    local values = instance._values
-    local owners = base._owners
+    local members = instance._members
     
     for i = 1, #base._ownMembers do
         local memberName = base._ownMembers[i]
-        local value = values[memberName]
-        if type(value) == "function" then
-            local fn = value
-            local declaringClass = owners[memberName]
+        local member = members[memberName]
+        if type(member.value) == "function" then
+            local fn = member.value
+            local declaringClass = member.owner
 
-            values[memberName] = function(selfOrData, ...)
+            member.value = function(selfOrData, ...)
                 -- Check if called on the instance (self:method()) vs standalone (fn())
                 local calledOnInstance = selfOrData == ogchild or selfOrData == instance
                 if not calledOnInstance then
@@ -205,51 +204,72 @@ local function wrapMethodsForScope(instance, ogchild)
 end
 
 --[[
-    copyValuesRecursive: Creates _values table for an instance and its parents.
+    copyMembersRecursive: Creates _members table for an instance and its parents.
     
     Parameters:
     - baseInstance: The class being instantiated
-    - lookup: Tracks created instances to handle diamond inheritance
-    - ownerLookup: Maps parent class -> parent instance for O(1) member lookup
+    - instanceLookup: Tracks created instances to handle diamond inheritance
+    - valueLookup: Passed to deepCopyValue for table deduplication (separate from instanceLookup)
     
-    Returns: values table for this instance
+    Returns: members table for this instance
 ]]
-local function copyValuesRecursive(baseInstance, lookup, ownerLookup)
-    local values = {}
-    local srcValues = baseInstance._values
+local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
+    local members = {}
+    local srcMembers = baseInstance._members
     local parentMembers = baseInstance._parentMembers  -- map of parent class -> member name
     local ownMembers = baseInstance._ownMembers        -- array of own member names
 
     -- Create parent instances first (depth-first)
     for parentBase, memberName in pairs(parentMembers) do
-        if not lookup[parentBase] then  -- skip if already created (diamond inheritance)
+        if not instanceLookup[parentBase] then  -- skip if already created (diamond inheritance)
             local parentInstance = {
                 _base = parentBase,
                 _name = parentBase._name,
-                _values = nil,           -- filled by recursive call below
-                _ownerLookup = ownerLookup  -- all instances share this lookup table
+                _members = nil           -- filled by recursive call below
             }
             
             -- Register before recursing to prevent infinite loops in diamond inheritance
-            lookup[parentBase] = parentInstance
-            ownerLookup[parentBase] = parentInstance
+            instanceLookup[parentBase] = parentInstance
             
-            -- Recurse to create parent's _values (and grandparents)
-            parentInstance._values = copyValuesRecursive(parentBase, lookup, ownerLookup)
+            -- Recurse to create parent's _members (and grandparents)
+            parentInstance._members = copyMembersRecursive(parentBase, instanceLookup, valueLookup)
         end
         
         -- Store parent reference so user can do self.ParentClass:method()
-        values[memberName] = lookup[parentBase]
+        members[memberName] = {value = instanceLookup[parentBase], owner = baseInstance, static = false}
+        
+        -- Copy all members from parent instance (inherited members share the same table)
+        local parentInstance = instanceLookup[parentBase]
+        for name, memberTable in pairs(parentInstance._members) do
+            if members[name] == nil then
+                members[name] = memberTable
+            end
+        end
     end
 
-    -- Copy own member values (only this class's members, not inherited)
-    -- deepCopyValue handles tables (deep copy) vs primitives/functions (by value/reference)
+    -- Own non-static members: create new member tables with deep-copied values
+    -- Uses precomputed _ownMembers array (excludes statics)
     for i = 1, #ownMembers do
         local memberName = ownMembers[i]
-        values[memberName] = util.deepCopyValue(srcValues[memberName], lookup)
+        local srcMember = srcMembers[memberName]
+        members[memberName] = {
+            value = util.deepCopyValue(srcMember.value, valueLookup),
+            owner = srcMember.owner,
+            static = false
+        }
     end
 
-    return values
+    -- Static members: reference base's member table directly
+    -- Uses precomputed _staticMembers array
+    local staticMembers = baseInstance._staticMembers
+    if staticMembers then
+        for i = 1, #staticMembers do
+            local memberName = staticMembers[i]
+            members[memberName] = srcMembers[memberName]
+        end
+    end
+
+    return members
 end
 
 --[[
@@ -257,27 +277,29 @@ end
     calling __construct or setting up __finalize. Used by both new() and deserialize().
 ]]
 local function createRawInstance(baseInstance)
-    -- ownerLookup maps class -> instance for O(1) inherited member access
-    local ownerLookup = {}
+    -- instanceLookup maps class -> instance, used for diamond inheritance
+    -- Separate from deepCopyValue's lookup to avoid setting metatables on copied tables
+    local instanceLookup = {}
+    -- valueLookup is passed to deepCopyValue for table deduplication
+    local valueLookup = {}
     
     local copy = {
         _base = baseInstance,           -- reference to class (for metadata lookup)
         _name = baseInstance._name,     -- cached for tostring
-        _values = copyValuesRecursive(baseInstance, {}, ownerLookup),
-        _ownerLookup = ownerLookup
+        _members = copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
     }
     
-    -- Add self to lookup (parents were added during copyValuesRecursive)
-    ownerLookup[baseInstance] = copy
+    -- Add self to lookup (parents were added during copyMembersRecursive)
+    instanceLookup[baseInstance] = copy
 
     -- Set metatables on all instances (self + all parent instances)
-    for _, instance in pairs(ownerLookup) do
+    for _, instance in pairs(instanceLookup) do
         setmetatable(instance, instancemt)
     end
     
     -- Development only: wrap methods for private/protected access control
     if not config.production then
-        for _, instance in pairs(ownerLookup) do
+        for _, instance in pairs(instanceLookup) do
             wrapMethodsForScope(instance, copy)
         end
     end
@@ -290,13 +312,13 @@ function instancemethods:new(...)
     local copy = createRawInstance(self)
 
     -- Call constructor if defined
-    if copy._base._owners["__construct"] then
+    if copy._base._members["__construct"] then
         copy:__construct(...)
-        copy._values["__construct"] = nil  -- Free memory - constructor won't be called again
+        copy._members["__construct"] = nil  -- Free memory - constructor won't be called again
     end
 
     -- Set up finalizer (destructor) if defined
-    if copy._base._owners["__finalize"] then
+    if copy._base._members["__finalize"] then
         util.addGcCallback(copy, function()
             copy:__finalize()
         end)
@@ -305,15 +327,15 @@ function instancemethods:new(...)
     return hook:fire("afterNew", copy) or copy
 end
 
-local function deserializeIntoValues(instance, data)
+local function deserializeIntoMembers(instance, data)
     for dataKey, dataVal in pairs(data) do
         local mods = instance._base._modifiers[dataKey]
         if mods and not mods.transient then
             if type(dataVal) == "table" and dataVal._name then
                 -- Recurse into parent instance
-                deserializeIntoValues(instance._values[dataKey], dataVal)
+                deserializeIntoMembers(instance._members[dataKey].value, dataVal)
             else
-                instance._values[dataKey] = dataVal
+                instance._members[dataKey].value = dataVal
             end
         end
     end
@@ -321,7 +343,7 @@ end
 
 function instancemethods:deserialize(data)
     local copy = createRawInstance(self)
-    deserializeIntoValues(copy, data)
+    deserializeIntoMembers(copy, data)
     return hook:fire("afterNew", copy) or copy
 end
 
@@ -335,35 +357,24 @@ instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__
     __index metamethod - handles all member reads (instance.member)
     
     Production mode path (optimized for speed):
-    1. Look up owner from _base._owners[key]
-    2. If owner == base: own member, return from _values
-    3. If owner is class: inherited, return from _ownerLookup[owner]._values
-    4. If owner == false: static, return from _base._values
+    1. Look up member from _members[key]
+    2. If member.static: return from _base._members[key].value
+    3. Otherwise: return member.value
     
     Development mode path (includes access control):
     1. Get current scope (the class whose method is executing)
     2. For private/protected members, redirect to scope's instance
     3. Check access permissions (private, protected, ambiguous)
-    4. Return value from appropriate instance
+    4. Return value from appropriate member
 ]]
 if config.production then
     function instancemt:__index(key)
-        local base = self._base
-        local owner = base._owners[key]
-
-        -- Own member
-        if owner == base then
-            return self._values[key]
-        end
-        
-        -- Inherited member
-        if owner then
-            return self._ownerLookup[owner]._values[key]
-        end
-        
-        -- Static member (owner is false)
-        if owner == false then
-            return base._values[key]
+        local member = self._members[key]
+        if member then
+            if member.static then
+                return self._base._members[key].value
+            end
+            return member.value
         end
 
         -- Built-in instance methods (get_name, get_class, instance_of, etc.)
@@ -372,61 +383,53 @@ if config.production then
         end
 
         -- Custom __index metamethod defined by user
-        if base._owners["__index"] then
+        if self._base._members["__index"] then
             return self:__index(key)
         end
     end
 else
     function instancemt:__index(key)
         local base = self._base
-        local owner = base._owners[key]
+        local member = self._members[key]
         local mods = base._modifiers[key]
 
         -- DEVELOPMENT PATH: Full access control and scope tracking
-        local lookupInstance = self
+        local lookupMember = member
         local scope = util.getScope()  -- The class whose method is currently running
         
         -- For private/protected members, we need to look up from the scope's perspective
         -- This ensures parent methods access parent's privates, not child's
-        if scope then
-            local scopeOwner = scope._base._owners[key]
+        if scope and scope._members then
+            local scopeMember = scope._members[key]
             local scopeMods = scope._base._modifiers[key]
-            if scopeOwner and scopeMods and (scopeMods.private or scopeMods.protected) then
-                owner = scopeOwner
+            if scopeMember and scopeMods and (scopeMods.private or scopeMods.protected) then
+                lookupMember = scopeMember
                 mods = scopeMods
-                -- Find the instance corresponding to this scope (could be a parent instance)
-                lookupInstance = self._ownerLookup and self._ownerLookup[scope] or self
             end
         end
 
-        if owner then
+        if lookupMember then
             -- Check for ambiguous members (same name from multiple parents)
-            if mods.ambiguous then
+            if mods and mods.ambiguous then
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
             end
             
             -- Private: only accessible within the declaring class
-            if mods.private and (not scope or owner._name ~= scope._name) then
+            if mods and mods.private and (not scope or lookupMember.owner._name ~= scope._name) then
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
             
             -- Protected: accessible within declaring class and subclasses
-            if mods.protected and (not scope or not scope:instance_of(owner)) then
+            if mods and mods.protected and (not scope or not scope:instance_of(lookupMember.owner)) then
                 error(string.format("class %s: accessing protected member %s", tostring(self), key))
             end
             
             -- Static member: value lives on the class
-            if mods.static then
-                return base._values[key]
+            if lookupMember.static then
+                return base._members[key].value
             end
             
-            -- Own member
-            if owner == lookupInstance._base then
-                return lookupInstance._values[key]
-            end
-            
-            -- Inherited member
-            return lookupInstance._ownerLookup[owner]._values[key]
+            return lookupMember.value
         end
 
         -- Built-in instance methods (get_name, get_class, instance_of, etc.)
@@ -435,7 +438,7 @@ else
         end
 
         -- Custom __index metamethod defined by user
-        if base._owners["__index"] then
+        if base._members["__index"] then
             return self:__index(key)
         end
     end
@@ -443,24 +446,13 @@ end
 
 if config.production then
     function instancemt:__newindex(key, value)
-        local base = self._base
-        local owner = base._owners[key]
-
-        -- Own member
-        if owner == base then
-            self._values[key] = value
-            return
-        end
-        
-        -- Inherited member
-        if owner then
-            self._ownerLookup[owner]._values[key] = value
-            return
-        end
-        
-        -- Static member (owner is false)
-        if owner == false then
-            base._values[key] = value
+        local member = self._members[key]
+        if member then
+            if member.static then
+                self._base._members[key].value = value
+            else
+                member.value = value
+            end
             return
         end
 
@@ -468,7 +460,7 @@ if config.production then
             error("cannot change instance methods")
         end
 
-        if base._owners["__newindex"] then
+        if self._base._members["__newindex"] then
             return self:__newindex(key, value)
         end
 
@@ -477,48 +469,40 @@ if config.production then
 else
     function instancemt:__newindex(key, value)
         local base = self._base
-        local owner = base._owners[key]
+        local member = self._members[key]
         local mods = base._modifiers[key]
 
         -- Development: full access control
-        local lookupInstance = self
+        local lookupMember = member
         local scope = util.getScope()
         
-        if scope then
-            local scopeOwner = scope._base._owners[key]
+        if scope and scope._members then
+            local scopeMember = scope._members[key]
             local scopeMods = scope._base._modifiers[key]
-            if scopeOwner and scopeMods and (scopeMods.private or scopeMods.protected) then
-                owner = scopeOwner
+            if scopeMember and scopeMods and (scopeMods.private or scopeMods.protected) then
+                lookupMember = scopeMember
                 mods = scopeMods
-                lookupInstance = self._ownerLookup and self._ownerLookup[scope] or self
             end
         end
 
-        if owner then
-            if mods.const then
+        if lookupMember then
+            if mods and mods.const then
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
             end
-            if mods.private and (not scope or owner._name ~= scope._name) then
+            if mods and mods.private and (not scope or lookupMember.owner._name ~= scope._name) then
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
-            if mods.protected and (not scope or not scope:instance_of(owner)) then
+            if mods and mods.protected and (not scope or not scope:instance_of(lookupMember.owner)) then
                 error(string.format("class %s: accessing protected member %s", tostring(self), key))
             end
             
             -- Static member
-            if mods.static then
-                base._values[key] = value
+            if lookupMember.static then
+                base._members[key].value = value
                 return
             end
             
-            -- Own member
-            if owner == lookupInstance._base then
-                lookupInstance._values[key] = value
-                return
-            end
-            
-            -- Inherited member
-            lookupInstance._ownerLookup[owner]._values[key] = value
+            lookupMember.value = value
             return
         end
 
@@ -526,7 +510,7 @@ else
             error("cannot change instance methods")
         end
 
-        if base._owners["__newindex"] then
+        if base._members["__newindex"] then
             return self:__newindex(key, value)
         end
 
@@ -541,7 +525,7 @@ function instancemt:__tostring()
     local fn = mt.__tostring
     mt.__tostring = nil
 
-    -- Grap the definition string.
+    -- Grab the definition string.
     local str = string.format("SimplooObject: %s <%s> {%s}", self._name, self._base == self and "class" or "instance", tostring(self):sub(8))
 
     local mods = self._base._modifiers["__tostring"]
@@ -569,14 +553,14 @@ function instancemt:__call(...)
 
         -- unset __construct after it has been ran... it should not run twice
         -- also saves some memory
-        self._values["__construct"] = nil
+        self._members["__construct"] = nil
 
         -- call the construct fn
         return fn(self, ...) -- call via metatable, because method may be static!
     end
 
     -- For child instances, we can just redirect to __call, because __construct has already been called from the 'new' method.
-    if self._base._owners["__call"] then  -- lookup via _owners to prevent infinite loop
+    if self._base._members["__call"] then  -- lookup via _members to prevent infinite loop
         -- call the construct fn
         return self:__call(...) -- call via metatable, because method may be static!
     end
