@@ -91,6 +91,28 @@ print(duck:instance_of(Flyable))    -- true
 print(duck:instance_of(Swimmable))  -- true
 ```
 
+### Checking Interfaces
+
+Works with interfaces too:
+
+```lua
+interface "Damageable" {
+    takeDamage = function(self, amount) end;
+}
+
+class "Player" implements "Damageable" {
+    takeDamage = function(self, amount) end;
+}
+
+class "Wall" {}
+
+local player = Player.new()
+local wall = Wall.new()
+
+print(player:instance_of(Damageable))  -- true
+print(wall:instance_of(Damageable))    -- false
+```
+
 ### Inverse Check
 
 To check if a class is a parent of an instance:

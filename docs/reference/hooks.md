@@ -87,6 +87,61 @@ end)
 
 ---
 
+### beforeInstancerInitInterface
+
+Called before an interface is initialized, after parsing. Same as `beforeInstancerInitClass` but for interfaces.
+
+**Arguments:**
+
+- `interfaceData` - The parsed interface data table
+
+**Returns:**
+
+- Modified `interfaceData` (optional)
+
+```lua
+simploo.hook:add("beforeInstancerInitInterface", function(interfaceData)
+    print("Creating interface: " .. interfaceData.name)
+    return interfaceData
+end)
+```
+
+---
+
+### afterInstancerInitInterface
+
+Called after an interface is fully initialized and registered.
+
+**Arguments:**
+
+- `interfaceData` - The parsed interface data
+- `baseInstance` - The created interface instance
+
+```lua
+simploo.hook:add("afterInstancerInitInterface", function(interfaceData, baseInstance)
+    print("Interface registered: " .. baseInstance:get_name())
+end)
+```
+
+---
+
+### onDefinitionFinished
+
+Called when a class or interface definition is completed (after `register()` is called).
+
+**Arguments:**
+
+- `definitionData` - The complete definition data
+
+```lua
+simploo.hook:add("onDefinitionFinished", function(definitionData)
+    print("Finished defining: " .. definitionData.name)
+    print("Type: " .. definitionData.type)  -- "class" or "interface"
+end)
+```
+
+---
+
 ### afterInstancerInstanceNew
 
 Called after a new instance is created.
