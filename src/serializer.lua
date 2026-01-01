@@ -2,11 +2,11 @@
 
 local config = simploo.config
 
-simploo.serialize = function(instance, customPerMemberFn)
-    return instance:serialize(customPerMemberFn)
+simploo.serialize = function(instance)
+    return instance:serialize()
 end
 
-simploo.deserialize = function(data, customPerMemberFn)
+simploo.deserialize = function(data)
     local name = data["_name"]
     if not name then
         error("failed to deserialize: _name not found in data")
@@ -17,5 +17,5 @@ simploo.deserialize = function(data, customPerMemberFn)
         error("failed to deserialize: class " .. name .. " not found")
     end
 
-    return class:deserialize(data, customPerMemberFn)
+    return class:deserialize(data)
 end

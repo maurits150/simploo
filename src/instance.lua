@@ -120,7 +120,7 @@ function instancemethods:get_parents()
     return t
 end
 
-function instancemethods:serialize(customPerMemberFn)
+function instancemethods:serialize()
     local data = {}
     data["_name"] = self._name
 
@@ -129,17 +129,18 @@ function instancemethods:serialize(customPerMemberFn)
 
     -- Serialize parent instances
     for parentBase, memberName in pairs(base._parentMembers) do
-        data[memberName] = self._values[memberName]:serialize(customPerMemberFn)
+        data[memberName] = self._values[memberName]:serialize()
     end
 
-    -- Serialize own non-static, non-transient, non-function members
+    -- Serialize own non-transient, non-function members
+    -- (static members are already excluded from _ownMembers)
     for i = 1, #base._ownMembers do
         local memberName = base._ownMembers[i]
         local mods = modifiers[memberName]
         if not mods.transient then
             local value = self._values[memberName]
             if type(value) ~= "function" then
-                data[memberName] = (customPerMemberFn and customPerMemberFn(memberName, value, mods, self)) or value
+                data[memberName] = value
             end
         end
     end
@@ -304,23 +305,23 @@ function instancemethods:new(...)
     return hook:fire("afterInstancerInstanceNew", copy) or copy
 end
 
-local function deserializeIntoValues(instance, data, customPerMemberFn)
+local function deserializeIntoValues(instance, data)
     for dataKey, dataVal in pairs(data) do
         local mods = instance._base._modifiers[dataKey]
         if mods and not mods.transient then
             if type(dataVal) == "table" and dataVal._name then
                 -- Recurse into parent instance
-                deserializeIntoValues(instance._values[dataKey], dataVal, customPerMemberFn)
+                deserializeIntoValues(instance._values[dataKey], dataVal)
             else
-                instance._values[dataKey] = (customPerMemberFn and customPerMemberFn(dataKey, dataVal, mods, instance)) or dataVal
+                instance._values[dataKey] = dataVal
             end
         end
     end
 end
 
-function instancemethods:deserialize(data, customPerMemberFn)
+function instancemethods:deserialize(data)
     local copy = createRawInstance(self)
-    deserializeIntoValues(copy, data, customPerMemberFn)
+    deserializeIntoValues(copy, data)
     return hook:fire("afterInstancerInstanceNew", copy) or copy
 end
 

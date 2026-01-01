@@ -149,49 +149,6 @@ print(restored.id)         -- 42
 print(restored.position.x) -- 10
 ```
 
-## Custom Serialization Functions
-
-Pass a function to transform values during serialization:
-
-```lua
-class "SecureData" {
-    username = "";
-    password = "";
-}
-
-local data = SecureData.new()
-data.username = "alice"
-data.password = "secret123"
-
--- Custom serializer: encrypt passwords
-local function customSerializer(key, value, modifiers, instance)
-    if key == "password" then
-        return encrypt(value)  -- Your encryption function
-    end
-    return value
-end
-
-local serialized = simploo.serialize(data, customSerializer)
--- password is now encrypted in serialized data
-```
-
-## Custom Deserialization Functions
-
-Transform values when restoring:
-
-```lua
--- Custom deserializer: decrypt passwords
-local function customDeserializer(key, value, modifiers, instance)
-    if key == "password" then
-        return decrypt(value)  -- Your decryption function
-    end
-    return value
-end
-
-local restored = simploo.deserialize(serialized, customDeserializer)
--- password is decrypted
-```
-
 ## Instance deserialize() Method
 
 You can also deserialize into an existing class:

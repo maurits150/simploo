@@ -7,8 +7,7 @@
 
 -- Tests the full serialize/deserialize cycle with an inheritance hierarchy.
 -- Verifies that: (1) transient members are excluded from serialization,
--- (2) custom transformer functions can modify values during serialize/deserialize,
--- (3) parent class data is properly nested under the parent class name in output.
+-- (2) parent class data is properly nested under the parent class name in output.
 -- After deserialize, transient members should have their original default values.
 function Test:testSerializer()
     class "P" {
@@ -37,22 +36,14 @@ function Test:testSerializer()
     instance.child_ok = "ok"
     instance.child_bad = "no serialize"
 
-    local data = simploo.serialize(instance, function(key, value, modifiers, instance)
-        if modifiers.public then
-            return value .. "_SERIALIZE_APPEND"
-        end
-    end)
+    local data = simploo.serialize(instance)
 
-    assertEquals(data["P"]["parent_ok"], "ok_SERIALIZE_APPEND")
+    assertEquals(data["P"]["parent_ok"], "ok")
     assertIsNil(data["P"]["parent_bad"])
-    assertEquals(data["child_ok"], "ok_SERIALIZE_APPEND")
+    assertEquals(data["child_ok"], "ok")
     assertIsNil(data["child_bad"])
 
-    local newinstance = simploo.deserialize(data, function(key, value, modifiers, instance)
-        if modifiers.public then
-            return string.sub(value, 1, #value - #"_SERIALIZE_APPEND")
-        end
-    end)
+    local newinstance = simploo.deserialize(data)
     assertEquals(newinstance["parent_ok"], "ok")
     assertEquals(newinstance["parent_bad"], "unset")
     assertEquals(newinstance["child_ok"], "ok")
