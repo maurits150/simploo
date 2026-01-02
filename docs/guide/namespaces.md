@@ -81,112 +81,210 @@ class "Texture" {}
 
 ## Empty Namespace
 
-Use an empty string for the global namespace:
+By default, SIMPLOO starts with an empty namespace, meaning classes are defined in `_G` directly.
+
+Use an empty string to return to the global namespace after using a named namespace:
 
 ```lua
+class "Global1" {}  -- Global1 (in _G directly, default)
+
 namespace "utils"
 class "Helper" {}  -- utils.Helper
 
 namespace ""
-class "Global" {}  -- Global (in _G directly)
+class "Global2" {}  -- Global2 (back in _G directly)
 ```
 
 ## Using Classes from Other Namespaces
 
 The `using` keyword imports classes so you can reference them without the full path:
 
-```lua
-namespace "game.weapons"
+=== "Block Syntax"
 
-class "Sword" {
-    damage = 10;
-}
+    ```lua
+    namespace "game.weapons"
 
-namespace "game.entities"
+    class "Sword" {
+        damage = 10;
+    }
 
-using "game.weapons.Sword"
+    namespace "game.entities"
 
-class "Knight" {
-    attack = function(self)
-        -- Can use Sword directly instead of game.weapons.Sword
+    using "game.weapons.Sword"
+
+    class "Knight" {
+        attack = function(self)
+            -- Can use Sword directly instead of game.weapons.Sword
+            local weapon = Sword.new()
+            return weapon.damage
+        end;
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    namespace "game.weapons"
+
+    local sword = class("Sword")
+    sword.damage = 10
+    sword:register()
+
+    namespace "game.entities"
+
+    using "game.weapons.Sword"
+
+    local knight = class("Knight")
+    function knight:attack()
         local weapon = Sword.new()
         return weapon.damage
-    end;
-}
-```
+    end
+    knight:register()
+    ```
 
 ## Wildcard Imports
 
 Import all classes from a namespace with `*`:
 
-```lua
-namespace "math.shapes"
+=== "Block Syntax"
 
-class "Circle" {}
-class "Rectangle" {}
-class "Triangle" {}
+    ```lua
+    namespace "math.shapes"
 
-namespace "rendering"
+    class "Circle" {}
+    class "Rectangle" {}
+    class "Triangle" {}
 
-using "math.shapes.*"
+    namespace "rendering"
 
-class "Renderer" {
-    render = function(self)
-        -- All shapes available directly
+    using "math.shapes.*"
+
+    class "Renderer" {
+        render = function(self)
+            -- All shapes available directly
+            local c = Circle.new()
+            local r = Rectangle.new()
+            local t = Triangle.new()
+        end;
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    namespace "math.shapes"
+
+    class("Circle"):register()
+    class("Rectangle"):register()
+    class("Triangle"):register()
+
+    namespace "rendering"
+
+    using "math.shapes.*"
+
+    local renderer = class("Renderer")
+    function renderer:render()
         local c = Circle.new()
         local r = Rectangle.new()
         local t = Triangle.new()
-    end;
-}
-```
+    end
+    renderer:register()
+    ```
 
 ## Aliasing with `as`
 
 Rename imported classes to avoid conflicts:
 
-```lua
-namespace "graphics"
-class "Image" {}
+=== "Block Syntax"
 
-namespace "data"
-class "Image" {}  -- Same name, different namespace
+    ```lua
+    namespace "graphics"
+    class "Image" {}
 
-namespace "app"
+    namespace "data"
+    class "Image" {}  -- Same name, different namespace
 
-using "graphics.Image" as "GraphicsImage"
-using "data.Image" as "DataImage"
+    namespace "app"
 
-class "Processor" {
-    process = function(self)
+    using "graphics.Image" as "GraphicsImage"
+    using "data.Image" as "DataImage"
+
+    class "Processor" {
+        process = function(self)
+            local gImg = GraphicsImage.new()
+            local dImg = DataImage.new()
+        end;
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    namespace "graphics"
+    class("Image"):register()
+
+    namespace "data"
+    class("Image"):register()
+
+    namespace "app"
+
+    using "graphics.Image" as "GraphicsImage"
+    using "data.Image" as "DataImage"
+
+    local processor = class("Processor")
+    function processor:process()
         local gImg = GraphicsImage.new()
         local dImg = DataImage.new()
-    end;
-}
-```
+    end
+    processor:register()
+    ```
 
 ## Same Namespace Across Files
 
 Classes in the same namespace automatically see each other:
 
-```lua
--- File: player.lua
-namespace "game"
+=== "Block Syntax"
 
-class "Player" {
-    inventory = null;
+    ```lua
+    -- File: player.lua
+    namespace "game"
 
-    __construct = function(self)
+    class "Player" {
+        inventory = null;
+
+        __construct = function(self)
+            self.inventory = Inventory.new()  -- Works!
+        end;
+    }
+
+    -- File: inventory.lua
+    namespace "game"
+
+    class "Inventory" {
+        items = {};
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    -- File: player.lua
+    namespace "game"
+
+    local player = class("Player")
+    player.inventory = null
+    function player:__construct()
         self.inventory = Inventory.new()  -- Works!
-    end;
-}
+    end
+    player:register()
 
--- File: inventory.lua
-namespace "game"
+    -- File: inventory.lua
+    namespace "game"
 
-class "Inventory" {
-    items = {};
-}
-```
+    local inventory = class("Inventory")
+    inventory.items = {}
+    inventory:register()
+    ```
 
 When you declare `namespace "game"` again, it adds to the existing namespace and automatically imports all classes already defined in it.
 
@@ -194,26 +292,54 @@ When you declare `namespace "game"` again, it adds to the existing namespace and
 
 Use full paths or `using` for cross-namespace inheritance:
 
-```lua
-namespace "base"
+=== "Block Syntax"
 
-class "Entity" {
-    id = 0;
-}
+    ```lua
+    namespace "base"
 
-namespace "game"
+    class "Entity" {
+        id = 0;
+    }
 
-using "base.Entity"
+    namespace "game"
 
-class "Player" extends "Entity" {
-    name = "";
-}
+    using "base.Entity"
 
--- Or with full path:
-class "Enemy" extends "base.Entity" {
-    health = 100;
-}
-```
+    class "Player" extends "Entity" {
+        name = "";
+    }
+
+    -- Or with full path:
+    class "Enemy" extends "base.Entity" {
+        health = 100;
+    }
+    ```
+
+=== "Builder Syntax"
+
+    ```lua
+    namespace "base"
+
+    local entity = class("Entity")
+    entity.id = 0
+    entity:register()
+
+    namespace "game"
+
+    using "base.Entity"
+
+    local player = class("Player", {extends = "Entity"})
+    player.name = ""
+    player:register()
+
+    -- Or with full path:
+    local enemy = class("Enemy", {extends = "base.Entity"})
+    enemy.health = 100
+    enemy:register()
+    ```
+
+!!! note
+    All classes are public - any class can inherit from or use any other class regardless of namespace. SIMPLOO does not have private or internal classes.
 
 ## Namespace with Builder Syntax
 

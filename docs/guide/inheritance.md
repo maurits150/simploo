@@ -328,13 +328,13 @@ print(b.value)  -- both
 
 ## Deep Inheritance Chains
 
-Inheritance can go multiple levels deep:
+Inheritance can go multiple levels deep. Use varargs (`...`) to pass arguments up the chain cleanly:
 
 ```lua
 class "Level1" {
     value1 = 0;
 
-    __construct = function(self, v)
+    __construct = function(self, v, ...)
         self.value1 = v
     end;
 }
@@ -342,22 +342,23 @@ class "Level1" {
 class "Level2" extends "Level1" {
     value2 = 0;
 
-    __construct = function(self, v1, v2)
-        self.Level1(v1)
-        self.value2 = v2
+    __construct = function(self, v, ...)
+        self.Level1(...)  -- Pass remaining args to parent
+        self.value2 = v
     end;
 }
 
 class "Level3" extends "Level2" {
     value3 = 0;
 
-    __construct = function(self, v1, v2, v3)
-        self.Level2(v1, v2)
-        self.value3 = v3
+    __construct = function(self, v, ...)
+        self.Level2(...)  -- Pass remaining args to parent
+        self.value3 = v
     end;
 }
 
-local obj = Level3.new(1, 2, 3)
+-- Arguments are consumed from right to left: v3, v2, v1
+local obj = Level3.new(3, 2, 1)
 print(obj.value1)  -- 1
 print(obj.value2)  -- 2
 print(obj.value3)  -- 3

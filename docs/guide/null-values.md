@@ -92,14 +92,14 @@ print(bob:getManagerName())    -- Alice
 ### Lazy Initialization
 
 ```lua
-class "Cache" {
-    data = null;  -- Not loaded yet
+class "DataLoader" {
+    cache = null;  -- Not loaded yet
 
-    getData = function(self)
-        if self.data == nil then
-            self.data = self:loadFromDisk()
+    get = function(self)
+        if self.cache == nil then
+            self.cache = self:loadFromDisk()
         end
-        return self.data
+        return self.cache
     end;
 
     loadFromDisk = function(self)
@@ -108,11 +108,11 @@ class "Cache" {
     end;
 }
 
-local cache = Cache.new()
-print(cache.data)  -- nil
-cache:getData()    -- Loading data...
-print(#cache.data) -- 3
-cache:getData()    -- (no output, already loaded)
+local loader = DataLoader.new()
+print(loader.cache)  -- nil
+loader:get()         -- Loading data...
+print(#loader.cache) -- 3
+loader:get()         -- (no output, already loaded)
 ```
 
 ## What is `null`?
