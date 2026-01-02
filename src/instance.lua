@@ -551,16 +551,11 @@ function instancemt:__call(...)
     end
 
     -- We need this when calling parent constructors from within a child constructor
-    if self.__construct then
-        -- cache reference because we unassign it before calling it
-        local fn = self.__construct
-
-        -- unset __construct after it has been ran... it should not run twice
-        -- also saves some memory
-        self._members["__construct"] = nil
-
-        -- call the construct fn
-        return fn(self, ...) -- call via metatable, because method may be static!
+    -- Check instance's _members (cleared after call) not base's (always exists)
+    local constructMember = self._members["__construct"]
+    if constructMember then
+        self._members["__construct"] = nil  -- clear to prevent double-call
+        return constructMember.value(self, ...)
     end
 
     -- For child instances, we can just redirect to __call, because __construct has already been called from the 'new' method.

@@ -34,6 +34,7 @@ nav:
     - Access Control: guide/access-control.md
     - Statics: guide/statics.md
     - Inheritance: guide/inheritance.md
+    - Polymorphism: guide/polymorphism.md
     - Interfaces: guide/interfaces.md
     - Namespaces: guide/namespaces.md
     - Null Values: guide/null-values.md

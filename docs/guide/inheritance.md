@@ -235,78 +235,8 @@ local c = Cat.new()
 print(c:describe())  -- an animal called cat
 ```
 
-## Polymorphism
-
-SIMPLOO supports polymorphism. When a child class overrides a method, the override is used even when called from a parent method:
-
-```lua
-class "Animal" {
-    speak = function(self)
-        return "..."
-    end;
-
-    introduce = function(self)
-        return "I say: " .. self:speak()
-    end;
-}
-
-class "Dog" extends "Animal" {
-    speak = function(self)
-        return "woof!"
-    end;
-}
-
-class "Cat" extends "Animal" {
-    speak = function(self)
-        return "meow!"
-    end;
-}
-
-local dog = Dog.new()
-local cat = Cat.new()
-
-print(dog:introduce())  -- I say: woof!
-print(cat:introduce())  -- I say: meow!
-```
-
-This works because child and parent share the same member tables - when the child overrides `speak`, the parent's `introduce` method sees the override.
-
-Private members also work correctly with polymorphism - each class accesses its own privates:
-
-```lua
-class "Parent" {
-    private {
-        secret = "parent secret";
-    };
-    
-    public {
-        getSecret = function(self)
-            return self.secret
-        end;
-    };
-}
-
-class "Child" extends "Parent" {
-    private {
-        secret = "child secret";
-    };
-    
-    public {
-        getChildSecret = function(self)
-            return self.secret
-        end;
-        
-        callParentGetSecret = function(self)
-            return self.Parent:getSecret()
-        end;
-    };
-}
-
-local c = Child.new()
-print(c:getSecret())            -- parent secret (Parent's method accesses Parent's private)
-print(c:getChildSecret())       -- child secret (Child's method accesses Child's private)
-print(c:callParentGetSecret())  -- parent secret (Child calls Parent method, which accesses Parent's private)
-```
+!!! tip "Polymorphism"
+    SIMPLOO fully supports polymorphism - when a parent method calls `self:method()`, it uses the child's override if one exists. See the [Polymorphism](polymorphism.md) guide for details and design pattern examples.
 
 ## Checking Inheritance
 

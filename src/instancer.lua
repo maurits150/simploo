@@ -210,6 +210,33 @@ function instancer:initClass(class)
     baseInstance._staticMembers = staticMembers
     baseInstance._parentMembers = parentMembers
 
+    -- Dev mode: wrap __construct to clear itself and warn if parent constructors not called
+    if not isInterface and not config["production"] then
+        local constructMember = baseInstance._members["__construct"]
+        if constructMember then
+            local originalFn = constructMember.value
+            constructMember.value = function(self, ...)
+                -- Find our own instance (self may be child due to scope wrapping)
+                local ourMember = self._members[baseInstance._name]
+                local ourInstance = ourMember and ourMember.value or self
+                
+                ourInstance._members["__construct"] = nil  -- clear to prevent double-call
+                local result = originalFn(self, ...)
+                
+                -- Check direct parents only (from extends clause) for uncalled constructors
+                for _, parentName in pairs(class.parents) do
+                    local parentMember = ourInstance._members[parentName]
+                    if parentMember and parentMember.value._members["__construct"] then
+                        print(string.format("WARNING: class %s: parent constructor %s() was not called",
+                            baseInstance._name, parentName))
+                    end
+                end
+                
+                return result
+            end
+        end
+    end
+
     -- Interfaces cannot be instantiated - no new() or deserialize()
     if not isInterface then
         -- Wrapper functions to handle both Class.method() and Class:method() calling conventions

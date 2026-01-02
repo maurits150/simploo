@@ -164,6 +164,108 @@ local c = Circle.new(5)     -- OK
 local bad = Circle.new(-1)  -- Error: Circle radius must be a positive number
 ```
 
+## Calling Parent Constructors
+
+When a child class has its own constructor, you should explicitly call the parent constructor using `self.ParentName()`:
+
+```lua
+class "Entity" {
+    id = 0;
+
+    __construct = function(self, entityId)
+        self.id = entityId
+        print("Entity created: " .. self.id)
+    end;
+}
+
+class "Player" extends "Entity" {
+    name = "";
+
+    __construct = function(self, playerId, playerName)
+        self.Entity(playerId)  -- Call parent constructor
+        self.name = playerName
+        print("Player created: " .. self.name)
+    end;
+}
+
+local p = Player.new(42, "Alice")
+-- Entity created: 42
+-- Player created: Alice
+```
+
+!!! warning "Dev Mode Warning"
+    In development mode (when `production` config is `false`), SIMPLOO warns if you forget to call a parent constructor. This helps catch common bugs where parent initialization is skipped.
+
+    ```lua
+    class "BadChild" extends "Entity" {
+        __construct = function(self)
+            -- Forgot to call self.Entity()!
+        end;
+    }
+    
+    local b = BadChild.new()
+    -- WARNING: class BadChild: parent constructor Entity() was not called
+    ```
+
+### Multiple Inheritance
+
+When extending multiple parents, call each parent's constructor:
+
+```lua
+class "Swimmer" {
+    swimSpeed = 0;
+    
+    __construct = function(self, speed)
+        self.swimSpeed = speed
+    end;
+}
+
+class "Flyer" {
+    flySpeed = 0;
+    
+    __construct = function(self, speed)
+        self.flySpeed = speed
+    end;
+}
+
+class "Duck" extends "Swimmer, Flyer" {
+    __construct = function(self, swimSpeed, flySpeed)
+        self.Swimmer(swimSpeed)
+        self.Flyer(flySpeed)
+    end;
+}
+
+local d = Duck.new(5, 10)
+print(d.swimSpeed)  -- 5
+print(d.flySpeed)   -- 10
+```
+
+### No Constructor Inheritance
+
+If a child class defines its own constructor, the parent constructor is **not** automatically called. You must call it explicitly. If the child has no constructor, it inherits the parent's:
+
+```lua
+class "Parent" {
+    __construct = function(self)
+        print("Parent constructor")
+    end;
+}
+
+class "ChildWithConstructor" extends "Parent" {
+    __construct = function(self)
+        -- Parent constructor NOT called unless we do: self.Parent()
+        print("Child constructor")
+    end;
+}
+
+class "ChildWithoutConstructor" extends "Parent" {
+    -- No constructor - inherits Parent's constructor
+}
+
+ChildWithConstructor.new()     -- Only prints: Child constructor
+ChildWithoutConstructor.new()  -- Prints: Parent constructor
+```
+
 ## No Constructor Needed
 
 If you don't need custom initialization, you can omit `__construct`. Instances will use the default values:

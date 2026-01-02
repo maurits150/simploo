@@ -19,6 +19,7 @@ memoryleaks.lua
 declare.lua
 instancer_testshadowing.lua
 instancer_polymorphism.lua
+polymorphism_examples.lua
 fenvupdates.lua
 definition_internal_fields.lua
 metamethods.lua
@@ -26,3 +27,4 @@ modifier_const.lua
 instancer_interface_validation.lua
 finalize.lua
 config.lua
+constructor_warnings.lua
