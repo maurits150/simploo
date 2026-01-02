@@ -19,7 +19,7 @@ end
 
 function hotswap:swap(newBase)
     for _, hotInstance in pairs(simploo_hotswap_instances) do
-        if hotInstance._name == newBase._name then
+        if hotInstance._base._name == newBase._name then
             hotswap:syncMembers(hotInstance, newBase)
         end
     end

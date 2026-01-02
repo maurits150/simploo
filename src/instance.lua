@@ -57,7 +57,7 @@ simploo.instancemt = instancemt
 -------------------------------------------------------------------------------
 
 function instancemethods:get_name()
-    return self._name
+    return self._base._name
 end
 
 function instancemethods:get_class()
@@ -65,7 +65,7 @@ function instancemethods:get_class()
 end
 
 function instancemethods:instance_of(otherInstance)
-    if not otherInstance._name then
+    if not otherInstance._base then
         error("passed instance is not a class")
     end
 
@@ -153,7 +153,7 @@ local function serializeInstance(instance)
 end
 
 function instancemethods:serialize()
-    return {[self._name] = serializeInstance(self)}
+    return {[self._base._name] = serializeInstance(self)}
 end
 
 -- Binds a function to the current scope, allowing callbacks to access private/protected members.
@@ -197,7 +197,6 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup, c
         if not instanceLookup[parentBase] then  -- skip if already created (diamond inheritance)
             local parentInstance = {
                 _base = parentBase,
-                _name = parentBase._name,
                 _child = childInstance,  -- reference to top-level child for self redirection
                 _members = nil           -- filled by recursive call below
             }
@@ -259,7 +258,6 @@ local function createRawInstance(baseInstance)
     
     local copy = {
         _base = baseInstance,           -- reference to class (for metadata lookup)
-        _name = baseInstance._name,     -- cached for tostring
         _child = false,                 -- false for child instance (parent instances have reference to child)
         _members = nil                  -- filled below
     }
@@ -349,6 +347,11 @@ if config.production then
             return instancemethods[key]
         end
 
+        -- Virtual _name property (not stored on instance to save memory)
+        if key == "_name" then
+            return self._base._name
+        end
+
         -- Custom __index metamethod defined by user
         if self._base._members["__index"] then
             return self:__index(key)
@@ -406,6 +409,11 @@ else
         -- Built-in instance methods (get_name, get_class, instance_of, etc.)
         if instancemethods[key] then
             return instancemethods[key]
+        end
+
+        -- Virtual _name property (not stored on instance to save memory)
+        if key == "_name" then
+            return base._name
         end
 
         -- Custom __index metamethod defined by user
@@ -498,7 +506,7 @@ function instancemt:__tostring()
     mt.__tostring = nil
 
     -- Grab the definition string.
-    local str = string.format("SimplooObject: %s <%s> {%s}", self._name, self._base == self and "class" or "instance", tostring(self):sub(8))
+    local str = string.format("SimplooObject: %s <%s> {%s}", self._base._name, self._base == self and "class" or "instance", tostring(self):sub(8))
 
     local member = self._base._members["__tostring"]
     if member and member.modifiers.meta then  -- lookup via modifiers to prevent infinite loop
