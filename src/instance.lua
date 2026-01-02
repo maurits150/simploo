@@ -107,21 +107,26 @@ function instancemethods:get_parents()
     return t
 end
 
--- Returns the internal member table for a given member name.
--- The member table has {value, owner, modifiers} fields.
--- Users can add a metatable to intercept reads/writes to member.value.
--- Returns nil if member doesn't exist.
+-- Returns the member info for a given member name.
+-- Returns {value, owner, modifiers} or nil if member doesn't exist.
 function instancemethods:get_member(name)
-    return self._members[name]
+    local member = self._members[name]
+    if not member then return nil end
+    local baseMember = self._base._members[name]
+    return {
+        value = member.value,
+        owner = baseMember.owner,
+        modifiers = baseMember.modifiers
+    }
 end
 
--- Returns a table of all members: {memberName = member, ...}
--- Each member has {value, owner, modifiers} fields.
+-- Returns a table of all members: {memberName = {value, owner, modifiers}, ...}
 -- Excludes parent references.
 function instancemethods:get_members()
     local result = {}
-    for name, member in pairs(self._members) do
-        if not member.modifiers.parent then
+    for name in pairs(self._members) do
+        local member = self:get_member(name)
+        if member and not member.modifiers.parent then
             result[name] = member
         end
     end
