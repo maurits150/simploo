@@ -297,10 +297,8 @@ This example shows how to intercept member value changes using a custom modifier
 Useful for automatically syncing variables over a network.
 
 ```lua
--- 1. Register custom modifier
-simploo.syntax.destroy()
+-- 1. Register custom modifier (set before loading simploo, or before first class definition)
 simploo.config["customModifiers"] = {"replicated"}
-simploo.syntax.init()
 
 -- 2. Define interface with default handler
 interface "Replicable" {
