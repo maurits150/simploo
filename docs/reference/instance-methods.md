@@ -35,12 +35,6 @@ local p = Player.new()
 print(p:get_class() == Player)  -- true
 ```
 
-Equivalent to accessing `_base`:
-
-```lua
-print(p:get_class() == Player)  -- true
-```
-
 ## instance_of(other)
 
 Checks if the instance is derived from another class. Works with inheritance chains.

@@ -97,7 +97,7 @@ print(player:get_name())  -- Player
 
 ### `get_class()`
 
-Returns the class (same as `_base`):
+Returns the class:
 
 ```lua
 local player = Player.new()

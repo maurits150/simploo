@@ -176,7 +176,7 @@ class "Ex" { optionalRef = null; }  -- declares member with nil default
 Usage (same for both syntaxes):
 ```lua
 obj:get_name()           -- "ClassName" or "ns.ClassName"
-obj:get_class()          -- base class reference (same as obj._base)
+obj:get_class()          -- class reference
 obj:instance_of(Other)   -- true if obj is/extends/implements Other
 obj:get_parents()        -- {ParentName = parentInstance, ...}
 obj:get_member("name")   -- {value, owner, modifiers} or nil
