@@ -708,6 +708,40 @@ function Test:testCrossInstanceAttack()
     assertFalse(success)
 end
 
+-- Tests that one instance of a class CAN access another instance's private members.
+-- Access control is class-based, not instance-based. This matches Java, C++, C#, etc.
+-- A method in class Wallet can access private members of ANY Wallet instance.
+function Test:testCrossInstanceSameClass()
+    class "Wallet" {
+        private { money = 0 };
+        public {
+            __construct = function(self, amount)
+                self.money = amount
+            end;
+            getMoney = function(self)
+                return self.money
+            end;
+            transferFrom = function(self, other, amount)
+                local taken = math.min(other.money, amount)  -- works: same class
+                other.money = other.money - taken
+                self.money = self.money + taken
+            end
+        }
+    }
+
+    local wallet1 = Wallet.new(100)
+    local wallet2 = Wallet.new(50)
+
+    -- Can access own private
+    assertEquals(wallet1:getMoney(), 100)
+    assertEquals(wallet2:getMoney(), 50)
+
+    -- Can access other instance's private (same class)
+    wallet1:transferFrom(wallet2, 30)
+    assertEquals(wallet1:getMoney(), 130)
+    assertEquals(wallet2:getMoney(), 20)
+end
+
 ---------------------------------------------------------------------
 -- Nested method calls
 ---------------------------------------------------------------------

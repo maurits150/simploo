@@ -294,7 +294,7 @@ print(e.secret)   -- Error: accessing private member
 
 ## Cross-Instance Access
 
-Private members are isolated per instance. One instance cannot access another's private members:
+Access control is **class-based**, not instance-based. A method can access private members of any instance of the same class:
 
 ```lua
 class "Wallet" {
@@ -307,11 +307,11 @@ class "Wallet" {
             self.money = amount
         end;
 
-        stealFrom = function(self, other)
-            -- This fails! Cannot access other instance's private
-            local stolen = other.money
-            other.money = 0
-            self.money = self.money + stolen
+        transferFrom = function(self, other, amount)
+            -- Works! Same class can access other instance's private
+            local taken = math.min(other.money, amount)
+            other.money = other.money - taken
+            self.money = self.money + taken
         end;
     };
 }
@@ -319,8 +319,11 @@ class "Wallet" {
 local wallet1 = Wallet.new(100)
 local wallet2 = Wallet.new(50)
 
-wallet1:stealFrom(wallet2)  -- Error: accessing private member money
+wallet1:transferFrom(wallet2, 30)
+print(wallet1.money)  -- Error: outside code still cannot access
 ```
+
+This matches Java, C++, C#, Kotlin, and most other OOP languages. It enables useful patterns like comparison methods, copy constructors, and object pooling.
 
 ## Complete Example
 

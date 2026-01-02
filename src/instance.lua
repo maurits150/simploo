@@ -402,9 +402,10 @@ else
         local mods = member and member.modifiers
         local scope = util.getScope()  -- The class whose method is currently running
         
-        -- For private/protected members, we need to look up from the scope's perspective
-        -- This ensures parent methods access parent's privates, not child's
-        if scope and scope._members then
+        -- For private/protected members in parent classes, look up from scope's perspective.
+        -- This ensures parent methods access parent's privates, not child's shadowing privates.
+        -- Only redirect when scope is different from self's class (inheritance case).
+        if scope and scope._members and scope ~= base then
             local scopeMember = scope._members[key]
             if scopeMember then
                 local scopeMods = scopeMember.modifiers
@@ -474,7 +475,9 @@ else
         local mods = member and member.modifiers
         local scope = util.getScope()
         
-        if scope and scope._members then
+        -- For private/protected members in parent classes, look up from scope's perspective.
+        -- Only redirect when scope is different from self's class (inheritance case).
+        if scope and scope._members and scope ~= base then
             local scopeMember = scope._members[key]
             if scopeMember then
                 local scopeMods = scopeMember.modifiers

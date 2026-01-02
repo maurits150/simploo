@@ -276,7 +276,7 @@ Polymorphism in constructors: child overrides are called during parent construct
 - Production mode: no access checks, maximum performance
 - Development mode: private/protected enforced via scope tracking
 - Private members: class-scoped (parent's private separate from child's private with same name)
-- Cross-instance: cannot access other instance's private members
+- Cross-instance: same class CAN access other instance's private (class-based, like Java/C++)
 - `bind(fn)`: preserves scope for callbacks passed to other classes
 - Coroutine-safe: scope tracked per-thread
 
