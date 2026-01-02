@@ -19,6 +19,9 @@
     
     _parentMembers: Map of parent base -> member name.
                     Used by copyMembers() to create parent instances.
+    
+    _ancestors: Set of all ancestor bases (transitive closure of parents).
+                Used by instance_of() for O(1) lookups.
 ]]
 
 -- Cache globals as locals for faster lookup and LuaJIT optimization
@@ -222,6 +225,20 @@ function instancer:initClass(class)
     baseInstance._ownMembers = ownMembers
     baseInstance._staticMembers = staticMembers
     baseInstance._parentMembers = parentMembers
+
+    -- Precompute all ancestors (transitive closure) for O(1) instance_of checks
+    -- Key = ancestor base, value = true
+    local ancestors = {}
+    for parentBase in pairs(parentMembers) do
+        ancestors[parentBase] = true
+        -- Include all of parent's ancestors (already computed)
+        if parentBase._ancestors then
+            for ancestor in pairs(parentBase._ancestors) do
+                ancestors[ancestor] = true
+            end
+        end
+    end
+    baseInstance._ancestors = ancestors
 
     -- Dev mode: wrap __construct to clear itself and warn if parent constructors not called
     if not isInterface and not config["production"] then

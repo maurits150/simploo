@@ -65,44 +65,32 @@ function instancemethods:get_class()
 end
 
 function instancemethods:instance_of(otherInstance)
-    -- TODO: write a cache for instance_of?
     if not otherInstance._name then
         error("passed instance is not a class")
     end
 
-    -- Check if self is the same class as otherInstance
-    if self == otherInstance or
-            self == otherInstance._base or
-            self._base == otherInstance or
-            self._base == otherInstance._base then
+    local selfBase = self._base or self
+    local otherBase = otherInstance._base or otherInstance
+
+    -- O(1) check: same class
+    if selfBase == otherBase then
         return true
     end
 
-    -- Check implemented interfaces
-    local otherBase = otherInstance._base or otherInstance
+    -- O(1) check: ancestor lookup
+    if selfBase._ancestors[otherBase] then
+        return true
+    end
+
+    -- O(n) check: implemented interfaces (n = number of interfaces)
     if otherBase._type == "interface" then
-        local implements = self._base._implements
+        local implements = selfBase._implements
         if implements then
-            for _, iface in ipairs(implements) do
-                if iface == otherBase then
+            for i = 1, #implements do
+                if implements[i] == otherBase then
                     return true
                 end
             end
-        end
-    end
-
-    -- Check all parents using precomputed _parentMembers map
-    for parentBase, memberName in pairs(self._base._parentMembers) do
-        local parentInstance = self._members[memberName].value
-        if parentInstance == otherInstance or
-                parentInstance == otherInstance._base or
-                parentInstance._base == otherInstance or
-                parentInstance._base == otherInstance._base then
-            return true
-        end
-
-        if parentInstance:instance_of(otherInstance) then
-            return true
         end
     end
 
