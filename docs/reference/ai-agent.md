@@ -182,7 +182,7 @@ obj:get_parents()        -- {ParentName = parentInstance, ...}
 obj:get_member("name")   -- {value, owner, modifiers} or nil
 obj:get_members()        -- {name = {value, owner, modifiers}, ...}
 obj:bind(fn)             -- wrap callback to preserve private/protected access
-obj:serialize()          -- {_class="Class", member=value, Parent={...}}
+obj:serialize()          -- {ClassName={member=value, Parent={...}}}
 ```
 
 ## Serialization
@@ -194,7 +194,7 @@ local obj = simploo.deserialize(data)     -- or ClassName:deserialize(data)
 ```
 
 Serializes: public/private/protected non-static non-function non-transient members.
-Parent data nested under parent name key. Data includes `_class` for class identification.
+Output: `{ClassName = {members..., ParentName = {parent members...}}}`. Consistent structure at all levels.
 
 ## Metamethods
 

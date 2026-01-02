@@ -38,10 +38,10 @@ function Test:testSerializer()
 
     local data = simploo.serialize(instance)
 
-    assertEquals(data["P"]["parent_ok"], "ok")
-    assertIsNil(data["P"]["parent_bad"])
-    assertEquals(data["child_ok"], "ok")
-    assertIsNil(data["child_bad"])
+    assertEquals(data["C"]["P"]["parent_ok"], "ok")
+    assertIsNil(data["C"]["P"]["parent_bad"])
+    assertEquals(data["C"]["child_ok"], "ok")
+    assertIsNil(data["C"]["child_bad"])
 
     local newinstance = simploo.deserialize(data)
     assertEquals(newinstance["parent_ok"], "ok")

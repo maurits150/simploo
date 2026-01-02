@@ -7,9 +7,10 @@ simploo.serialize = function(instance)
 end
 
 simploo.deserialize = function(data)
-    local name = data["_class"]
+    -- Get class name from first (and only) key
+    local name = next(data)
     if not name then
-        error("failed to deserialize: _class not found in data")
+        error("failed to deserialize: empty data")
     end
 
     local class = config["baseInstanceTable"][name]
@@ -17,5 +18,5 @@ simploo.deserialize = function(data)
         error("failed to deserialize: class " .. name .. " not found")
     end
 
-    return class:deserialize(data)
+    return class:deserialize(data[name])
 end

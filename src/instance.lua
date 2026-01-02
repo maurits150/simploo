@@ -140,22 +140,20 @@ function instancemethods:get_members()
     return result
 end
 
-function instancemethods:serialize()
+local function serializeInstance(instance)
     local data = {}
-    data["_class"] = self._name
-
-    local base = self._base
+    local base = instance._base
 
     -- Serialize parent instances
     for parentBase, memberName in pairs(base._parentMembers) do
-        data[memberName] = self._members[memberName].value:serialize()
+        data[memberName] = serializeInstance(instance._members[memberName].value)
     end
 
     -- Serialize own non-transient, non-function members
     -- (static members are already excluded from _ownMembers)
     for i = 1, #base._ownMembers do
         local memberName = base._ownMembers[i]
-        local member = self._members[memberName]
+        local member = instance._members[memberName]
         if not member.modifiers.transient then
             if type(member.value) ~= "function" then
                 data[memberName] = member.value
@@ -164,6 +162,10 @@ function instancemethods:serialize()
     end
 
     return data
+end
+
+function instancemethods:serialize()
+    return {[self._name] = serializeInstance(self)}
 end
 
 -- Binds a function to the current scope, allowing callbacks to access private/protected members.
@@ -350,7 +352,7 @@ local function deserializeIntoMembers(instance, data)
     for dataKey, dataVal in pairs(data) do
         local member = instance._members[dataKey]
         if member and not member.modifiers.transient then
-            if type(dataVal) == "table" and dataVal._class then
+            if member.modifiers.parent and type(dataVal) == "table" then
                 -- Recurse into parent instance
                 deserializeIntoMembers(member.value, dataVal)
             else
