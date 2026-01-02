@@ -22,7 +22,7 @@ local data = simploo.serialize(player)
 
 -- data is now a plain Lua table:
 -- {
---     _name = "Player",
+--     _class = "Player",
 --     name = "Alice",
 --     level = 10,
 --     score = 5000
@@ -135,11 +135,11 @@ player.health = 75
 
 local data = simploo.serialize(player)
 -- {
---     _name = "Player",
+--     _class = "Player",
 --     name = "Alice",
 --     health = 75,
 --     Entity = {
---         _name = "Entity",
+--         _class = "Entity",
 --         id = 42,
 --         position = {x = 10, y = 20}
 --     }
@@ -162,7 +162,7 @@ class "Config" {
 }
 
 local data = {
-    _name = "Config",
+    _class = "Config",
     debug = true,
     volume = 50
 }

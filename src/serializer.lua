@@ -7,9 +7,9 @@ simploo.serialize = function(instance)
 end
 
 simploo.deserialize = function(data)
-    local name = data["_name"]
+    local name = data["_class"]
     if not name then
-        error("failed to deserialize: _name not found in data")
+        error("failed to deserialize: _class not found in data")
     end
 
     local class = config["baseInstanceTable"][name]

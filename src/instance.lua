@@ -142,7 +142,7 @@ end
 
 function instancemethods:serialize()
     local data = {}
-    data["_name"] = self._name
+    data["_class"] = self._name
 
     local base = self._base
 
@@ -350,7 +350,7 @@ local function deserializeIntoMembers(instance, data)
     for dataKey, dataVal in pairs(data) do
         local member = instance._members[dataKey]
         if member and not member.modifiers.transient then
-            if type(dataVal) == "table" and dataVal._name then
+            if type(dataVal) == "table" and dataVal._class then
                 -- Recurse into parent instance
                 deserializeIntoMembers(member.value, dataVal)
             else
