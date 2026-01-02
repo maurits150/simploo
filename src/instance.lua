@@ -222,15 +222,14 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup, c
         end
     end
 
-    -- Own variables: create new member tables with deep-copied values
+    -- Own variables: create minimal member tables with just the value
+    -- owner/modifiers are looked up from base._members when needed
     -- Uses precomputed _ownVariables array (excludes functions and statics)
     for i = 1, #ownVariables do
         local memberName = ownVariables[i]
         local srcMember = srcMembers[memberName]
         members[memberName] = {
-            value = util.deepCopyValue(srcMember.value, valueLookup),
-            owner = srcMember.owner,
-            modifiers = srcMember.modifiers
+            value = util.deepCopyValue(srcMember.value, valueLookup)
         }
     end
 
@@ -362,7 +361,8 @@ else
 
         -- DEVELOPMENT PATH: Full access control and scope tracking
         local lookupMember = member
-        local mods = member and member.modifiers
+        local baseMember = base._members[key]  -- for owner/modifiers lookup
+        local mods = baseMember and baseMember.modifiers
         local scope = util.getScope()  -- The class whose method is currently running
         
         -- For private/protected members in parent classes, look up from scope's perspective.
@@ -371,9 +371,11 @@ else
         if scope and scope._members and scope ~= base then
             local scopeMember = scope._members[key]
             if scopeMember then
-                local scopeMods = scopeMember.modifiers
+                local scopeBaseMember = scope._members[key]
+                local scopeMods = scopeBaseMember and scopeBaseMember.modifiers
                 if scopeMods and (scopeMods.private or scopeMods.protected) then
                     lookupMember = scopeMember
+                    baseMember = scopeBaseMember
                     mods = scopeMods
                 end
             end
@@ -385,13 +387,16 @@ else
                 error(string.format("class %s: call to member %s is ambiguous as it is present in both parents", tostring(self), key))
             end
             
+            -- Get owner from base (not stored per-instance to save memory)
+            local owner = baseMember.owner
+            
             -- Private: only accessible within the declaring class
-            if mods and mods.private and (not scope or lookupMember.owner._name ~= scope._name) then
+            if mods and mods.private and (not scope or owner._name ~= scope._name) then
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
             
             -- Protected: accessible within declaring class and subclasses
-            if mods and mods.protected and (not scope or not scope:instance_of(lookupMember.owner)) then
+            if mods and mods.protected and (not scope or not scope:instance_of(owner)) then
                 error(string.format("class %s: accessing protected member %s", tostring(self), key))
             end
             
@@ -435,7 +440,8 @@ else
 
         -- Development: full access control
         local lookupMember = member
-        local mods = member and member.modifiers
+        local baseMember = base._members[key]  -- for owner/modifiers lookup
+        local mods = baseMember and baseMember.modifiers
         local scope = util.getScope()
         
         -- For private/protected members in parent classes, look up from scope's perspective.
@@ -443,9 +449,11 @@ else
         if scope and scope._members and scope ~= base then
             local scopeMember = scope._members[key]
             if scopeMember then
-                local scopeMods = scopeMember.modifiers
+                local scopeBaseMember = scope._members[key]
+                local scopeMods = scopeBaseMember and scopeBaseMember.modifiers
                 if scopeMods and (scopeMods.private or scopeMods.protected) then
                     lookupMember = scopeMember
+                    baseMember = scopeBaseMember
                     mods = scopeMods
                 end
             end
@@ -455,10 +463,14 @@ else
             if mods and mods.const then
                 error(string.format("class %s: can not modify const variable %s", tostring(self), key))
             end
-            if mods and mods.private and (not scope or lookupMember.owner._name ~= scope._name) then
+            
+            -- Get owner from base (not stored per-instance to save memory)
+            local owner = baseMember.owner
+            
+            if mods and mods.private and (not scope or owner._name ~= scope._name) then
                 error(string.format("class %s: accessing private member %s", tostring(self), key))
             end
-            if mods and mods.protected and (not scope or not scope:instance_of(lookupMember.owner)) then
+            if mods and mods.protected and (not scope or not scope:instance_of(owner)) then
                 error(string.format("class %s: accessing protected member %s", tostring(self), key))
             end
             

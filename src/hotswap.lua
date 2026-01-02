@@ -31,17 +31,19 @@ function hotswap:syncMembers(hotInstance, baseInstance)
         if baseMember.modifiers.parent then
             -- Skip parent references, handled separately
         elseif hotInstance._members[baseMemberName] == nil then
-            -- Add new member
-            hotInstance._members[baseMemberName] = {
-                value = simploo.util.deepCopyValue(baseMember.value),
-                owner = baseMember.owner,
-                modifiers = baseMember.modifiers
-            }
+            -- Add new member - for variables just store {value}, for shared members reference base
+            if type(baseMember.value) == "function" or baseMember.modifiers.static then
+                -- Shared member: reference base directly
+                hotInstance._members[baseMemberName] = baseMember
+            else
+                -- Variable: create minimal member table with just value
+                hotInstance._members[baseMemberName] = {
+                    value = simploo.util.deepCopyValue(baseMember.value)
+                }
+            end
         elseif type(baseMember.value) == "function" then
-            -- Replace existing method with new implementation
-            hotInstance._members[baseMemberName].value = baseMember.value
-            hotInstance._members[baseMemberName].owner = baseMember.owner
-            hotInstance._members[baseMemberName].modifiers = baseMember.modifiers
+            -- Replace existing method: reference base's member directly
+            hotInstance._members[baseMemberName] = baseMember
         end
     end
 
