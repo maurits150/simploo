@@ -125,8 +125,8 @@ print(d.canSwim)  -- true
 print(d.canFly)   -- true
 ```
 
-!!! note "Shadowing Model"
-    Due to the shadowing model, parent methods operate on their own instance. A method defined in `Swimmer` cannot access `name` from `Animal`. Only child class methods can access members from all parents.
+!!! note "Polymorphism"
+    Parent methods have access to all inherited members. A method defined in `Swimmer` can access `name` from `Animal` when called on a `Duck` instance, because `self` refers to the full `Duck` instance with all its inherited members.
 
 ## Accessing Parent Members
 
