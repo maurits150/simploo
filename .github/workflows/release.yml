@@ -1,0 +1,50 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: github.event.release.target_commitish == '3.x'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3.x
+      - uses: leafo/gh-actions-lua@v12
+        with:
+          luaVersion: '5.4'
+      - name: Build simploo.lua
+        run: printf '1\n5' | lua menu.lua
+      - name: Upload release asset
+        run: gh release upload ${{ github.event.release.tag_name }} dist/simploo.lua --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  docs:
+    runs-on: ubuntu-latest
+    if: github.event.release.target_commitish == '3.x'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - run: pip install mkdocs-material
+      - run: mkdocs gh-deploy --force
+
+  sync-master:
+    runs-on: ubuntu-latest
+    if: github.event.release.target_commitish == '3.x'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3.x
+          fetch-depth: 0
+      - name: Push to master
+        run: git push origin 3.x:master --force
