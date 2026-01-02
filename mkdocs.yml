@@ -47,3 +47,4 @@ nav:
     - Hooks: reference/hooks.md
     - Instance Methods: reference/instance-methods.md
     - Modifiers: reference/modifiers.md
+  - AI Agent Reference: reference/ai-agent.md
