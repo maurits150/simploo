@@ -165,26 +165,32 @@ function definition:new()
 
             self._simploo.resolved_usings = resolvedUsings
 
-            -- Create a meta table that intercepts all lookups of global variables inside class/instance functions.
-            local mt = {}
-            function mt:__index(key)
-                return
-                -- If a key is a localized class, we look up the actual instance in our baseInstanceTable
-                -- Putting this first makes 'using' take prevalence over what already exists in _G.
-                (resolvedUsings[key] and simploo.config["baseInstanceTable"][resolvedUsings[key]])
-                        -- Unknown keys can refer back to _G
-                        or _G[key]
-            end
-            function mt:__newindex(key, value)
-                -- Assignments are always written into _G directly..
-                _G[key] = value
-            end
+            -- Only set function environments if there's a namespace or explicit usings
+            -- This avoids overhead for simple classes in the global namespace
+            local hasNamespace = self._simploo.ns and self._simploo.ns ~= ""
+            local hasUsings = #self._simploo.usings > 0
+            
+            if hasNamespace or hasUsings then
+                -- Create a meta table that intercepts all lookups of global variables inside class/instance functions.
+                local mt = {}
+                function mt:__index(key)
+                    return
+                    -- If a key is a localized class, we look up the actual instance in our baseInstanceTable
+                    -- Putting this first makes 'using' take prevalence over what already exists in _G.
+                    (resolvedUsings[key] and simploo.config["baseInstanceTable"][resolvedUsings[key]])
+                            -- Unknown keys can refer back to _G
+                            or _G[key]
+                end
+                function mt:__newindex(key, value)
+                    -- Assignments are always written into _G directly..
+                    _G[key] = value
+                end
 
-
-            -- Add usings environment to class functions
-            for _, memberData in pairs(self._simploo.members) do
-                if type(memberData.value) == "function" then
-                    simploo.util.setFunctionEnvironment(memberData.value, setmetatable({}, mt))
+                -- Add usings environment to class functions
+                for _, memberData in pairs(self._simploo.members) do
+                    if type(memberData.value) == "function" then
+                        simploo.util.setFunctionEnvironment(memberData.value, setmetatable({}, mt))
+                    end
                 end
             end
         end

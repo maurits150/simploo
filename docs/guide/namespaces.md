@@ -2,6 +2,9 @@
 
 Namespaces help organize classes into logical groups and prevent naming conflicts.
 
+!!! note "Performance Note"
+    Classes in namespaces use function environments (fenv) to enable short name references like `Player` instead of `game.Player`. This adds a small overhead (~10%) when accessing global variables like `math`, `string`, etc. Classes without a namespace don't have this overhead.
+
 ## Declaring a Namespace
 
 Use `namespace` before defining classes:
