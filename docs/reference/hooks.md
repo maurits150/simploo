@@ -316,8 +316,10 @@ simploo.hook:add("afterNew", function(instance)
         return instance
     end
 
-    for name, member in pairs(instance:get_members()) do
-        if member.modifiers.replicated then
+    for name, memberInfo in pairs(instance:get_members()) do
+        if memberInfo.modifiers.replicated then
+            -- Get the actual member table (not a copy)
+            local member = instance._members[name]
             -- Proxy pattern: move value to storage, intercept via metatable
             local storage = {value = member.value}
             member.value = nil
