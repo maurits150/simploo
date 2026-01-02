@@ -145,6 +145,54 @@ print(parents.A)  -- parent A instance
 print(parents.B)  -- parent B instance
 ```
 
+## get_member(name)
+
+Returns the internal member table for a given member name. Useful for hooks that need to inspect or modify member behavior.
+
+**Arguments:**
+
+- `name` - The member name
+
+**Returns:**
+
+- Member table `{value, owner, modifiers}` or `nil` if not found
+
+```lua
+class "Player" {
+    public { health = 100 };
+}
+
+local p = Player.new()
+local member = p:get_member("health")
+
+print(member.value)              -- 100
+print(member.modifiers.public)   -- true
+```
+
+## get_members()
+
+Returns a table of all members (excludes parent references).
+
+**Returns:**
+
+- Table `{memberName = member, ...}` where each member has `{value, owner, modifiers}`
+
+```lua
+class "Player" {
+    public { 
+        health = 100;
+        name = "unnamed";
+    };
+}
+
+local p = Player.new()
+for name, member in pairs(p:get_members()) do
+    print(name, member.value)
+end
+-- health  100
+-- name    unnamed
+```
+
 ## bind(fn)
 
 Wraps a callback so it can access private/protected members.
@@ -189,4 +237,6 @@ If your callback only uses public members, you don't need `bind()`.
 | `get_class()` | class | Base class reference |
 | `instance_of(other)` | boolean | Inheritance check |
 | `get_parents()` | table | Parent instances |
+| `get_member(name)` | table/nil | Member table `{value, owner, modifiers}` |
+| `get_members()` | table | All members (excludes parent refs) |
 | `bind(fn)` | function | Bind callback to current scope |

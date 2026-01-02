@@ -369,9 +369,4 @@ class "Enemy" implements "Replicable" {
 }
 ```
 
-### Instance Methods for Hooks
-
-These methods help hooks inspect instances without accessing internal fields:
-
-- `instance:get_member(name)` - Returns the member table `{value, owner, modifiers}`.
-- `instance:get_members()` - Returns `{memberName = member, ...}` for all members (excludes parent references).
+> **Note:** The `get_member()` and `get_members()` methods used above are documented in [Instance Methods](instance-methods.md).
