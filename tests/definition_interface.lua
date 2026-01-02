@@ -98,29 +98,3 @@ function Test:testInterfaceExtends()
     assertNotEquals(IChildDef._members.parentMethod, nil)
     assertNotEquals(IChildDef._members.childMethod, nil)
 end
-
--- Test: shorthand syntax (= true) for required methods
-function Test:testInterfaceShorthandSyntax()
-    interface "IShorthand" {
-        foo = true;
-        bar = true;
-    }
-
-    assertNotEquals(IShorthand, nil)
-    assertEquals(type(IShorthand._members.foo.value), "function")
-    assertEquals(type(IShorthand._members.bar.value), "function")
-end
-
--- Test: shorthand syntax not allowed for default methods
-function Test:testInterfaceShorthandNotAllowedForDefault()
-    local success, err = pcall(function()
-        interface "IShorthandDefault" {
-            default {
-                foo = true;
-            };
-        }
-    end)
-
-    assertFalse(success)
-    assertStrContains(err, "implementation")
-end

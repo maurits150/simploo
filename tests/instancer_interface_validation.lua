@@ -437,11 +437,11 @@ end
 -- Test: interface reference exists only when interface has default methods
 function Test:testInterfaceReferenceOnlyWithDefaults()
     interface "INoDefaults" {
-        foo = true;
+        foo = function(self) end;
     }
 
     interface "IWithDefaults" {
-        bar = true;
+        bar = function(self) end;
         default {
             baz = function(self) return "baz" end;
         };
@@ -513,11 +513,11 @@ end
 
 -- Test: deep interface inheritance (5 levels)
 function Test:testDeepInterfaceInheritance()
-    interface "ILevel1" { method1 = true; }
-    interface "ILevel2" extends "ILevel1" { method2 = true; }
-    interface "ILevel3" extends "ILevel2" { method3 = true; }
-    interface "ILevel4" extends "ILevel3" { method4 = true; }
-    interface "ILevel5" extends "ILevel4" { method5 = true; }
+    interface "ILevel1" { method1 = function(self) end; }
+    interface "ILevel2" extends "ILevel1" { method2 = function(self) end; }
+    interface "ILevel3" extends "ILevel2" { method3 = function(self) end; }
+    interface "ILevel4" extends "ILevel3" { method4 = function(self) end; }
+    interface "ILevel5" extends "ILevel4" { method5 = function(self) end; }
 
     class "DeepImpl" implements "ILevel5" {
         method1 = function(self) return 1 end;

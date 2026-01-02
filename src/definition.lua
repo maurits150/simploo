@@ -230,20 +230,13 @@ function definition:new()
 
         -- Interfaces only allow public methods (required) or public default methods (optional)
         if self._simploo.type == "interface" then
-            -- Only 'default' modifier allowed; default methods must have an implementation
             for _, modifier in pairs(modifiers or {}) do
                 if modifier ~= "default" then
                     error(string.format("interface %s: member '%s' has invalid modifier '%s' (only 'default' allowed)", 
                         self._simploo.name, memberName, modifier))
-                elseif memberValue == true then
-                    error(string.format("interface %s: default method '%s' must have an implementation", 
-                        self._simploo.name, memberName))
                 end
             end
-            -- Allow true as shorthand for required methods: takeDamage = true
-            if memberValue == true then
-                memberValue = function() end
-            elseif type(memberValue) ~= "function" then
+            if type(memberValue) ~= "function" then
                 error(string.format("interface %s: member '%s' must be a function", 
                     self._simploo.name, memberName))
             end
