@@ -27,6 +27,19 @@ Interface methods are just signatures - the function bodies are empty. They docu
 - The method name
 - Expected arguments
 
+### Shorthand Syntax
+
+For simple interfaces, you can use `true` as shorthand for `function(self, ...) end`:
+
+```lua
+interface "Damageable" {
+    takeDamage = true;
+    getHealth = true;
+}
+```
+
+This is equivalent to the full syntax but doesn't document the expected arguments.
+
 !!! note "Interface Restrictions"
     Interfaces can only contain:
     
