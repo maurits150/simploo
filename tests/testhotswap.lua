@@ -133,7 +133,7 @@ function Test:testHotswapWeakReferences()
     local function countTrackedInstances()
         local count = 0
         for _, inst in pairs(simploo_hotswap_instances) do
-            if inst._name == "HotWeakRef" then
+            if inst:get_name() == "HotWeakRef" then
                 count = count + 1
             end
         end

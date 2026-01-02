@@ -61,7 +61,7 @@ function instancemethods:get_name()
 end
 
 function instancemethods:get_class()
-    return self._base or self
+    return self._base
 end
 
 function instancemethods:instance_of(otherInstance)
@@ -69,8 +69,8 @@ function instancemethods:instance_of(otherInstance)
         error("passed instance is not a class")
     end
 
-    local selfBase = self._base or self
-    local otherBase = otherInstance._base or otherInstance
+    local selfBase = self._base
+    local otherBase = otherInstance._base
 
     -- O(1) check: same class
     if selfBase == otherBase then
@@ -347,11 +347,6 @@ if config.production then
             return instancemethods[key]
         end
 
-        -- Virtual _name property (not stored on instance to save memory)
-        if key == "_name" then
-            return self._base._name
-        end
-
         -- Custom __index metamethod defined by user
         if self._base._members["__index"] then
             return self:__index(key)
@@ -409,11 +404,6 @@ else
         -- Built-in instance methods (get_name, get_class, instance_of, etc.)
         if instancemethods[key] then
             return instancemethods[key]
-        end
-
-        -- Virtual _name property (not stored on instance to save memory)
-        if key == "_name" then
-            return base._name
         end
 
         -- Custom __index metamethod defined by user

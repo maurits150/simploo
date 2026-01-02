@@ -145,7 +145,7 @@ function Test:testAfterRegister()
     assertTrue(capturedBaseInstance ~= nil)
     assertEquals(capturedData.name, "AfterInitTest")
     assertEquals(capturedData.type, "class")
-    assertEquals(capturedBaseInstance._name, "AfterInitTest")
+    assertEquals(capturedBaseInstance:get_name(), "AfterInitTest")
 end
 
 ---------------------------------------------------------------------
@@ -174,7 +174,7 @@ function Test:testAfterNew()
     
     -- Verify hook was called
     assertTrue(capturedInstance ~= nil)
-    assertEquals(capturedInstance._name, "AfterNewTest")
+    assertEquals(capturedInstance:get_name(), "AfterNewTest")
     assertEquals(capturedInstance.value, 100)
 end
 

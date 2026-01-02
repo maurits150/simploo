@@ -63,12 +63,12 @@ function Test:testNamespaces()
             assertNotIs(SameClassName1, nil)
             assertNotIs(SameClassName2, nil)
 
-            assertNotIs(Foo._name, nil)
-            assertNotIs(Bar._name, nil)
-            assertNotIs(Bonk._name, nil)
-            assertNotIs(Boo._name, nil)
-            assertNotIs(SameClassName1._name, nil)
-            assertNotIs(SameClassName2._name, nil)
+            assertNotIs(Foo:get_name(), nil)
+            assertNotIs(Bar:get_name(), nil)
+            assertNotIs(Bonk:get_name(), nil)
+            assertNotIs(Boo:get_name(), nil)
+            assertNotIs(SameClassName1:get_name(), nil)
+            assertNotIs(SameClassName2:get_name(), nil)
 
             print("Ran all assertions inside class method")
         end;

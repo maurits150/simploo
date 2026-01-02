@@ -15,7 +15,7 @@ function Test:testStatic()
     class "TestStatic" {
         __static = function(self)
             assertTrue(self._base == self)
-            assertTrue(self._name ~= nil)
+            assertTrue(self:get_name() ~= nil)
         end;
     }
 end
