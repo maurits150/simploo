@@ -109,16 +109,19 @@ function instancer:initClass(class)
         local value = formatMember.value
         local isStatic = formatMember.modifiers.static or false
 
-        -- In dev mode, wrap static functions to track scope for private/protected access
-        -- (Non-static methods are wrapped per-instance in wrapMethodsForScope)
+        -- In dev mode, wrap functions once per CLASS to track scope for private/protected access
+        -- The wrapper checks self._child to handle parent method calls (self.Parent:method())
         -- Skip for interfaces - they don't have real implementations
-        if not isInterface and not config["production"] and isStatic and type(value) == "function" then
+        if not isInterface and not config["production"] and type(value) == "function" then
             local fn = value
             local declaringClass = baseInstance
-            value = function(selfOrData, ...)
+            value = function(self, ...)
+                -- If called via parent instance, self._child points to the real child
+                -- Child instances have _child = false, parent instances have _child = childInstance
+                local realSelf = self._child or self
                 local prevScope = simploo.util.getScope()
                 simploo.util.setScope(declaringClass)
-                return simploo.util.restoreScope(prevScope, fn(selfOrData, ...))
+                return simploo.util.restoreScope(prevScope, fn(realSelf, ...))
             end
         end
 
@@ -199,8 +202,8 @@ function instancer:initClass(class)
 
     -- Precompute member lists for fast instantiation in copyMembers()
     -- This avoids iterating all members and checking conditions on every new()
-    local ownMembers = {}      -- Own non-static members (need to create new member tables)
-    local staticMembers = {}   -- Static members (reference base's table directly)
+    local ownVariables = {}    -- Own non-static variables (need per-instance storage)
+    local sharedMembers = {}   -- Functions + statics (reference base's table directly)
     local parentMembers = {}   -- Parent base -> member name (dedupes short name vs full name)
     
     for memberName, member in pairs(baseInstance._members) do
@@ -212,18 +215,18 @@ function instancer:initClass(class)
                 parentMembers[parentBase] = memberName
             end
         elseif member.owner == baseInstance then
-            if mods.static then
-                -- Static members are accessed via _base, just need reference
-                staticMembers[#staticMembers + 1] = memberName
+            if mods.static or type(member.value) == "function" then
+                -- Static members and functions: reference base's table directly (not copied)
+                sharedMembers[#sharedMembers + 1] = memberName
             else
-                -- Own non-static members need new member tables created for each instance
-                ownMembers[#ownMembers + 1] = memberName
+                -- Own non-static variables: need per-instance storage
+                ownVariables[#ownVariables + 1] = memberName
             end
         end
     end
     
-    baseInstance._ownMembers = ownMembers
-    baseInstance._staticMembers = staticMembers
+    baseInstance._ownVariables = ownVariables
+    baseInstance._sharedMembers = sharedMembers
     baseInstance._parentMembers = parentMembers
 
     -- Precompute all ancestors (transitive closure) for O(1) instance_of checks

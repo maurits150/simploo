@@ -176,56 +176,21 @@ else
 end
 
 --[[
-    wrapMethodsForScope: Development mode only - wraps methods for scope tracking.
-    
-    The wrapper sets the "current scope" to the declaring class before calling the method.
-    This enables private/protected access control in __index/__newindex.
-    
-    Parameters:
-    - instance: The instance whose methods to wrap
-    - ogchild: The original (top-level) instance, used to redirect self references
-]]
-local function wrapMethodsForScope(instance, ogchild)
-    local base = instance._base
-    local members = instance._members
-    
-    for i = 1, #base._ownMembers do
-        local memberName = base._ownMembers[i]
-        local member = members[memberName]
-        if type(member.value) == "function" then
-            local fn = member.value
-            local declaringClass = member.owner
-
-            member.value = function(selfOrData, ...)
-                -- Check if called on the instance (self:method()) vs standalone (fn())
-                local calledOnInstance = selfOrData == ogchild or selfOrData == instance
-                if not calledOnInstance then
-                    return fn(selfOrData, ...)
-                end
-                -- Set scope to declaring class, call method, restore scope
-                local prevScope = util.getScope()
-                util.setScope(declaringClass)
-                return util.restoreScope(prevScope, fn(ogchild, ...))
-            end
-        end
-    end
-end
-
---[[
     copyMembersRecursive: Creates _members table for an instance and its parents.
     
     Parameters:
     - baseInstance: The class being instantiated
     - instanceLookup: Tracks created instances to handle diamond inheritance
     - valueLookup: Passed to deepCopyValue for table deduplication (separate from instanceLookup)
+    - childInstance: The top-level child instance (stored as _child on parent instances)
     
     Returns: members table for this instance
 ]]
-local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
+local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup, childInstance)
     local members = {}
     local srcMembers = baseInstance._members
     local parentMembers = baseInstance._parentMembers  -- map of parent class -> member name
-    local ownMembers = baseInstance._ownMembers        -- array of own member names
+    local ownVariables = baseInstance._ownVariables    -- array of own variable names (no functions)
 
     -- Create parent instances first (depth-first)
     for parentBase, memberName in pairs(parentMembers) do
@@ -233,6 +198,7 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
             local parentInstance = {
                 _base = parentBase,
                 _name = parentBase._name,
+                _child = childInstance,  -- reference to top-level child for self redirection
                 _members = nil           -- filled by recursive call below
             }
             
@@ -240,7 +206,7 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
             instanceLookup[parentBase] = parentInstance
             
             -- Recurse to create parent's _members (and grandparents)
-            parentInstance._members = copyMembersRecursive(parentBase, instanceLookup, valueLookup)
+            parentInstance._members = copyMembersRecursive(parentBase, instanceLookup, valueLookup, childInstance)
         end
         
         -- Store parent reference so user can do self.ParentClass:method()
@@ -256,10 +222,10 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
         end
     end
 
-    -- Own non-static members: create new member tables with deep-copied values
-    -- Uses precomputed _ownMembers array (excludes statics)
-    for i = 1, #ownMembers do
-        local memberName = ownMembers[i]
+    -- Own variables: create new member tables with deep-copied values
+    -- Uses precomputed _ownVariables array (excludes functions and statics)
+    for i = 1, #ownVariables do
+        local memberName = ownVariables[i]
         local srcMember = srcMembers[memberName]
         members[memberName] = {
             value = util.deepCopyValue(srcMember.value, valueLookup),
@@ -268,12 +234,12 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
         }
     end
 
-    -- Static members: reference base's member table directly
-    -- Uses precomputed _staticMembers array
-    local staticMembers = baseInstance._staticMembers
-    if staticMembers then
-        for i = 1, #staticMembers do
-            local memberName = staticMembers[i]
+    -- Functions and statics: reference base's member table directly (not copied)
+    -- Uses precomputed _sharedMembers array
+    local sharedMembers = baseInstance._sharedMembers
+    if sharedMembers then
+        for i = 1, #sharedMembers do
+            local memberName = sharedMembers[i]
             members[memberName] = srcMembers[memberName]
         end
     end
@@ -295,22 +261,19 @@ local function createRawInstance(baseInstance)
     local copy = {
         _base = baseInstance,           -- reference to class (for metadata lookup)
         _name = baseInstance._name,     -- cached for tostring
-        _members = copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
+        _child = false,                 -- false for child instance (parent instances have reference to child)
+        _members = nil                  -- filled below
     }
     
-    -- Add self to lookup (parents were added during copyMembersRecursive)
+    -- Add self to lookup BEFORE recursing so parent instances can reference it via _child
     instanceLookup[baseInstance] = copy
+    
+    -- Create members - parent instances will have _child pointing to copy
+    copy._members = copyMembersRecursive(baseInstance, instanceLookup, valueLookup, copy)
 
     -- Set metatables on all instances (self + all parent instances)
     for _, instance in pairs(instanceLookup) do
         setmetatable(instance, instancemt)
-    end
-    
-    -- Development only: wrap methods for private/protected access control
-    if not config.production then
-        for _, instance in pairs(instanceLookup) do
-            wrapMethodsForScope(instance, copy)
-        end
     end
 
     return copy
