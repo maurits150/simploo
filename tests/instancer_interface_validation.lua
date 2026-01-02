@@ -413,3 +413,156 @@ function Test:testNonStrictInterfaceAllowsMismatch()
     local obj = FlexibleImpl.new()
     assertTrue(obj ~= nil)
 end
+
+-- Test: call default method from override via self.InterfaceName:method()
+function Test:testCallDefaultMethodFromOverride()
+    interface "ICallableDefault" {
+        default {
+            greet = function(self)
+                return "Hello"
+            end;
+        };
+    }
+
+    class "ExtendedGreeter" implements "ICallableDefault" {
+        greet = function(self)
+            return self.ICallableDefault:greet() .. ", World!"
+        end;
+    }
+
+    local obj = ExtendedGreeter.new()
+    assertEquals(obj:greet(), "Hello, World!")
+end
+
+-- Test: interface reference exists only when interface has default methods
+function Test:testInterfaceReferenceOnlyWithDefaults()
+    interface "INoDefaults" {
+        foo = true;
+    }
+
+    interface "IWithDefaults" {
+        bar = true;
+        default {
+            baz = function(self) return "baz" end;
+        };
+    }
+
+    class "ImplNoDefaults" implements "INoDefaults" {
+        foo = function(self) return "foo" end;
+    }
+
+    class "ImplWithDefaults" implements "IWithDefaults" {
+        bar = function(self) return "bar" end;
+    }
+
+    local noDefaults = ImplNoDefaults.new()
+    local withDefaults = ImplWithDefaults.new()
+
+    assertEquals(noDefaults.INoDefaults, nil)
+    assertNotEquals(withDefaults.IWithDefaults, nil)
+end
+
+-- Test: call default method even when overriding all methods
+function Test:testCallDefaultWhenOverridden()
+    interface "IOverrideAll" {
+        default {
+            action = function(self)
+                return "default action"
+            end;
+        };
+    }
+
+    class "OverridesAll" implements "IOverrideAll" {
+        action = function(self)
+            local defaultResult = self.IOverrideAll:action()
+            return "override + " .. defaultResult
+        end;
+    }
+
+    local obj = OverridesAll.new()
+    assertEquals(obj:action(), "override + default action")
+end
+
+-- Test: multiple interfaces with defaults
+function Test:testMultipleInterfacesWithDefaults()
+    interface "ILogger" {
+        default {
+            log = function(self, msg)
+                return "LOG: " .. msg
+            end;
+        };
+    }
+
+    interface "IFormatter" {
+        default {
+            format = function(self, val)
+                return "[" .. tostring(val) .. "]"
+            end;
+        };
+    }
+
+    class "LogFormatter" implements "ILogger, IFormatter" {
+        output = function(self, val)
+            return self.ILogger:log(self.IFormatter:format(val))
+        end;
+    }
+
+    local obj = LogFormatter.new()
+    assertEquals(obj:output(42), "LOG: [42]")
+end
+
+-- Test: deep interface inheritance (5 levels)
+function Test:testDeepInterfaceInheritance()
+    interface "ILevel1" { method1 = true; }
+    interface "ILevel2" extends "ILevel1" { method2 = true; }
+    interface "ILevel3" extends "ILevel2" { method3 = true; }
+    interface "ILevel4" extends "ILevel3" { method4 = true; }
+    interface "ILevel5" extends "ILevel4" { method5 = true; }
+
+    class "DeepImpl" implements "ILevel5" {
+        method1 = function(self) return 1 end;
+        method2 = function(self) return 2 end;
+        method3 = function(self) return 3 end;
+        method4 = function(self) return 4 end;
+        method5 = function(self) return 5 end;
+    }
+
+    local obj = DeepImpl.new()
+    assertEquals(obj:method1(), 1)
+    assertEquals(obj:method2(), 2)
+    assertEquals(obj:method3(), 3)
+    assertEquals(obj:method4(), 4)
+    assertEquals(obj:method5(), 5)
+    
+    -- instance_of works for all levels
+    assertTrue(obj:instance_of(ILevel1))
+    assertTrue(obj:instance_of(ILevel3))
+    assertTrue(obj:instance_of(ILevel5))
+end
+
+-- Test: only default methods are copied, not required methods
+function Test:testOnlyDefaultMethodsCopied()
+    local interfaceRequiredFn = function(self) return "interface required" end
+    
+    interface "ICheckCopy" {
+        required = interfaceRequiredFn;
+        
+        default {
+            optional = function(self) return "interface default" end;
+        };
+    }
+
+    class "CheckCopyImpl" implements "ICheckCopy" {
+        required = function(self) return "class required" end;
+        -- optional not overridden - should use default
+    }
+
+    local obj = CheckCopyImpl.new()
+    
+    -- Class method should NOT be the interface's function (required methods not copied)
+    assertEquals(obj:required(), "class required")
+    assertNotEquals(obj:get_member("required").value, interfaceRequiredFn)
+    
+    -- Default method should be copied from interface
+    assertEquals(obj:optional(), "interface default")
+end

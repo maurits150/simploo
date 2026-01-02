@@ -143,9 +143,12 @@ Use `default` for optional methods that have a default implementation:
         onDeath = function(self)  -- override default
             print("BOSS DEFEATED!")
             self:dropLoot()
+            self.Damageable:onDeath()  -- call default implementation
         end;
     }
     ```
+
+You can call the default implementation from an override using `self.InterfaceName:method()`, similar to calling parent methods in class inheritance.
 
 === "Builder Syntax"
 

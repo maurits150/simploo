@@ -124,6 +124,7 @@ function instancer:initClass(class)
 
     -- Process implemented interfaces
     -- Validate required methods exist, copy default methods, store for instance_of
+    -- If default methods are copied, add interface reference so self.InterfaceName:method() works
     baseInstance._implements = {}
     
     for _, interfaceName in ipairs(class.implements) do
@@ -138,7 +139,7 @@ function instancer:initClass(class)
             error(string.format("class %s: %s is not an interface", class.name, interfaceName))
         end
         
-        -- Check interface and its parents
+        -- Check interface and its parents (for interface inheritance: interface B extends A)
         local interfacesToCheck = {interfaceBase}
         for parentBase in pairs(interfaceBase._parentMembers) do
             table.insert(interfacesToCheck, parentBase)
@@ -151,6 +152,21 @@ function instancer:initClass(class)
                 local mods = ifaceMember.modifiers
                 if mods.parent then
                     -- Skip parent references
+                elseif mods.default then
+                    -- Add interface reference on first default method (for self.InterfaceName:method() calls)
+                    if not baseInstance._members[interfaceName] then
+                        local ifaceRefMember = {value = interfaceBase, owner = baseInstance, modifiers = {parent = true}}
+                        baseInstance._members[interfaceName] = ifaceRefMember
+                        
+                        local shortName = self:classNameFromFullPath(interfaceName)
+                        if shortName ~= interfaceName and not baseInstance._members[shortName] then
+                            baseInstance._members[shortName] = ifaceRefMember
+                        end
+                    end
+                    -- Copy default method if class doesn't override it
+                    if not baseInstance._members[memberName] then
+                        baseInstance._members[memberName] = {value = ifaceMember.value, owner = baseInstance, modifiers = mods}
+                    end
                 elseif baseInstance._members[memberName] then
                     -- Class has this member - verify types match (skip in production)
                     if not config["production"] then
@@ -170,9 +186,6 @@ function instancer:initClass(class)
                             end
                         end
                     end
-                elseif mods.default then
-                    -- Copy default method
-                    baseInstance._members[memberName] = {value = ifaceMember.value, owner = baseInstance, modifiers = mods}
                 else
                     error(string.format("class %s: missing method '%s' required by interface %s", 
                         class.name, memberName, iface._name))
