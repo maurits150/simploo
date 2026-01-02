@@ -301,7 +301,7 @@ Useful for automatically syncing variables over a network.
 simploo.config["customModifiers"] = {"replicated"}
 
 -- 2. Define interface with default handler
-interface "Replicable" {
+interface "Replicated" {
     default {
         onReplicate = function(self, name, old, new)
             -- Default implementation
@@ -312,7 +312,7 @@ interface "Replicable" {
 
 -- 3. Hook to set up watchers on replicated members
 simploo.hook:add("afterNew", function(instance)
-    if not instance:instance_of(Replicable) then
+    if not instance:instance_of(Replicated) then
         return instance
     end
 
@@ -341,7 +341,7 @@ simploo.hook:add("afterNew", function(instance)
 end)
 
 -- 4. Use it with default handler
-class "Player" implements "Replicable" {
+class "Player" implements "Replicated" {
     public {
         name = "unnamed";
     };
@@ -352,10 +352,10 @@ class "Player" implements "Replicable" {
 
 local p = Player()
 p.name = "Bob"      -- no output
-p.health = 50       -- prints: [NET] health: 100 -> 50
+p.health = 50       -- prints: [NET DEFAULT] health: 100 -> 50
 
 -- 5. Or override the handler
-class "Enemy" implements "Replicable" {
+class "Enemy" implements "Replicated" {
     replicated {
         health = 50;
     };
