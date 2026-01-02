@@ -235,34 +235,78 @@ local c = Cat.new()
 print(c:describe())  -- an animal called cat
 ```
 
-## The Shadowing Model
+## Polymorphism
 
-!!! warning "Important: No Polymorphism"
-    SIMPLOO uses a **shadowing model**, not polymorphism. When a parent method calls `self:someMethod()`, it always calls the parent's version of `someMethod`, even if the child has overridden it.
+SIMPLOO supports polymorphism. When a child class overrides a method, the override is used even when called from a parent method:
+
+```lua
+class "Animal" {
+    speak = function(self)
+        return "..."
+    end;
+
+    introduce = function(self)
+        return "I say: " .. self:speak()
+    end;
+}
+
+class "Dog" extends "Animal" {
+    speak = function(self)
+        return "woof!"
+    end;
+}
+
+class "Cat" extends "Animal" {
+    speak = function(self)
+        return "meow!"
+    end;
+}
+
+local dog = Dog.new()
+local cat = Cat.new()
+
+print(dog:introduce())  -- I say: woof!
+print(cat:introduce())  -- I say: meow!
+```
+
+This works because child and parent share the same member tables - when the child overrides `speak`, the parent's `introduce` method sees the override.
+
+Private members also work correctly with polymorphism - each class accesses its own privates:
 
 ```lua
 class "Parent" {
-    getValue = function(self)
-        return "parent"
-    end;
-
-    callGetValue = function(self)
-        return self:getValue()
-    end;
+    private {
+        secret = "parent secret";
+    };
+    
+    public {
+        getSecret = function(self)
+            return self.secret
+        end;
+    };
 }
 
 class "Child" extends "Parent" {
-    getValue = function(self)
-        return "child"
-    end;
+    private {
+        secret = "child secret";
+    };
+    
+    public {
+        getChildSecret = function(self)
+            return self.secret
+        end;
+        
+        callParentGetSecret = function(self)
+            return self.Parent:getSecret()
+        end;
+    };
 }
 
 local c = Child.new()
-print(c:getValue())      -- child (direct call)
-print(c:callGetValue())  -- parent (NOT child!)
+print(c:getSecret())            -- parent secret (Parent's method accesses Parent's private)
+print(c:getChildSecret())       -- child secret (Child's method accesses Child's private)
+print(c:callParentGetSecret())  -- parent secret (Child calls Parent method, which accesses Parent's private)
 ```
-
-This design ensures private members work correctly with inheritance - each class's methods operate on their own instance.
 
 ## Checking Inheritance
 
