@@ -118,3 +118,49 @@ function Test:testHotswapChildPreservesParentAccess()
     assertEquals(child.toBeRemoved, nil)
     assertEquals(child.newMember, "hello")
 end
+
+-- Tests that hotswap uses weak references, allowing instances to be garbage collected.
+-- Creates instances, removes references, forces GC, then verifies they were collected.
+-- This ensures hotswap tracking doesn't prevent normal garbage collection.
+function Test:testHotswapWeakReferences()
+    simploo.hotswap:init()
+
+    class "HotWeakRef" {
+        data = "";
+    }
+
+    -- Count instances in hotswap table
+    local function countTrackedInstances()
+        local count = 0
+        for _, inst in pairs(simploo_hotswap_instances) do
+            if inst._name == "HotWeakRef" then
+                count = count + 1
+            end
+        end
+        return count
+    end
+
+    -- Create instances
+    local instances = {}
+    for i = 1, 100 do
+        instances[i] = HotWeakRef.new()
+        instances[i].data = string.rep("X", 1000)  -- some data to track
+    end
+
+    -- Force GC to clean up any previous garbage
+    for i = 1, 3 do collectgarbage("collect") end
+
+    local countBefore = countTrackedInstances()
+    assertTrue(countBefore >= 100)
+
+    -- Remove all references
+    instances = nil
+
+    -- Force garbage collection multiple times (needed for some Lua versions)
+    for i = 1, 5 do collectgarbage("collect") end
+
+    local countAfter = countTrackedInstances()
+
+    -- All instances should be collected (weak references don't prevent GC)
+    assertEquals(countAfter, 0)
+end
