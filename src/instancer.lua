@@ -65,7 +65,7 @@ function instancer:initClass(class)
         -- Add parent reference so child can access parent via self.ParentName
         -- The value is the parent's base instance; at instantiation, this becomes a parent instance
         local parentRefModifiers = {parent = true}
-        local parentRefMember = {value = parentBaseInstance, owner = baseInstance, static = false}
+        local parentRefMember = {value = parentBaseInstance, owner = baseInstance, static = false, modifiers = parentRefModifiers}
         baseInstance._members[parentName] = parentRefMember
         baseInstance._modifiers[parentName] = parentRefModifiers
 
@@ -98,10 +98,12 @@ function instancer:initClass(class)
                     and not (existingModifiers and existingModifiers.parent)
                     and not (parentModifiers and parentModifiers.parent) then
                 -- Mark as ambiguous - child must override to resolve
-                baseInstance._members[parentMemberName] = {value = nil, owner = baseInstance, static = false}
-                baseInstance._modifiers[parentMemberName] = {ambiguous = true}
+                local ambiguousMods = {ambiguous = true}
+                baseInstance._members[parentMemberName] = {value = nil, owner = baseInstance, static = false, modifiers = ambiguousMods}
+                baseInstance._modifiers[parentMemberName] = ambiguousMods
             else
                 -- Reference parent's member table directly (not a copy!)
+                -- Parent's member already has modifiers field
                 baseInstance._members[parentMemberName] = parentMember
                 baseInstance._modifiers[parentMemberName] = parentModifiers
             end
@@ -126,7 +128,7 @@ function instancer:initClass(class)
             end
         end
 
-        baseInstance._members[formatMemberName] = {value = value, owner = baseInstance, static = isStatic}
+        baseInstance._members[formatMemberName] = {value = value, owner = baseInstance, static = isStatic, modifiers = formatMember.modifiers}
         baseInstance._modifiers[formatMemberName] = formatMember.modifiers
     end
 
@@ -179,7 +181,7 @@ function instancer:initClass(class)
                     end
                 elseif mods.default then
                     -- Copy default method
-                    baseInstance._members[memberName] = {value = iface._members[memberName].value, owner = baseInstance, static = false}
+                    baseInstance._members[memberName] = {value = iface._members[memberName].value, owner = baseInstance, static = false, modifiers = mods}
                     baseInstance._modifiers[memberName] = mods
                 else
                     error(string.format("class %s: missing method '%s' required by interface %s", 

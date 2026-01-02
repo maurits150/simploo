@@ -284,3 +284,87 @@ simploo.hook:add("onUsing", function(path)
     return path
 end)
 ```
+
+## Example: Networked Variables
+
+This example shows how to intercept member value changes using a custom modifier.
+Useful for automatically syncing variables over a network.
+
+```lua
+-- 1. Register custom modifier
+simploo.syntax.destroy()
+simploo.config["customModifiers"] = {"replicated"}
+simploo.syntax.init()
+
+-- 2. Define interface with default handler
+interface "Replicable" {
+    default {
+        onReplicate = function(self, name, old, new)
+            print(string.format("[NET] %s: %s -> %s", name, old, new))
+        end;
+    };
+}
+
+-- 3. Hook to set up watchers on replicated members
+simploo.hook:add("afterNew", function(instance)
+    if not instance:instance_of(Replicable) then
+        return instance
+    end
+
+    for name, member in pairs(instance:get_members()) do
+        if member.modifiers.replicated then
+            -- Proxy pattern: move value to storage, intercept via metatable
+            local storage = {value = member.value}
+            member.value = nil
+            setmetatable(member, {
+                __index = function(t, k)
+                    if k == "value" then return storage.value end
+                    return rawget(t, k)
+                end,
+                __newindex = function(t, k, v)
+                    if k == "value" then
+                        instance:onReplicate(name, storage.value, v)
+                        storage.value = v
+                    else
+                        rawset(t, k, v)
+                    end
+                end
+            })
+        end
+    end
+    return instance
+end)
+
+-- 4. Use it with default handler
+class "Player" implements "Replicable" {
+    public {
+        name = "unnamed";
+    };
+    replicated {
+        health = 100;
+    };
+}
+
+local p = Player()
+p.name = "Bob"      -- no output
+p.health = 50       -- prints: [NET] health: 100 -> 50
+
+-- 5. Or override the handler
+class "Enemy" implements "Replicable" {
+    replicated {
+        health = 50;
+    };
+    
+    onReplicate = function(self, name, old, new)
+        -- Custom logic: send to server
+        sendToServer(self:get_name(), name, new)
+    end;
+}
+```
+
+### Instance Methods for Hooks
+
+These methods help hooks inspect instances without accessing internal fields:
+
+- `instance:get_member(name)` - Returns the member table `{value, owner, static, modifiers}`. You can add a metatable to intercept reads/writes to `member.value`.
+- `instance:get_members()` - Returns `{memberName = member, ...}` for all members (excludes parent references).

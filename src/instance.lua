@@ -120,6 +120,27 @@ function instancemethods:get_parents()
     return t
 end
 
+-- Returns the internal member table for a given member name.
+-- The member table has {value, owner, static, modifiers} fields.
+-- Users can add a metatable to intercept reads/writes to member.value.
+-- Returns nil if member doesn't exist.
+function instancemethods:get_member(name)
+    return self._members[name]
+end
+
+-- Returns a table of all members: {memberName = member, ...}
+-- Each member has {value, owner, static, modifiers} fields.
+-- Excludes parent references.
+function instancemethods:get_members()
+    local result = {}
+    for name, member in pairs(self._members) do
+        if not member.modifiers.parent then
+            result[name] = member
+        end
+    end
+    return result
+end
+
 function instancemethods:serialize()
     local data = {}
     data["_name"] = self._name
@@ -236,7 +257,8 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
         end
         
         -- Store parent reference so user can do self.ParentClass:method()
-        members[memberName] = {value = instanceLookup[parentBase], owner = baseInstance, static = false}
+        local mods = baseInstance._modifiers[memberName]
+        members[memberName] = {value = instanceLookup[parentBase], owner = baseInstance, static = false, modifiers = mods}
         
         -- Copy all members from parent instance (inherited members share the same table)
         local parentInstance = instanceLookup[parentBase]
@@ -255,7 +277,8 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
         members[memberName] = {
             value = util.deepCopyValue(srcMember.value, valueLookup),
             owner = srcMember.owner,
-            static = false
+            static = false,
+            modifiers = srcMember.modifiers
         }
     end
 
