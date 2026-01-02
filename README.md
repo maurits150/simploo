@@ -95,6 +95,8 @@ This is a fundamental trade-off. SIMPLOO will never match raw Lua instantiation 
 
 https://maurits150.github.io/simploo/
 
-## Feedback
+## Contributing
 
-Submit an issue, create a pull request, or contact me directly.
+Open an issue for bugs or feature requests. Pull requests are appreciated.
+
+Planning to touch the internals? Just know that "Simple" is more of a historical artifact at this point. 😅
