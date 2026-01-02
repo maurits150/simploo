@@ -194,34 +194,38 @@ end)
 
 ```lua
 simploo.hook:add("beforeRegister", function(classData)
-    local newMembers = {}
-
-    for memberName, memberData in pairs(classData.members) do
-        -- Skip functions and special members
-        if type(memberData.value) ~= "function" and memberName:sub(1, 1) ~= "_" then
-            local upperName = memberName:sub(1, 1):upper() .. memberName:sub(2)
-
-            -- Create getter
-            newMembers["get" .. upperName] = {
-                value = function(self)
-                    return self[memberName]
-                end,
-                modifiers = {public = true}
-            }
-
-            -- Create setter
-            newMembers["set" .. upperName] = {
-                value = function(self, value)
-                    self[memberName] = value
-                end,
-                modifiers = {public = true}
-            }
-        end
+    -- Collect names first to avoid modifying table during iteration
+    local memberNames = {}
+    for name in pairs(classData.members) do
+        table.insert(memberNames, name)
     end
 
-    -- Merge new members
-    for name, data in pairs(newMembers) do
-        classData.members[name] = data
+    for _, name in ipairs(memberNames) do
+        local data = classData.members[name]
+        
+        if type(data.value) ~= "function" and not data.modifiers.private then
+            local upperName = name:sub(1, 1):upper() .. name:sub(2)
+            local getterName = "get" .. upperName
+            local setterName = "set" .. upperName
+
+            if not classData.members[getterName] then
+                classData.members[getterName] = {
+                    value = function(self)
+                        return self[name]
+                    end,
+                    modifiers = {public = true}
+                }
+            end
+
+            if not classData.members[setterName] then
+                classData.members[setterName] = {
+                    value = function(self, value)
+                        self[name] = value
+                    end,
+                    modifiers = {public = true}
+                }
+            end
+        end
     end
 
     return classData
@@ -243,6 +247,8 @@ print(p:getAge())   -- 30
 ## Example: Instance Logging
 
 ```lua
+-- Note: This holds strong references to instances.
+-- Remove entries when done or use weak references to avoid memory leaks.
 local instanceLog = {}
 
 simploo.hook:add("afterNew", function(instance)
