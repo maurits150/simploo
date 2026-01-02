@@ -62,6 +62,31 @@ function Test:testHotswapWithInheritance()
     assertEquals(child.childValue, "child")
 end
 
+-- Tests that methods are replaced when a class is redefined.
+-- When a method implementation changes, existing instances should use the new method.
+function Test:testHotswapMethodsReplaced()
+    simploo.hotswap:init()
+
+    class "HotMethod" {
+        getValue = function(self)
+            return "old"
+        end;
+    }
+
+    local instance = HotMethod.new()
+    assertEquals(instance:getValue(), "old")
+
+    -- Redefine with new method implementation
+    class "HotMethod" {
+        getValue = function(self)
+            return "new"
+        end;
+    }
+
+    -- Method should be replaced
+    assertEquals(instance:getValue(), "new")
+end
+
 -- Tests that child class hotswapping preserves parent member access.
 -- After redefining a child class, existing instances should still be able
 -- to access and modify parent members through inheritance.

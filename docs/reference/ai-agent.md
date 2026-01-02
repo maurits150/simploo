@@ -380,7 +380,8 @@ Multiple hooks: run in registration order, each receives previous hook's return 
 When class redefined with hotswap enabled:
 - New members added with default values
 - Removed members become nil
-- Existing member values preserved (not reset to new defaults)
+- Methods replaced with new implementations
+- Existing non-function values preserved (not reset to new defaults)
 - Works with inheritance
 
 ## Common Patterns

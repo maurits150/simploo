@@ -26,14 +26,22 @@ function hotswap:swap(newBase)
 end
 
 function hotswap:syncMembers(hotInstance, baseInstance)
-    -- Add members that do not exist in the current instance.
+    -- Add new members and update methods.
     for baseMemberName, baseMember in pairs(baseInstance._members) do
-        if hotInstance._members[baseMemberName] == nil and not baseMember.modifiers.parent then
+        if baseMember.modifiers.parent then
+            -- Skip parent references, handled separately
+        elseif hotInstance._members[baseMemberName] == nil then
+            -- Add new member
             hotInstance._members[baseMemberName] = {
                 value = simploo.util.deepCopyValue(baseMember.value),
                 owner = baseMember.owner,
                 modifiers = baseMember.modifiers
             }
+        elseif type(baseMember.value) == "function" then
+            -- Replace existing method with new implementation
+            hotInstance._members[baseMemberName].value = baseMember.value
+            hotInstance._members[baseMemberName].owner = baseMember.owner
+            hotInstance._members[baseMemberName].modifiers = baseMember.modifiers
         end
     end
 

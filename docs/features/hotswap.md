@@ -56,8 +56,9 @@ print(player.mana)    -- 50 (new member with default value)
 | Updated | Not Updated |
 |---------|-------------|
 | New members added | Existing values |
-| Removed members deleted | Method implementations |
-| Default values for new members | Modified instance data |
+| Removed members deleted | Modified instance data |
+| Method implementations | Default values for existing members |
+| Default values for new members | |
 
 ## Use Case: Development
 
@@ -85,9 +86,8 @@ end
 ## Limitations
 
 1. **Values are not updated**: If you change a default value, existing instances keep their old values
-2. **Methods are not replaced**: Redefining a method doesn't update existing instances
-3. **Memory overhead**: Hotswap tracks all instances, using more memory
-4. **Performance**: Slight overhead on instance creation
+2. **Memory overhead**: Hotswap tracks all instances, using more memory
+3. **Performance**: Slight overhead on instance creation
 
 ```lua
 class "Example" {
