@@ -96,6 +96,29 @@ print(_G.Player)        -- SimplooObject: Player <class>
 
 You can change where classes are stored using the `baseInstanceTable` config option. See [Configuration](../reference/config.md).
 
+## Builder Syntax Options
+
+The builder syntax accepts an optional second argument with class options:
+
+```lua
+local player = class("Player", {
+    extends = "Entity",
+    implements = "Damageable",
+    namespace = "game"
+})
+player:register()
+
+-- Results in game.Player extending Entity and implementing Damageable
+```
+
+Available options:
+
+| Option | Description |
+|--------|-------------|
+| `extends` | Parent class(es) to inherit from |
+| `implements` | Interface(s) to implement |
+| `namespace` | Namespace for this class |
+
 ## Comparing Syntaxes
 
 | Feature | Block Syntax | Builder Syntax |

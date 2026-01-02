@@ -343,27 +343,28 @@ Use full paths or `using` for cross-namespace inheritance:
 
 ## Namespace with Builder Syntax
 
-=== "Block Syntax"
+In builder syntax, you can specify the namespace as an argument to `class()` instead of using the global `namespace` statement:
 
-    ```lua
-    namespace "myapp"
+```lua
+local config = class("Config", {namespace = "myapp"})
+config.debug = false
+config:register()
 
-    class "Config" {
-        debug = false;
-    }
-    ```
+-- Results in myapp.Config
+local c = myapp.Config.new()
+```
 
-=== "Builder Syntax"
+This is equivalent to:
 
-    ```lua
-    namespace "myapp"
+```lua
+namespace "myapp"
 
-    local config = class("Config")
-    config.debug = false
-    config:register()
-    ```
+local config = class("Config")
+config.debug = false
+config:register()
+```
 
-Both result in `myapp.Config`.
+The option syntax is useful when you want to define classes in different namespaces without changing the global namespace state.
 
 ## Getting Current Namespace
 
