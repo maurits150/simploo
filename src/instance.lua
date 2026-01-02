@@ -4,9 +4,8 @@
     Key concepts:
     
     1. Member lookup (instance.member):
-       - Check _members[key] for member table {value, owner, static}
-       - If member.static: read from _base._members[key].value
-       - Otherwise: read from member.value
+       - Check _members[key] for member table {value, owner, modifiers}
+       - Return member.value (static members share same table as base)
        - If no member: fall through to instancemethods
     
     2. Polymorphism via shared member tables:
@@ -28,13 +27,13 @@
            _base = <class>,           -- Reference to the base instance (class) for metadata lookup
            _name = "ClassName",       -- Class name for debugging/serialization
            _members = {               -- Member tables (inherited members share references with parent)
-               health = {value = 100, owner = ParentBase, static = false},
+               health = {value = 100, owner = ParentBase, modifiers = {...}},
                ...
            }
        }
        
-       The key optimization: _modifiers are NOT copied to instances. They're accessed via _base.
-       Inherited members share the same {value, owner, static} table as the parent instance,
+       The key optimization: modifiers are stored in each member table and shared via reference.
+       Inherited and static members share the same {value, owner, modifiers} table as the parent/base,
        so writes are automatically visible through both child and parent.
 ]]
 
@@ -121,7 +120,7 @@ function instancemethods:get_parents()
 end
 
 -- Returns the internal member table for a given member name.
--- The member table has {value, owner, static, modifiers} fields.
+-- The member table has {value, owner, modifiers} fields.
 -- Users can add a metatable to intercept reads/writes to member.value.
 -- Returns nil if member doesn't exist.
 function instancemethods:get_member(name)
@@ -129,7 +128,7 @@ function instancemethods:get_member(name)
 end
 
 -- Returns a table of all members: {memberName = member, ...}
--- Each member has {value, owner, static, modifiers} fields.
+-- Each member has {value, owner, modifiers} fields.
 -- Excludes parent references.
 function instancemethods:get_members()
     local result = {}
@@ -146,7 +145,6 @@ function instancemethods:serialize()
     data["_name"] = self._name
 
     local base = self._base
-    local modifiers = base._modifiers
 
     -- Serialize parent instances
     for parentBase, memberName in pairs(base._parentMembers) do
@@ -157,11 +155,10 @@ function instancemethods:serialize()
     -- (static members are already excluded from _ownMembers)
     for i = 1, #base._ownMembers do
         local memberName = base._ownMembers[i]
-        local mods = modifiers[memberName]
-        if not mods.transient then
-            local value = self._members[memberName].value
-            if type(value) ~= "function" then
-                data[memberName] = value
+        local member = self._members[memberName]
+        if not member.modifiers.transient then
+            if type(member.value) ~= "function" then
+                data[memberName] = member.value
             end
         end
     end
@@ -257,8 +254,8 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
         end
         
         -- Store parent reference so user can do self.ParentClass:method()
-        local mods = baseInstance._modifiers[memberName]
-        members[memberName] = {value = instanceLookup[parentBase], owner = baseInstance, static = false, modifiers = mods}
+        local srcMember = srcMembers[memberName]
+        members[memberName] = {value = instanceLookup[parentBase], owner = baseInstance, modifiers = srcMember.modifiers}
         
         -- Copy all members from parent instance (inherited members share the same table)
         local parentInstance = instanceLookup[parentBase]
@@ -277,7 +274,6 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup)
         members[memberName] = {
             value = util.deepCopyValue(srcMember.value, valueLookup),
             owner = srcMember.owner,
-            static = false,
             modifiers = srcMember.modifiers
         }
     end
@@ -352,13 +348,13 @@ end
 
 local function deserializeIntoMembers(instance, data)
     for dataKey, dataVal in pairs(data) do
-        local mods = instance._base._modifiers[dataKey]
-        if mods and not mods.transient then
+        local member = instance._members[dataKey]
+        if member and not member.modifiers.transient then
             if type(dataVal) == "table" and dataVal._name then
                 -- Recurse into parent instance
-                deserializeIntoMembers(instance._members[dataKey].value, dataVal)
+                deserializeIntoMembers(member.value, dataVal)
             else
-                instance._members[dataKey].value = dataVal
+                member.value = dataVal
             end
         end
     end
@@ -381,8 +377,7 @@ instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__
     
     Production mode path (optimized for speed):
     1. Look up member from _members[key]
-    2. If member.static: return from _base._members[key].value
-    3. Otherwise: return member.value
+    2. Return member.value (static members share same table as base)
     
     Development mode path (includes access control):
     1. Get current scope (the class whose method is executing)
@@ -394,9 +389,6 @@ if config.production then
     function instancemt:__index(key)
         local member = self._members[key]
         if member then
-            if member.static then
-                return self._base._members[key].value
-            end
             return member.value
         end
 
@@ -414,20 +406,22 @@ else
     function instancemt:__index(key)
         local base = self._base
         local member = self._members[key]
-        local mods = base._modifiers[key]
 
         -- DEVELOPMENT PATH: Full access control and scope tracking
         local lookupMember = member
+        local mods = member and member.modifiers
         local scope = util.getScope()  -- The class whose method is currently running
         
         -- For private/protected members, we need to look up from the scope's perspective
         -- This ensures parent methods access parent's privates, not child's
         if scope and scope._members then
             local scopeMember = scope._members[key]
-            local scopeMods = scope._base._modifiers[key]
-            if scopeMember and scopeMods and (scopeMods.private or scopeMods.protected) then
-                lookupMember = scopeMember
-                mods = scopeMods
+            if scopeMember then
+                local scopeMods = scopeMember.modifiers
+                if scopeMods and (scopeMods.private or scopeMods.protected) then
+                    lookupMember = scopeMember
+                    mods = scopeMods
+                end
             end
         end
 
@@ -445,11 +439,6 @@ else
             -- Protected: accessible within declaring class and subclasses
             if mods and mods.protected and (not scope or not scope:instance_of(lookupMember.owner)) then
                 error(string.format("class %s: accessing protected member %s", tostring(self), key))
-            end
-            
-            -- Static member: value lives on the class
-            if lookupMember.static then
-                return base._members[key].value
             end
             
             return lookupMember.value
@@ -471,11 +460,7 @@ if config.production then
     function instancemt:__newindex(key, value)
         local member = self._members[key]
         if member then
-            if member.static then
-                self._base._members[key].value = value
-            else
-                member.value = value
-            end
+            member.value = value
             return
         end
 
@@ -493,18 +478,20 @@ else
     function instancemt:__newindex(key, value)
         local base = self._base
         local member = self._members[key]
-        local mods = base._modifiers[key]
 
         -- Development: full access control
         local lookupMember = member
+        local mods = member and member.modifiers
         local scope = util.getScope()
         
         if scope and scope._members then
             local scopeMember = scope._members[key]
-            local scopeMods = scope._base._modifiers[key]
-            if scopeMember and scopeMods and (scopeMods.private or scopeMods.protected) then
-                lookupMember = scopeMember
-                mods = scopeMods
+            if scopeMember then
+                local scopeMods = scopeMember.modifiers
+                if scopeMods and (scopeMods.private or scopeMods.protected) then
+                    lookupMember = scopeMember
+                    mods = scopeMods
+                end
             end
         end
 
@@ -517,12 +504,6 @@ else
             end
             if mods and mods.protected and (not scope or not scope:instance_of(lookupMember.owner)) then
                 error(string.format("class %s: accessing protected member %s", tostring(self), key))
-            end
-            
-            -- Static member
-            if lookupMember.static then
-                base._members[key].value = value
-                return
             end
             
             lookupMember.value = value
@@ -551,8 +532,8 @@ function instancemt:__tostring()
     -- Grab the definition string.
     local str = string.format("SimplooObject: %s <%s> {%s}", self._name, self._base == self and "class" or "instance", tostring(self):sub(8))
 
-    local mods = self._base._modifiers["__tostring"]
-    if mods and mods.meta then  -- lookup via modifiers to prevent infinite loop
+    local member = self._base._members["__tostring"]
+    if member and member.modifiers.meta then  -- lookup via modifiers to prevent infinite loop
         str = self:__tostring()
     end
 

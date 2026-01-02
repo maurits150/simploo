@@ -44,9 +44,6 @@ function util.deepCopyValue(value, lookup)
     return copy
 end
 
-
-
-
 function util.addGcCallback(object, callback)
     if not _VERSION or _VERSION == "Lua 5.1" then
         local proxy = newproxy(true)

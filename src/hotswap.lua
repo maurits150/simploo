@@ -27,13 +27,12 @@ end
 
 function hotswap:syncMembers(hotInstance, baseInstance)
     -- Add members that do not exist in the current instance.
-    for baseMemberName, baseMods in pairs(baseInstance._modifiers) do
-        if hotInstance._members[baseMemberName] == nil and not baseMods.parent then
-            local baseMember = baseInstance._members[baseMemberName]
+    for baseMemberName, baseMember in pairs(baseInstance._members) do
+        if hotInstance._members[baseMemberName] == nil and not baseMember.modifiers.parent then
             hotInstance._members[baseMemberName] = {
                 value = simploo.util.deepCopyValue(baseMember.value),
                 owner = baseMember.owner,
-                static = baseMember.static
+                modifiers = baseMember.modifiers
             }
         end
     end

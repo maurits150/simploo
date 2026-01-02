@@ -300,7 +300,8 @@ simploo.syntax.init()
 interface "Replicable" {
     default {
         onReplicate = function(self, name, old, new)
-            print(string.format("[NET] %s: %s -> %s", name, old, new))
+            -- Default implementation
+            print(string.format("[NET DEFAULT] %s: %s -> %s", name, old, new))
         end;
     };
 }
@@ -357,7 +358,7 @@ class "Enemy" implements "Replicable" {
     
     onReplicate = function(self, name, old, new)
         -- Custom logic: send to server
-        sendToServer(self:get_name(), name, new)
+        print(string.format("[NET CUSTOM] %s: %s -> %s", name, old, new))
     end;
 }
 ```
@@ -366,5 +367,5 @@ class "Enemy" implements "Replicable" {
 
 These methods help hooks inspect instances without accessing internal fields:
 
-- `instance:get_member(name)` - Returns the member table `{value, owner, static, modifiers}`. You can add a metatable to intercept reads/writes to `member.value`.
+- `instance:get_member(name)` - Returns the member table `{value, owner, modifiers}`.
 - `instance:get_members()` - Returns `{memberName = member, ...}` for all members (excludes parent references).

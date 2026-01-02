@@ -5,17 +5,17 @@
     
     _type: String - "class" or "interface".
     
-    _members: Table mapping member names to {value, owner, static}
+    _members: Table mapping member names to {value, owner, modifiers}
               - value: the actual member value (function, number, table, etc.)
               - owner: the base instance (class) that declared this member
-              - static: boolean, true if this is a static member
-              For instances, inherited members share the same table reference as parent.
+              - modifiers: table of modifiers {public=true, static=true, ...}
+              For instances, inherited and static members share the same table reference.
     
-    _modifiers: Table mapping member names to {public=true, static=true, ...}
-                This is SHARED - not copied to instances. Used for access control in dev mode.
-    
-    _ownMembers: Array of member names declared by THIS class (not inherited).
+    _ownMembers: Array of own non-static member names.
                  Used by copyMembers() to quickly iterate only what needs copying.
+    
+    _staticMembers: Array of static member names.
+                    Static members share the base's member table (not copied).
     
     _parentMembers: Map of parent base -> member name.
                     Used by copyMembers() to create parent instances.
@@ -44,10 +44,8 @@ function instancer:initClass(class)
     baseInstance._name = class.name
     baseInstance._type = class.type
     
-    -- _members maps member name -> {value, owner, static}
-    -- _modifiers maps member name -> {public=true, static=true, ...} (only used in dev mode)
+    -- _members maps member name -> {value, owner, static, modifiers}
     baseInstance._members = {}
-    baseInstance._modifiers = {}
 
     -- Process parent classes/interfaces (inheritance)
     -- For each parent:
@@ -64,10 +62,8 @@ function instancer:initClass(class)
 
         -- Add parent reference so child can access parent via self.ParentName
         -- The value is the parent's base instance; at instantiation, this becomes a parent instance
-        local parentRefModifiers = {parent = true}
-        local parentRefMember = {value = parentBaseInstance, owner = baseInstance, static = false, modifiers = parentRefModifiers}
+        local parentRefMember = {value = parentBaseInstance, owner = baseInstance, modifiers = {parent = true}}
         baseInstance._members[parentName] = parentRefMember
-        baseInstance._modifiers[parentName] = parentRefModifiers
 
         -- Also add short name (e.g., "Foo" for "namespace.Foo")
         -- If conflict, keep nil - use full name or 'using ... as' instead
@@ -76,10 +72,8 @@ function instancer:initClass(class)
             if not assignedShortNames[shortName] then
                 assignedShortNames[shortName] = true
                 baseInstance._members[shortName] = parentRefMember
-                baseInstance._modifiers[shortName] = parentRefModifiers
             else
                 baseInstance._members[shortName] = nil
-                baseInstance._modifiers[shortName] = nil
             end
         end
 
@@ -90,22 +84,19 @@ function instancer:initClass(class)
         -- 2. Polymorphism - child and parent share same member table, writes affect both
         for parentMemberName, parentMember in pairs(parentBaseInstance._members) do
             local existingMember = baseInstance._members[parentMemberName]
-            local existingModifiers = baseInstance._modifiers[parentMemberName]
-            local parentModifiers = parentBaseInstance._modifiers[parentMemberName]
+            local existingMods = existingMember and existingMember.modifiers
+            local parentMods = parentMember.modifiers
             
             -- Handle diamond inheritance: same member name from multiple parents
             if existingMember
-                    and not (existingModifiers and existingModifiers.parent)
-                    and not (parentModifiers and parentModifiers.parent) then
+                    and not (existingMods and existingMods.parent)
+                    and not (parentMods and parentMods.parent) then
                 -- Mark as ambiguous - child must override to resolve
-                local ambiguousMods = {ambiguous = true}
-                baseInstance._members[parentMemberName] = {value = nil, owner = baseInstance, static = false, modifiers = ambiguousMods}
-                baseInstance._modifiers[parentMemberName] = ambiguousMods
+                baseInstance._members[parentMemberName] = {value = nil, owner = baseInstance, modifiers = {ambiguous = true}}
             else
                 -- Reference parent's member table directly (not a copy!)
                 -- Parent's member already has modifiers field
                 baseInstance._members[parentMemberName] = parentMember
-                baseInstance._modifiers[parentMemberName] = parentModifiers
             end
         end
     end
@@ -128,8 +119,7 @@ function instancer:initClass(class)
             end
         end
 
-        baseInstance._members[formatMemberName] = {value = value, owner = baseInstance, static = isStatic, modifiers = formatMember.modifiers}
-        baseInstance._modifiers[formatMemberName] = formatMember.modifiers
+        baseInstance._members[formatMemberName] = {value = value, owner = baseInstance, modifiers = formatMember.modifiers}
     end
 
     -- Process implemented interfaces
@@ -157,13 +147,14 @@ function instancer:initClass(class)
         for _, iface in ipairs(interfacesToCheck) do
             table.insert(baseInstance._implements, iface)
             
-            for memberName, mods in pairs(iface._modifiers) do
+            for memberName, ifaceMember in pairs(iface._members) do
+                local mods = ifaceMember.modifiers
                 if mods.parent then
                     -- Skip parent references
                 elseif baseInstance._members[memberName] then
                     -- Class has this member - verify types match (skip in production)
                     if not config["production"] then
-                        local expectedType = type(iface._members[memberName].value)
+                        local expectedType = type(ifaceMember.value)
                         local actualType = type(baseInstance._members[memberName].value)
                         if actualType ~= expectedType then
                             error(string.format("class %s: member '%s' must be a %s to satisfy interface %s (got %s)",
@@ -173,7 +164,7 @@ function instancer:initClass(class)
                         -- Strict interface checking: verify argument count, names, and varargs match
                         if config["strictInterfaces"] and actualType == "function" then
                             local err = simploo.util.compareFunctionArgs(
-                                iface._members[memberName].value, baseInstance._members[memberName].value, memberName, iface._name)
+                                ifaceMember.value, baseInstance._members[memberName].value, memberName, iface._name)
                             if err then
                                 error(string.format("class %s: %s", class.name, err))
                             end
@@ -181,8 +172,7 @@ function instancer:initClass(class)
                     end
                 elseif mods.default then
                     -- Copy default method
-                    baseInstance._members[memberName] = {value = iface._members[memberName].value, owner = baseInstance, static = false, modifiers = mods}
-                    baseInstance._modifiers[memberName] = mods
+                    baseInstance._members[memberName] = {value = ifaceMember.value, owner = baseInstance, modifiers = mods}
                 else
                     error(string.format("class %s: missing method '%s' required by interface %s", 
                         class.name, memberName, iface._name))
@@ -198,7 +188,7 @@ function instancer:initClass(class)
     local parentMembers = {}   -- Parent base -> member name (dedupes short name vs full name)
     
     for memberName, member in pairs(baseInstance._members) do
-        local mods = baseInstance._modifiers[memberName]
+        local mods = member.modifiers
         if mods and mods.parent then
             -- Use parent base as key to avoid duplicates (both "Parent" and "namespace.Parent" point to same base)
             local parentBase = member.value
@@ -206,7 +196,7 @@ function instancer:initClass(class)
                 parentMembers[parentBase] = memberName
             end
         elseif member.owner == baseInstance then
-            if member.static then
+            if mods.static then
                 -- Static members are accessed via _base, just need reference
                 staticMembers[#staticMembers + 1] = memberName
             else
