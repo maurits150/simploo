@@ -10,4 +10,4 @@
   end
   ```
 - ALWAYS read all src/ files before working (unless told not to).
-- Benchmarks: compare to README numbers, run all 3 lua versions, ask to update README.
+- Benchmarks: compare to README numbers, run all 3 lua versions sequentially (not parallel), ask to update README, always end with a percentage change for every table entry.
