@@ -63,7 +63,10 @@ function menu:init()
 		elseif action == 3 then
 			self:watch("test")
 		elseif action == 4 then
-			self:tests()
+			local failures = self:tests()
+			if failures > 0 then
+				os.exit(1)
+			end
 		elseif action == 5 then
 			return
 		end
@@ -145,7 +148,10 @@ function menu:tests()
 
 	if not testfiles then
 		print("[tests] no tests ran: " .. tostring(err))
+		return 1
 	end
+
+	local totalFailures = 0
 
 	for _, testproduction in pairs({false, true}) do -- Test in both production mode and non-production
 		print("\n\n\n\n\n===================================================")
@@ -185,9 +191,12 @@ function menu:tests()
 			dofile("tests/" .. v)
 
 			-- Run luaunit
-			LuaUnit:run("Test")
+			local failures = LuaUnit:run("Test")
+			totalFailures = totalFailures + failures
 		end
 	end
+
+	return totalFailures
 end
 
 menu:init()

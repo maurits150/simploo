@@ -143,11 +143,13 @@ local function serializeInstance(instance)
     end
 
     -- Serialize own non-transient, non-function members
-    -- (static members are already excluded from _ownMembers)
-    for i = 1, #base._ownMembers do
-        local memberName = base._ownMembers[i]
-        local member = instance._members[memberName]
-        if not member.modifiers.transient then
+    -- (static members are already excluded from _ownVariables)
+    -- Note: instance members only have {value}, modifiers are on base._members
+    for i = 1, #base._ownVariables do
+        local memberName = base._ownVariables[i]
+        local baseMember = base._members[memberName]
+        if not baseMember.modifiers.transient then
+            local member = instance._members[memberName]
             if type(member.value) ~= "function" then
                 data[memberName] = member.value
             end
@@ -302,10 +304,13 @@ function instancemethods:new(...)
 end
 
 local function deserializeIntoMembers(instance, data)
+    local base = instance._base
     for dataKey, dataVal in pairs(data) do
         local member = instance._members[dataKey]
-        if member and not member.modifiers.transient then
-            if member.modifiers.parent and type(dataVal) == "table" then
+        local baseMember = base._members[dataKey]
+        local mods = baseMember and baseMember.modifiers
+        if member and mods and not mods.transient then
+            if mods.parent and type(dataVal) == "table" then
                 -- Recurse into parent instance
                 deserializeIntoMembers(member.value, dataVal)
             else

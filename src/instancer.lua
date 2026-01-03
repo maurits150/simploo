@@ -11,8 +11,8 @@
               - modifiers: table of modifiers {public=true, static=true, ...}
               For instances, inherited and static members share the same table reference.
     
-    _ownMembers: Array of own non-static member names.
-                 Used by copyMembers() to quickly iterate only what needs copying.
+    _ownVariables: Array of own non-static variable names.
+                   Used by copyMembers() to quickly iterate only what needs copying.
     
     _staticMembers: Array of static member names.
                     Static members share the base's member table (not copied).
