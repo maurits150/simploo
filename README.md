@@ -72,18 +72,18 @@ At runtime, member access goes through metatables rather than direct table acces
 
 Times in seconds. Run with `printf '4\n5' | lua menu.lua`.
 
-| Benchmark                        | Lua 5.1 |       |       | Lua 5.4 |       |       | LuaJIT |       |       |
-|----------------------------------|---------|-------|-------|---------|-------|-------|--------|-------|-------|
-|                                  | Raw     | Dev   | Prod  | Raw     | Dev   | Prod  | Raw    | Dev   | Prod  |
-| **Simple class (20 members)**    |         |       |       |         |       |       |        |       |       |
-| 10k instantiations               | 0.019   | 0.052 | 0.043 | 0.013   | 0.035 | 0.039 | 0.009  | 0.019 | 0.021 |
-| 1M method calls                  | 0.073   | 1.020 | 0.202 | 0.114   | 0.743 | 0.166 | ~0     | 0.367 | ~0    |
-| **Deep inheritance (5 levels)**  |         |       |       |         |       |       |        |       |       |
-| 10k instantiations               | 0.009   | 0.114 | 0.117 | 0.007   | 0.108 | 0.108 | ~0     | 0.049 | 0.050 |
-| 100k method chain calls          | 0.031   | 0.504 | 0.059 | 0.025   | 0.363 | 0.046 | ~0     | 0.185 | ~0    |
-| 1M calls to parent method (5 up) | 0.072   | 0.528 | 0.150 | 0.114   | 0.398 | 0.117 | ~0     | 0.169 | ~0    |
-| 1M inherited member access       | 0.010   | 0.170 | 0.047 | 0.005   | 0.110 | 0.027 | ~0     | 0.046 | ~0    |
-| 1M own member access             | 0.009   | 0.174 | 0.045 | 0.005   | 0.112 | 0.028 | ~0     | 0.042 | ~0    |
+| Benchmark                    | Lua 5.1 |      |      | Lua 5.4 |      |      | LuaJIT |      |      |
+|------------------------------|---------|------|------|---------|------|------|--------|------|------|
+|                              | Raw     | Dev  | Prod | Raw     | Dev  | Prod | Raw    | Dev  | Prod |
+| **Plain class (20 members)** |         |      |      |         |      |      |        |      |      |
+| 10k instantiations           | .018    | .046 | .046 | .013    | .035 | .040 | .016   | .020 | .019 |
+| 1M method calls              | .074    | 1.04 | .207 | .118    | .685 | .163 | ~0     | .353 | ~0   |
+| **Inheritance (5x20 members)** |       |      |      |         |      |      |        |      |      |
+| 10k instantiations           | .045    | .596 | .583 | .036    | .560 | .531 | ~0     | .225 | .239 |
+| 100k method chain            | .028    | .540 | .062 | .023    | .350 | .046 | ~0     | .182 | ~0   |
+| 1M parent method (5 up)      | .069    | .532 | .154 | .120    | .371 | .124 | ~0     | .168 | ~0   |
+| 1M inherited member          | .009    | .173 | .048 | .005    | .112 | .029 | ~0     | .048 | ~0   |
+| 1M own member                | .008    | .170 | .048 | .005    | .114 | .031 | ~0     | .053 | ~0   |
 
 ### Why Raw Lua is Faster
 
