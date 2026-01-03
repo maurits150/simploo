@@ -42,6 +42,39 @@ function Test:testBaseIsCorrect()
     assertTrue(child._base == Child)
 end
 
+-- Tests 3-level variable shadowing with deep parent access.
+-- A, B, and C all define 'x'. Accessing instance.x returns C's value.
+-- Accessing instance.B.x returns B's value. Accessing instance.B.A.x
+-- returns A's value. This tests that deep parent chain access works
+-- correctly for shadowed variables.
+function Test:testDeepVariableShadowing()
+    class "ShadowA" {
+        x = "A";
+    }
+
+    class "ShadowB" extends "ShadowA" {
+        x = "B";
+    }
+
+    class "ShadowC" extends "ShadowB" {
+        x = "C";
+    }
+
+    local instance = ShadowC.new()
+
+    -- Direct access returns child's value
+    assertEquals(instance.x, "C")
+
+    -- One level up
+    assertEquals(instance.ShadowB.x, "B")
+
+    -- Two levels up
+    assertEquals(instance.ShadowB.ShadowA.x, "A")
+
+    -- Can also access grandparent directly
+    assertEquals(instance.ShadowA.x, "A")
+end
+
 -- Tests method calls with both dot and colon syntax.
 -- Dot syntax (instance.method(arg)) passes arg as first parameter.
 -- Colon syntax (instance:method(arg)) passes instance as self, then arg.
