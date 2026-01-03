@@ -160,6 +160,7 @@ function Test:testMemoryLeakViaUsingsFENVReferencingOldClasses()
     end
 
     collectgarbage('collect')
+    collectgarbage('collect')  -- second cycle needed for objects with __gc
 
     local endMemory = collectgarbage("count")
 

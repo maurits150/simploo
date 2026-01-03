@@ -295,9 +295,7 @@ function instancemethods:new(...)
 
     -- Set up finalizer (destructor) if defined
     if copy._base._members["__finalize"] then
-        util.addGcCallback(copy, function()
-            copy:__finalize()
-        end)
+        util.enableTableGc51(copy)
     end
 
     return hook:fire("afterNew", copy) or copy
@@ -331,6 +329,18 @@ end
 -------------------------------------------------------------------------------
 
 instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__concat", "__unm", "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__eq", "__lt", "__le"}
+
+-- Lua 5.4 requires __gc to exist when setmetatable is first called.
+-- For Lua 5.2+, this single __gc handles all instances via self parameter.
+-- For Lua 5.1, tables don't support __gc so addGcCallback uses proxy userdata.
+instancemt.__gc = function(self)
+    if self._members and self._members["__finalize"] then
+        local success, err = pcall(self.__finalize, self)
+        if not success then
+            print(string.format("ERROR: %s: error in __finalize: %s", tostring(self), tostring(err)))
+        end
+    end
+end
 
 --[[
     __index metamethod - handles all member reads (instance.member)

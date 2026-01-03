@@ -44,39 +44,22 @@ function util.deepCopyValue(value, lookup)
     return copy
 end
 
-function util.addGcCallback(object, callback)
+-- Lua 5.1: tables don't support __gc, so we attach a proxy userdata.
+-- When proxy is collected, it calls the object's metatable __gc.
+-- Lua 5.2+: this is a no-op since instancemt.__gc handles it directly.
+function util.enableTableGc51(object)
     if not _VERSION or _VERSION == "Lua 5.1" then
-        local proxy = newproxy(true)
-        local mt = getmetatable(proxy) -- Lua 5.1 doesn't allow __gc on tables. This function is a hidden lua feature which creates an empty userdata object instead, which allows the usage of __gc.
-        mt.MetaName = "SimplooGC" -- This is used internally when printing or displaying info.
-        mt.__class = object -- Store a reference to our object, so the userdata object lives as long as the object does.
-        mt.__gc = function(self)
-            -- Lua < 5.1 flips out when errors happen inside a userdata __gc, so we catch and print them!
-            local success, error = pcall(function()
-                callback(object)
-            end)
-
-            if not success then
-                print(string.format("ERROR: class %s: error __gc function: %s", tostring(object), tostring(error)))
-            end
-        end
-
-        rawset(object, "__gc", proxy)
-    else
         local mt = getmetatable(object)
-        mt.__gc = function(self)
-            -- Lua doesn't really do anything with errors happening inside __gc (doesn't even print them in my test)
-            -- So we catch them by hand and print them!
-            local success, error = pcall(function()
-                callback(object)
-            end)
-
-            if not success then
-                print(string.format("ERROR: %s: error __gc function: %s", tostring(self), tostring(error)))
+        local proxy = newproxy(true)
+        local proxyMt = getmetatable(proxy)
+        proxyMt.__gc = function()
+            if mt and mt.__gc then
+                mt.__gc(object)
             end
         end
-        
-        return
+        -- Store proxy on object so it lives as long as object does.
+        -- When object is collected, proxy is collected, triggering __gc.
+        rawset(object, "__gcproxy", proxy)
     end
 end
 
