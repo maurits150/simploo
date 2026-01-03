@@ -1,16 +1,13 @@
-- Performance is critical. Do not use `debug.getinfo` or other debug library functions in code paths that run during method calls (e.g., wrappers, metamethods). These are too slow for hot paths.
-- Tests do not need pcall wrappers - the test framework (menu.lua) handles errors. Only use pcall when testing that something should fail (e.g., assertFalse(success) after pcall).
-- Do NOT add `namespace ""` to test files - the test framework (menu.lua) reloads simploo fresh for each test file, so namespace state does not persist between files.
-- NEVER read any files in dist/ - they are probably outdated and will confuse your context.
-- To run tests: `printf '4\n5' | lua menu.lua` (option 4 runs tests, option 5 exits). The menu requires input so you must pipe both options.
-- To initialize simploo manually for testing outside menu.lua, load files from src/sourcefiles.txt in order:
+- Performance is critical. No `debug.getinfo` in hot paths (wrappers, metamethods).
+- Tests don't need pcall - menu.lua handles errors. Only use pcall when testing failures.
+- Don't add `namespace ""` to tests - simploo reloads fresh per test file.
+- NEVER read dist/ files - outdated.
+- Run tests: `printf '4\n5' | lua menu.lua`
+- Manual init (outside menu.lua): load files from src/sourcefiles.txt in order:
   ```lua
-  local file = io.open("src/sourcefiles.txt", "r")
-  local content = file:read("*all")
-  file:close()
-  for name in string.gmatch(content, "[^\r\n]+") do
+  for name in io.open("src/sourcefiles.txt"):read("*a"):gmatch("[^\r\n]+") do
       dofile("src/" .. name)
   end
   ```
-- ALWAYS read all files in src/ before you start working - unless explicitly told not to.
-- If asked to benchmark, READ the existing benchmark in README.md and give a COMPARISON to those numbers. We always benchmark to see if code became better or worse, not on its own. If printing tables, ensure the spacing is right. Always run benchmarks via menu.lua.
+- ALWAYS read all src/ files before working (unless told not to).
+- Benchmarks: compare to README numbers, run all 3 lua versions, ask to update README.
