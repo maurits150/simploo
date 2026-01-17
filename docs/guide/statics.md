@@ -220,9 +220,9 @@ print(b.sharedValue)    -- 100 (same value!)
 print(Example.sharedValue)  -- 100
 ```
 
-## Static Initializer: `__static`
+## Static Initializer: `__register`
 
-The `__static` method runs once when the class is defined. Use it to initialize static members that require computation or to register the class somewhere.
+The `__register` method runs once when the class is defined. Use it to initialize static members that require computation or to register the class somewhere.
 
 === "Block Syntax"
 
@@ -233,7 +233,7 @@ The `__static` method runs once when the class is defined. Use it to initialize 
             nextId = 0;
         };
         
-        __static = function(self)
+        __register = function(self)
             self.nextId = loadNextIdFromDatabase()
             registerClass(self)
         end;
@@ -247,7 +247,7 @@ The `__static` method runs once when the class is defined. Use it to initialize 
     enemy.static.allEnemies = {}
     enemy.static.nextId = 0
     
-    enemy.__static = function(self)
+    enemy.__register = function(self)
         self.nextId = loadNextIdFromDatabase()
         registerClass(self)
     end

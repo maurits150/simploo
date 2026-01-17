@@ -335,9 +335,9 @@ function instancer:registerBaseInstance(baseInstance)
     -- Assign a proper deep table entry as well.
     self:namespaceToTable(baseInstance._name, config["baseInstanceTable"], baseInstance)
 
-    if baseInstance._members["__static"] then
-        local fn = baseInstance._members["__static"].value
-        fn(baseInstance._members["__static"].owner) -- no metamethod exists to call member directly
+    if baseInstance._members["__register"] then
+        local fn = baseInstance._members["__register"].value
+        fn(baseInstance._members["__register"].owner) -- no metamethod exists to call member directly
     end
 end
 

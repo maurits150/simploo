@@ -16,7 +16,7 @@ serializer.lua
 testhooks.lua
 testhotswap.lua
 memoryleaks.lua
-declare.lua
+register.lua
 instancer_testshadowing.lua
 instancer_polymorphism.lua
 polymorphism_examples.lua

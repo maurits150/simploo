@@ -137,7 +137,7 @@ function Test:testMemoryLeakViaUsingsFENVReferencingOldClasses()
                 data = {}
             };
 
-            __static = function(self)
+            __register = function(self)
                 for i=1, 1000 * 100 do
                     -- 1MB of AAA, should give us 1MB x 25 = 25MB used if test fails
                     -- We're inserting into a static so this should get recycled every loop.

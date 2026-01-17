@@ -96,14 +96,14 @@ c.public.static.const.VERSION = "1.0"
 class "Ex" {
     __construct = function(self, arg1, arg2) end;  -- called on new()
     __finalize = function(self) end;               -- called on GC
-    __static = function(self) end;                 -- called once at class registration (self = class)
+    __register = function(self) end;                 -- called once at class registration (self = class)
 }
 
 -- Builder
 local c = class("Ex")
 function c:__construct(arg1, arg2) end
 function c:__finalize() end
-function c:__static() end
+function c:__register() end
 c:register()
 
 -- Usage: instantiation (same for both syntaxes, all equivalent)
