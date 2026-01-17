@@ -156,3 +156,79 @@ function Test:testTwoParentsWithSameShortName()
     -- Short name should be nil (ambiguous - can't know which parent)
     assertEquals(c.Same, nil)
 end
+
+-- Tests that namespace classes take precedence over globals with the same name.
+-- When _G.Material exists (e.g., GMod's Material function), a class implementing
+-- interface "Material" in namespace "mymod" should resolve to mymod.Material,
+-- not the global _G.Material.
+function Test:testNamespacePrecedenceOverGlobal()
+    -- Simulate a global function with the same name as our interface
+    local oldMaterial = _G.Material
+    _G.Material = function() return "global function" end
+
+    namespace "mymod"
+
+    interface "Material" {
+        getId = function(self) end;
+    }
+
+    -- This should work: "Material" resolves to mymod.Material, not _G.Material
+    namespace "mymod"
+
+    class "MaterialImpl" implements "Material" {
+        getId = function(self) return 42 end;
+    }
+
+    local impl = mymod.MaterialImpl.new()
+    assertEquals(impl:getId(), 42)
+    assertTrue(impl:instance_of(mymod.Material))
+
+    -- Restore original global
+    _G.Material = oldMaterial
+end
+
+-- Tests that namespace classes take precedence over globals for extends too.
+function Test:testNamespacePrecedenceOverGlobalForExtends()
+    -- Simulate a global with the same name
+    local oldEntity = _G.Entity
+    _G.Entity = "not a class"
+
+    namespace "game"
+
+    class "Entity" {
+        name = "base";
+    }
+
+    -- This should work: "Entity" resolves to game.Entity, not _G.Entity
+    namespace "game"
+
+    class "Player" extends "Entity" {
+        health = 100;
+    }
+
+    local p = game.Player.new()
+    assertEquals(p.name, "base")
+    assertEquals(p.health, 100)
+    assertTrue(p:instance_of(game.Entity))
+
+    -- Restore original global
+    _G.Entity = oldEntity
+end
+
+-- Tests that qualified names (with dots) are resolved directly.
+-- When extending "other.Base", it should resolve directly, not try to prepend namespace.
+function Test:testQualifiedNameResolvesDirect()
+    namespace "other"
+    class "Base" {
+        value = 10;
+    }
+
+    namespace "myspace"
+    class "Child" extends "other.Base" {
+        extra = 20;
+    }
+
+    local c = myspace.Child.new()
+    assertEquals(c.value, 10)
+    assertEquals(c.extra, 20)
+end

@@ -33,6 +33,40 @@ local hook = simploo.hook
 local instancer = {}
 simploo.instancer = instancer
 
+-- Resolve a class/interface name to a base instance.
+-- Resolution order for simple names (no dots):
+-- 1. resolved_usings (includes current namespace via wildcard + explicit 'using' declarations)
+-- 2. Global fallback (for classes without namespace, must be a simploo class)
+-- Qualified names (with dots) are resolved directly.
+local function resolveClass(name, resolvedUsings)
+    local baseTable = config["baseInstanceTable"]
+    
+    -- Qualified name (contains dots): resolve directly
+    if name:find(".", 1, true) then
+        local result = baseTable[name]
+        if type(result) == "table" and result._name then
+            return result
+        end
+        return nil
+    end
+    
+    -- Simple name: check resolved_usings first (includes current namespace)
+    if resolvedUsings[name] then
+        local result = baseTable[resolvedUsings[name]]
+        if type(result) == "table" and result._name then
+            return result
+        end
+    end
+    
+    -- Global fallback - only if it's a simploo class
+    local result = baseTable[name]
+    if type(result) == "table" and result._name then
+        return result
+    end
+    
+    return nil
+end
+
 function instancer:initClass(class)
     local isInterface = class.type == "interface"
 
@@ -56,8 +90,7 @@ function instancer:initClass(class)
     -- 2. Copy all parent's members to this class/interface (references to parent's member tables)
     local assignedShortNames = {}
     for _, parentName in pairs(class.parents) do
-        local parentBaseInstance = config["baseInstanceTable"][parentName]
-            or (class.resolved_usings[parentName] and config["baseInstanceTable"][class.resolved_usings[parentName]])
+        local parentBaseInstance = resolveClass(parentName, class.resolved_usings)
 
         if not parentBaseInstance then
             error(string.format("%s %s: could not find parent %s", class.type, baseInstance._name, parentName))
@@ -134,8 +167,7 @@ function instancer:initClass(class)
     baseInstance._implements = {}
     
     for _, interfaceName in ipairs(class.implements) do
-        local interfaceBase = config["baseInstanceTable"][interfaceName]
-            or (class.resolved_usings[interfaceName] and config["baseInstanceTable"][class.resolved_usings[interfaceName]])
+        local interfaceBase = resolveClass(interfaceName, class.resolved_usings)
         
         if not interfaceBase then
             error(string.format("class %s: interface %s not found", class.name, interfaceName))
