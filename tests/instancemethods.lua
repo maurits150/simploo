@@ -193,3 +193,40 @@ function Test:testGetParentsSingleInheritance()
 
     assertTrue(parents.SingleParent ~= nil)
 end
+
+-- Tests instance_of() with string class names (v2 backwards compatibility).
+-- Accepts both class objects and string names for convenience.
+function Test:testInstanceOfWithStringName()
+    class "StringTestParent" {}
+    class "StringTestChild" extends "StringTestParent" {}
+
+    local c = StringTestChild.new()
+
+    -- String names work
+    assertTrue(c:instance_of("StringTestChild"))
+    assertTrue(c:instance_of("StringTestParent"))
+
+    -- Non-existent class returns false (not error)
+    assertFalse(c:instance_of("NonExistentClass"))
+
+    -- Class objects still work
+    assertTrue(c:instance_of(StringTestChild))
+    assertTrue(c:instance_of(StringTestParent))
+end
+
+-- Tests instance_of() with namespaced string names.
+function Test:testInstanceOfWithNamespacedString()
+    namespace "testns"
+    class "NsParent" {}
+    class "NsChild" extends "NsParent" {}
+    namespace ""
+
+    local c = testns.NsChild.new()
+
+    -- Full path string works
+    assertTrue(c:instance_of("testns.NsChild"))
+    assertTrue(c:instance_of("testns.NsParent"))
+
+    -- Short name doesn't work (not registered that way)
+    assertFalse(c:instance_of("NsChild"))
+end

@@ -177,7 +177,7 @@ Usage (same for both syntaxes):
 ```lua
 obj:get_name()           -- "ClassName" or "ns.ClassName"
 obj:get_class()          -- class reference
-obj:instance_of(Other)   -- true if obj is/extends/implements Other
+obj:instance_of(Other)   -- true if obj is/extends/implements Other (also accepts "ClassName" string)
 obj:get_parents()        -- {ParentName = parentInstance, ...}
 obj:get_member("name")   -- {value, owner, modifiers} or nil
 obj:get_members()        -- {name = {value, owner, modifiers}, ...}

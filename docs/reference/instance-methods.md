@@ -41,7 +41,7 @@ Checks if the instance is derived from another class. Works with inheritance cha
 
 **Arguments:**
 
-- `other` - A class or instance to check against
+- `other` - A class, instance, or class name string to check against
 
 **Returns:**
 
@@ -70,6 +70,11 @@ print(dog:instance_of(Cat))     -- false
 -- Works with instances too
 local someAnimal = Animal.new()
 print(dog:instance_of(someAnimal))  -- true
+
+-- Works with string names too
+print(dog:instance_of("Dog"))     -- true
+print(dog:instance_of("Animal"))  -- true
+print(dog:instance_of("Unknown")) -- false (returns false, not error)
 ```
 
 ### Checking Multiple Types
