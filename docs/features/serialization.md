@@ -222,6 +222,8 @@ print(player.health) -- 75 (unchanged)
 | Parent class data | `static` members |
 | Tables and primitives | Runtime-added members |
 
+Deserialization silently skips data for members that no longer exist on the class.
+
 ## Complete Example
 
 ```lua
