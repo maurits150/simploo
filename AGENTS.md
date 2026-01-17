@@ -11,3 +11,4 @@
   ```
 - ALWAYS read all src/ files before working (unless told not to).
 - Benchmarks: compare to README numbers, run all 3 lua versions sequentially (not parallel), ask to update README, always end with a percentage change for every table entry.
+- When adding/changing features, update both user docs (docs/) and AI reference (docs/reference/ai-agent.md).

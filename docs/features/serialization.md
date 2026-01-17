@@ -176,6 +176,43 @@ print(config.debug)   -- true
 print(config.volume)  -- 50
 ```
 
+## Cloning Instances
+
+Use `clone()` for fast in-memory copies. Unlike serialize/deserialize, clone includes transient members:
+
+```lua
+class "Player" {
+    name = "";
+    health = 100;
+    
+    transient { sessionId = 0 };
+}
+
+local player = Player.new()
+player.name = "Alice"
+player.health = 75
+player.sessionId = 12345
+
+-- Clone copies everything, including transient
+local cloned = player:clone()
+print(cloned.name)      -- Alice
+print(cloned.sessionId) -- 12345 (preserved!)
+
+-- Clone is independent
+cloned.health = 100
+print(player.health) -- 75 (unchanged)
+```
+
+### When to Use clone() vs serialize()
+
+| Use Case | Method |
+|----------|--------|
+| Save to file/database | `serialize()` + `deserialize()` |
+| In-memory copy | `clone()` |
+| Network transfer | `serialize()` + `deserialize()` |
+| Undo/redo system | `clone()` |
+| Object pooling | `clone()` |
+
 ## What Gets Serialized
 
 | Serialized | Not Serialized |

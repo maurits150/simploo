@@ -183,6 +183,7 @@ obj:get_member("name")   -- {value, owner, modifiers} or nil
 obj:get_members()        -- {name = {value, owner, modifiers}, ...}
 obj:bind(fn)             -- wrap callback to preserve private/protected access
 obj:serialize()          -- {ClassName={member=value, Parent={...}}}
+obj:clone()              -- deep copy (faster than serialize/deserialize, includes transient)
 ```
 
 ## Serialization

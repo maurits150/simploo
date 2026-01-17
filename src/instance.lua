@@ -253,8 +253,8 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup, c
 end
 
 --[[
-    createRawInstance: Creates an instance with metatables set up, but without
-    calling __construct or setting up __finalize. Used by both new() and deserialize().
+    createRawInstance: Creates an instance with metatables and finalizer set up,
+    but without calling __construct. Used by new(), deserialize(), and clone().
 ]]
 local function createRawInstance(baseInstance)
     -- instanceLookup maps class -> instance, used for diamond inheritance
@@ -280,6 +280,12 @@ local function createRawInstance(baseInstance)
         setmetatable(instance, instancemt)
     end
 
+    -- Set up finalizer (destructor) if defined.
+    -- All callers (new, deserialize, clone) need this - instances should always be finalized.
+    if baseInstance._members["__finalize"] then
+        util.enableTableGc51(copy)
+    end
+
     return copy
 end
 
@@ -291,11 +297,6 @@ function instancemethods:new(...)
     if copy._base._members["__construct"] then
         copy:__construct(...)
         copy._members["__construct"] = nil  -- Free memory - constructor won't be called again
-    end
-
-    -- Set up finalizer (destructor) if defined
-    if copy._base._members["__finalize"] then
-        util.enableTableGc51(copy)
     end
 
     return hook:fire("afterNew", copy) or copy
@@ -321,6 +322,33 @@ end
 function instancemethods:deserialize(data)
     local copy = createRawInstance(self)
     deserializeIntoMembers(copy, data)
+    return hook:fire("afterNew", copy) or copy
+end
+
+local function cloneIntoMembers(targetInstance, sourceInstance)
+    local base = targetInstance._base
+
+    -- Clone parent instances recursively
+    for parentBase, memberName in pairs(base._parentMembers) do
+        local targetParent = targetInstance._members[memberName].value
+        local sourceParent = sourceInstance._members[memberName].value
+        cloneIntoMembers(targetParent, sourceParent)
+    end
+
+    -- Clone own variable values (includes transient, unlike serialize)
+    for i = 1, #base._ownVariables do
+        local memberName = base._ownVariables[i]
+        targetInstance._members[memberName].value = util.deepCopyValue(sourceInstance._members[memberName].value)
+    end
+end
+
+function instancemethods:clone()
+    local copy = createRawInstance(self._base)
+    cloneIntoMembers(copy, self)
+
+    -- Clear constructor (already called on original, shouldn't be callable on clone)
+    copy._members["__construct"] = nil
+
     return hook:fire("afterNew", copy) or copy
 end
 

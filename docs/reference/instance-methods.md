@@ -223,6 +223,77 @@ class "Player" {
 
 If your callback only uses public members, you don't need `bind()`.
 
+## clone()
+
+Creates a deep copy of the instance. Faster than serialize/deserialize and includes transient members.
+
+**Returns:**
+
+- A new instance with the same member values
+
+```lua
+class "Player" {
+    name = "";
+    health = 100;
+    inventory = {};
+    
+    transient { lastUpdate = 0 };
+}
+
+local player = Player.new()
+player.name = "Alice"
+player.health = 75
+player.inventory = {"sword", "shield"}
+player.lastUpdate = os.time()
+
+local cloned = player:clone()
+
+-- Values are copied
+print(cloned.name)       -- Alice
+print(cloned.health)     -- 75
+print(#cloned.inventory) -- 2
+
+-- Unlike deserialize, transient members are included
+print(cloned.lastUpdate) -- (same as player.lastUpdate)
+
+-- Clone is independent - changes don't affect original
+cloned.health = 100
+print(player.health) -- 75 (unchanged)
+```
+
+### clone() vs serialize/deserialize
+
+| Feature | `clone()` | `serialize()` + `deserialize()` |
+|---------|-----------|--------------------------------|
+| Speed | Faster | Slower (converts to/from table) |
+| Transient members | Included | Reset to defaults |
+| Use case | In-memory copies | Saving/loading data |
+
+### Static Members
+
+Static members are shared, not copied:
+
+```lua
+class "Counter" {
+    public { instanceId = 0 };
+    static { totalCount = 0 };
+}
+
+local a = Counter.new()
+a.instanceId = 1
+
+local b = a:clone()
+b.instanceId = 2
+
+-- Instance values are independent
+print(a.instanceId) -- 1
+print(b.instanceId) -- 2
+
+-- Static values are shared
+b.totalCount = 10
+print(a.totalCount) -- 10
+```
+
 ## Summary
 
 | Method | Returns | Description |
@@ -234,3 +305,4 @@ If your callback only uses public members, you don't need `bind()`.
 | `get_member(name)` | table/nil | Member table `{value, owner, modifiers}` |
 | `get_members()` | table | All members (excludes parent refs) |
 | `bind(fn)` | function | Bind callback to current scope |
+| `clone()` | instance | Deep copy of instance |
