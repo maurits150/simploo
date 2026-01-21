@@ -119,6 +119,46 @@ function Test:testHotswapChildPreservesParentAccess()
     assertEquals(child.newMember, "hello")
 end
 
+-- Tests that __finalize can access private members after hotswap.
+-- When a class is redefined, old instances that get GC'd should still be able
+-- to run __finalize and access their private members.
+function Test:testHotswapFinalizeCanAccessPrivate()
+    -- Skip in production mode - access checks are disabled anyway
+    if simploo.config["production"] then
+        return
+    end
+
+    simploo.hotswap:init()
+
+    local capturedSecret = nil
+
+    class "HotFinalizePrivate" {
+        private { secret = "hidden_value" };
+        
+        __finalize = function(self)
+            capturedSecret = self.secret
+        end;
+    }
+
+    local instance = HotFinalizePrivate.new()
+
+    -- Redefine the class (triggers hotswap)
+    class "HotFinalizePrivate" {
+        private { secret = "new_default" };
+        
+        __finalize = function(self)
+            capturedSecret = self.secret
+        end;
+    }
+
+    -- Let the old instance be garbage collected
+    instance = nil
+    collectgarbage("collect")
+
+    -- The __finalize should have been able to access the private member
+    assertEquals(capturedSecret, "hidden_value")
+end
+
 -- Tests that hotswap uses weak references, allowing instances to be garbage collected.
 -- Creates instances, removes references, forces GC, then verifies they were collected.
 -- This ensures hotswap tracking doesn't prevent normal garbage collection.
