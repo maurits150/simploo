@@ -113,3 +113,87 @@ function Test:testFinalizeBuilderSyntax()
     
     assertTrue(finalized)
 end
+
+-- Tests that __finalize can access private members.
+-- GC has no class scope context, so __finalize must bypass scope checks
+-- to access private members during cleanup.
+function Test:testFinalizeCanAccessPrivateMembers()
+    -- Skip in production mode - access checks are disabled anyway
+    if simploo.config["production"] then
+        return
+    end
+    
+    local capturedSecret = nil
+    
+    class "FinalizePrivate" {
+        private { secret = "hidden_value" };
+        
+        __finalize = function(self)
+            capturedSecret = self.secret
+        end;
+    }
+
+    local instance = FinalizePrivate.new()
+    instance = nil
+    
+    collectgarbage("collect")
+    
+    assertEquals(capturedSecret, "hidden_value")
+end
+
+-- Tests that __finalize can call private methods.
+-- The finalizer should be able to call private cleanup methods.
+function Test:testFinalizeCanCallPrivateMethods()
+    -- Skip in production mode - access checks are disabled anyway
+    if simploo.config["production"] then
+        return
+    end
+    
+    local cleanupCalled = false
+    
+    class "FinalizePrivateMethod" {
+        private {
+            cleanup = function(self)
+                cleanupCalled = true
+            end;
+        };
+        
+        __finalize = function(self)
+            self:cleanup()
+        end;
+    }
+
+    local instance = FinalizePrivateMethod.new()
+    instance = nil
+    
+    collectgarbage("collect")
+    
+    assertTrue(cleanupCalled)
+end
+
+-- Tests that a private __finalize method is called correctly.
+-- The __gc metamethod must access __finalize without going through __index,
+-- which would fail scope checks during GC (scope is nil).
+function Test:testPrivateFinalizeIsCalled()
+    -- Skip in production mode - access checks are disabled anyway
+    if simploo.config["production"] then
+        return
+    end
+    
+    local finalized = false
+    
+    class "PrivateFinalizeTest" {
+        private {
+            __finalize = function(self)
+                finalized = true
+            end;
+        };
+    }
+
+    local instance = PrivateFinalizeTest.new()
+    instance = nil
+    
+    collectgarbage("collect")
+    
+    assertTrue(finalized)
+end

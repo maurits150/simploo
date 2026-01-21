@@ -367,9 +367,12 @@ instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__
 -- Lua 5.4 requires __gc to exist when setmetatable is first called.
 -- For Lua 5.2+, this single __gc handles all instances via self parameter.
 -- For Lua 5.1, tables don't support __gc so addGcCallback uses proxy userdata.
+-- Access __finalize via _members directly to bypass __index scope checks
+-- (GC runs with no scope context, so private __finalize would fail scope check).
 instancemt.__gc = function(self)
-    if self._members and self._members["__finalize"] then
-        local success, err = pcall(self.__finalize, self)
+    local finalizeMember = self._members and self._members["__finalize"]
+    if finalizeMember then
+        local success, err = pcall(finalizeMember.value, self)
         if not success then
             print(string.format("ERROR: %s: error in __finalize: %s", tostring(self), tostring(err)))
         end
