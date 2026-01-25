@@ -28,3 +28,4 @@ instancer_interface_validation.lua
 finalize.lua
 config.lua
 constructor_warnings.lua
+hotswap_finalize_reload.lua
