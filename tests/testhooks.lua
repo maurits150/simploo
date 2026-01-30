@@ -149,6 +149,136 @@ function Test:testAfterRegister()
 end
 
 ---------------------------------------------------------------------
+-- beforeNew hook tests
+---------------------------------------------------------------------
+
+-- Tests the beforeNew hook which fires before the constructor runs.
+-- Receives instance as argument and can return a modified/replacement instance.
+function Test:testBeforeNew()
+    local capturedInstance = nil
+    
+    local hookFn = function(instance)
+        capturedInstance = instance
+        return instance
+    end
+    
+    simploo.hook:add("beforeNew", hookFn)
+    
+    class "BeforeNewTest" {
+        value = 100;
+    }
+    
+    local inst = BeforeNewTest.new()
+    
+    simploo.hook:remove("beforeNew", hookFn)
+    
+    -- Verify hook was called
+    assertTrue(capturedInstance ~= nil)
+    assertEquals(capturedInstance:get_name(), "BeforeNewTest")
+    assertEquals(capturedInstance.value, 100)
+end
+
+-- Tests that beforeNew runs before the constructor.
+function Test:testBeforeNewRunsBeforeConstructor()
+    local hookOrder = {}
+    
+    local hookFn = function(instance)
+        table.insert(hookOrder, "beforeNew")
+        return instance
+    end
+    
+    simploo.hook:add("beforeNew", hookFn)
+    
+    class "BeforeNewOrderTest" {
+        __construct = function(self)
+            table.insert(hookOrder, "constructor")
+        end;
+    }
+    
+    BeforeNewOrderTest.new()
+    
+    simploo.hook:remove("beforeNew", hookFn)
+    
+    assertEquals(#hookOrder, 2)
+    assertEquals(hookOrder[1], "beforeNew")
+    assertEquals(hookOrder[2], "constructor")
+end
+
+-- Tests that beforeNew can modify member values before constructor runs.
+function Test:testBeforeNewCanModifyInstance()
+    local hookFn = function(instance)
+        instance.value = 999  -- modify before constructor
+        return instance
+    end
+    
+    simploo.hook:add("beforeNew", hookFn)
+    
+    class "BeforeNewModifyTest" {
+        value = 0;
+        constructorSawValue = 0;
+        
+        __construct = function(self)
+            self.constructorSawValue = self.value  -- capture what constructor saw
+        end;
+    }
+    
+    local inst = BeforeNewModifyTest.new()
+    
+    simploo.hook:remove("beforeNew", hookFn)
+    
+    assertEquals(inst.constructorSawValue, 999)  -- constructor saw the modified value
+end
+
+-- Tests that beforeNew also fires on deserialize.
+function Test:testBeforeNewOnDeserialize()
+    local beforeNewCalled = false
+    
+    local hookFn = function(instance)
+        beforeNewCalled = true
+        return instance
+    end
+    
+    simploo.hook:add("beforeNew", hookFn)
+    
+    class "BeforeNewDeserializeTest" {
+        value = 50;
+    }
+    
+    -- Class:deserialize expects unwrapped data format
+    local data = {value = 100}
+    local inst = BeforeNewDeserializeTest:deserialize(data)
+    
+    simploo.hook:remove("beforeNew", hookFn)
+    
+    assertTrue(beforeNewCalled)
+    assertEquals(inst.value, 100)
+end
+
+-- Tests that beforeNew also fires on clone.
+function Test:testBeforeNewOnClone()
+    local beforeNewCallCount = 0
+    
+    local hookFn = function(instance)
+        beforeNewCallCount = beforeNewCallCount + 1
+        return instance
+    end
+    
+    simploo.hook:add("beforeNew", hookFn)
+    
+    class "BeforeNewCloneTest" {
+        value = 123;
+    }
+    
+    local original = BeforeNewCloneTest.new()  -- first call
+    local cloned = original:clone()            -- second call
+    
+    simploo.hook:remove("beforeNew", hookFn)
+    
+    assertEquals(beforeNewCallCount, 2)
+    assertEquals(cloned.value, 123)
+end
+
+---------------------------------------------------------------------
 -- afterNew hook tests
 ---------------------------------------------------------------------
 

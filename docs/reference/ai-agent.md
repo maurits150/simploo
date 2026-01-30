@@ -353,7 +353,8 @@ simploo.hook:fire("hookName", ...)
 -- Available hooks:
 -- beforeRegister(data) -> data  -- modify class/interface definition
 -- afterRegister(data, baseInstance)
--- afterNew(instance) -> instance
+-- beforeNew(instance) -> instance  -- before constructor
+-- afterNew(instance) -> instance   -- after constructor
 -- onNamespace(name) -> name
 -- onUsing(path) -> path
 ```

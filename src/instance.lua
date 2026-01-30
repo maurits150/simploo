@@ -299,6 +299,9 @@ end
 function instancemethods:new(...)
     local copy = createRawInstance(self)
 
+    -- Fire beforeNew hook (before constructor)
+    copy = hook:fire("beforeNew", copy) or copy
+
     -- Call constructor if defined
     if copy._base._members["__construct"] then
         copy:__construct(...)
@@ -327,6 +330,7 @@ end
 
 function instancemethods:deserialize(data)
     local copy = createRawInstance(self)
+    copy = hook:fire("beforeNew", copy) or copy
     deserializeIntoMembers(copy, data)
     return hook:fire("afterNew", copy) or copy
 end
@@ -350,6 +354,7 @@ end
 
 function instancemethods:clone()
     local copy = createRawInstance(self._base)
+    copy = hook:fire("beforeNew", copy) or copy
     cloneIntoMembers(copy, self)
 
     -- Clear constructor (already called on original, shouldn't be callable on clone)

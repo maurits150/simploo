@@ -90,9 +90,34 @@ end)
 
 ---
 
+### beforeNew
+
+Called before the constructor runs, after the instance is created via `new()`, `deserialize()`, or `clone()`.
+
+**Arguments:**
+
+- `instance` - The newly created instance (before constructor)
+
+**Returns:**
+
+- Modified or replacement instance (optional)
+
+```lua
+simploo.hook:add("beforeNew", function(instance)
+    print("Creating instance of: " .. instance:get_name())
+    
+    -- Initialize default values before constructor
+    instance.createdAt = os.time()
+    
+    return instance
+end)
+```
+
+---
+
 ### afterNew
 
-Called after a new instance is created via `new()` or `deserialize()`.
+Called after a new instance is created via `new()`, `deserialize()`, or `clone()`.
 
 **Arguments:**
 
