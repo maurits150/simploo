@@ -134,3 +134,61 @@ function Test:testFinalizePrivateMethodAfterFullReload()
 
     assertTrue(cleanupCalled, "private cleanup method was not called")
 end
+
+-- Tests that bind() callbacks can access private members after full simploo reload
+-- This tests the fix for: bind() closures capturing local util instead of simploo.util
+function Test:testBindPrivateAfterFullReload()
+    -- Skip in production mode - access checks are disabled anyway
+    if simploo.config["production"] then
+        return
+    end
+
+    -- Enable hotswap
+    simploo.hotswap:init()
+
+    local callbackResult = nil
+    local storedCallback = nil
+
+    class "ReloadBindTest" {
+        private { secret = "the_secret" };
+        
+        __construct = function(self)
+            -- Create a bound callback that accesses private member
+            storedCallback = self:bind(function()
+                callbackResult = self.secret
+            end)
+        end;
+    }
+
+    local instance = ReloadBindTest.new()
+
+    -- Simulate full simploo reload
+    local preservedConfig = simploo.config
+    local preservedHotswapInstances = simploo_hotswap_instances
+    
+    simploo = {config = preservedConfig}
+    
+    for name in io.open("src/sourcefiles.txt"):read("*a"):gmatch("[^\r\n]+") do
+        dofile("src/" .. name)
+    end
+    
+    simploo_hotswap_instances = preservedHotswapInstances
+    simploo.hotswap:init()
+
+    -- Redefine the class (triggers hotswap)
+    class "ReloadBindTest" {
+        private { secret = "new_default" };
+        
+        __construct = function(self)
+            storedCallback = self:bind(function()
+                callbackResult = self.secret
+            end)
+        end;
+    }
+
+    -- Call the OLD callback created before reload
+    -- This should work because bind() now uses simploo.util (runtime lookup)
+    storedCallback()
+
+    assertEquals(callbackResult, "the_secret")
+end

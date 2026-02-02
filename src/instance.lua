@@ -179,11 +179,11 @@ if config.production then
     end
 else
     function instancemethods:bind(fn)
-        local capturedScope = util.getScope()
+        local capturedScope = simploo.util.getScope()
         return function(...)
-            local prevScope = util.getScope()
-            util.setScope(capturedScope)
-            return util.restoreScope(prevScope, fn(...))
+            local prevScope = simploo.util.getScope()
+            simploo.util.setScope(capturedScope)
+            return simploo.util.restoreScope(prevScope, fn(...))
         end
     end
 end
@@ -423,7 +423,7 @@ else
         local lookupMember = member
         local baseMember = base._members[key]  -- for owner/modifiers lookup
         local mods = baseMember and baseMember.modifiers
-        local scope = util.getScope()  -- The class whose method is currently running
+        local scope = simploo.util.getScope()  -- The class whose method is currently running
         
         -- For private/protected members in parent classes, look up from scope's perspective.
         -- This ensures parent methods access parent's privates, not child's shadowing privates.
@@ -502,7 +502,7 @@ else
         local lookupMember = member
         local baseMember = base._members[key]  -- for owner/modifiers lookup
         local mods = baseMember and baseMember.modifiers
-        local scope = util.getScope()
+        local scope = simploo.util.getScope()
         
         -- For private/protected members in parent classes, look up from scope's perspective.
         -- Only redirect when scope is different from self's class (inheritance case).
