@@ -212,8 +212,13 @@ local function copyMembersRecursive(baseInstance, instanceLookup, valueLookup, c
             -- Register before recursing to prevent infinite loops in diamond inheritance
             instanceLookup[parentBase] = parentInstance
             
-            -- Recurse to create parent's _members (and grandparents)
-            parentInstance._members = copyMembersRecursive(parentBase, instanceLookup, valueLookup, childInstance)
+            -- Interfaces only have methods (no variables), so share _members directly
+            -- Classes need per-instance copies for variable storage
+            if parentBase._type == "interface" then
+                parentInstance._members = parentBase._members
+            else
+                parentInstance._members = copyMembersRecursive(parentBase, instanceLookup, valueLookup, childInstance)
+            end
         end
         
         -- Store parent reference so user can do self.ParentClass:method()
