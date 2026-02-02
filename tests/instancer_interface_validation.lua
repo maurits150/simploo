@@ -224,6 +224,46 @@ function Test:testInstanceOfWithInheritedInterface()
     assertTrue(obj:instance_of(IBaseInterface))
 end
 
+-- Test: instance_of works with interfaces through deep class inheritance
+-- Each level adds a different interface, final object should be instance_of all
+function Test:testInstanceOfWithInterfaceThroughClassInheritance()
+    interface "ILevel1" {
+        method1 = function(self) end;
+    }
+    
+    interface "ILevel2" {
+        method2 = function(self) end;
+    }
+    
+    interface "ILevel3" {
+        method3 = function(self) end;
+    }
+
+    class "Level1" implements "ILevel1" {
+        method1 = function(self) return 1 end;
+    }
+
+    class "Level2" extends "Level1" implements "ILevel2" {
+        method2 = function(self) return 2 end;
+    }
+    
+    class "Level3" extends "Level2" implements "ILevel3" {
+        method3 = function(self) return 3 end;
+    }
+
+    local obj = Level3.new()
+    
+    -- Should be instance_of all classes
+    assertTrue(obj:instance_of(Level1))
+    assertTrue(obj:instance_of(Level2))
+    assertTrue(obj:instance_of(Level3))
+    
+    -- Should be instance_of all interfaces (including inherited ones)
+    assertTrue(obj:instance_of(ILevel1))
+    assertTrue(obj:instance_of(ILevel2))
+    assertTrue(obj:instance_of(ILevel3))
+end
+
 -- Test: interface with namespaces
 function Test:testInterfaceWithNamespace()
     namespace "validation.test"

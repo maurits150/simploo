@@ -365,6 +365,26 @@ interface "Damageable" {
 Damageable.new()  -- Error: cannot instantiate interface Damageable
 ```
 
+## Marker Interfaces
+
+Interfaces without default methods (marker interfaces) have zero runtime overhead - they're only used for `instance_of` checks and don't create any additional objects during instantiation.
+
+```lua
+interface "Serializable" {
+    serialize = function(self) end;
+    deserialize = function(self, data) end;
+}
+
+-- Zero overhead at instantiation - just validates methods exist
+class "Player" implements "Serializable" {
+    serialize = function(self) return {health = self.health} end;
+    deserialize = function(self, data) self.health = data.health end;
+    health = 100;
+}
+```
+
+Only interfaces with `default` methods create an interface reference (`self.InterfaceName`) for calling default implementations.
+
 ## Namespaces
 
 Interfaces work with namespaces like classes:

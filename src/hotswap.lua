@@ -57,6 +57,11 @@ function hotswap:syncMembers(hotInstance, baseInstance)
     -- Update _base to point to the new base instance (for metadata lookup)
     hotInstance._base = baseInstance
     
+    -- Update metatable to use new simploo.instancemt (important after full simploo reload)
+    -- The old metatable's __index uses old local util, new methods use new local util
+    -- They must use the same scope table.
+    setmetatable(hotInstance, simploo.instancemt)
+    
     -- Recursively sync parent instances
     for newParentBase, memberName in pairs(baseInstance._parentMembers) do
         local parentMember = hotInstance._members[memberName]

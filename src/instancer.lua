@@ -88,7 +88,9 @@ function instancer:initClass(class)
     -- For each parent:
     -- 1. Add a "parent reference" member (e.g., self.ParentClass returns the parent instance)
     -- 2. Copy all parent's members to this class/interface (references to parent's member tables)
+    -- 3. Copy parent's implemented interfaces (for instance_of to work through inheritance)
     local assignedShortNames = {}
+    baseInstance._implements = {}
     for _, parentName in pairs(class.parents) do
         local parentBaseInstance = resolveClass(parentName, class.resolved_usings)
 
@@ -135,6 +137,13 @@ function instancer:initClass(class)
                 baseInstance._members[parentMemberName] = parentMember
             end
         end
+        
+        -- Copy parent's implemented interfaces
+        if parentBaseInstance._implements then
+            for iface in pairs(parentBaseInstance._implements) do
+                baseInstance._implements[iface] = true
+            end
+        end
     end
 
     -- Add this class's own members (overrides any inherited members with same name)
@@ -164,8 +173,6 @@ function instancer:initClass(class)
     -- Process implemented interfaces
     -- Validate required methods exist, copy default methods, store for instance_of
     -- If default methods are copied, add interface reference so self.InterfaceName:method() works
-    baseInstance._implements = {}
-    
     for _, interfaceName in ipairs(class.implements) do
         local interfaceBase = resolveClass(interfaceName, class.resolved_usings)
         
@@ -184,7 +191,7 @@ function instancer:initClass(class)
         end
         
         for _, iface in ipairs(interfacesToCheck) do
-            table.insert(baseInstance._implements, iface)
+            baseInstance._implements[iface] = true
             
             for memberName, ifaceMember in pairs(iface._members) do
                 local mods = ifaceMember.modifiers

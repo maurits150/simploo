@@ -88,15 +88,10 @@ function instancemethods:instance_of(otherInstance)
         return true
     end
 
-    -- O(n) check: implemented interfaces (n = number of interfaces)
+    -- O(1) check: implemented interfaces
     if otherBase._type == "interface" then
-        local implements = selfBase._implements
-        if implements then
-            for i = 1, #implements do
-                if implements[i] == otherBase then
-                    return true
-                end
-            end
+        if selfBase._implements[otherBase] then
+            return true
         end
     end
 
@@ -423,7 +418,7 @@ else
         local lookupMember = member
         local baseMember = base._members[key]  -- for owner/modifiers lookup
         local mods = baseMember and baseMember.modifiers
-        local scope = simploo.util.getScope()  -- The class whose method is currently running
+        local scope = util.getScope()  -- The class whose method is currently running
         
         -- For private/protected members in parent classes, look up from scope's perspective.
         -- This ensures parent methods access parent's privates, not child's shadowing privates.
@@ -502,7 +497,7 @@ else
         local lookupMember = member
         local baseMember = base._members[key]  -- for owner/modifiers lookup
         local mods = baseMember and baseMember.modifiers
-        local scope = simploo.util.getScope()
+        local scope = util.getScope()
         
         -- For private/protected members in parent classes, look up from scope's perspective.
         -- Only redirect when scope is different from self's class (inheritance case).
