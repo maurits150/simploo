@@ -197,3 +197,34 @@ function Test:testPrivateFinalizeIsCalled()
     
     assertTrue(finalized)
 end
+
+-- Tests that a default interface __finalize runs in the implementing class scope.
+-- Interface default methods are not wrapped with class scope, so GC must provide it.
+function Test:testDefaultInterfaceFinalizeCanAccessPrivateMembers()
+    -- Skip in production mode - access checks are disabled anyway
+    if simploo.config["production"] then
+        return
+    end
+
+    local capturedSecret = nil
+
+    interface "DefaultFinalizeInterface" {
+        default {
+            __finalize = function(self)
+                capturedSecret = self.secret
+            end;
+        };
+    }
+
+    class "DefaultFinalizeImplementation" implements "DefaultFinalizeInterface" {
+        private { secret = "interface_secret" };
+    }
+
+    local instance = DefaultFinalizeImplementation.new()
+    instance = nil
+
+    collectgarbage("collect")
+    collectgarbage("collect")
+
+    assertEquals(capturedSecret, "interface_secret")
+end

@@ -377,7 +377,15 @@ instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__
 instancemt.__gc = function(self)
     local finalizeMember = self._members and self._members["__finalize"]
     if finalizeMember then
-        local success, err = pcall(finalizeMember.value, self)
+        local success, err = nil, nil
+        if config.production then
+            success, err = pcall(finalizeMember.value, self)
+        else
+            local prevScope = simploo.util.getScope()
+            simploo.util.setScope(self._base)
+            success, err = pcall(finalizeMember.value, self)
+            simploo.util.setScope(prevScope)
+        end
         if not success then
             print(string.format("ERROR: %s: error in __finalize: %s", tostring(self), tostring(err)))
         end
@@ -605,5 +613,4 @@ for _, metaName in pairs(instancemt.metafunctions) do
         end
     end
 end
-
 
