@@ -2,6 +2,8 @@ local hotswap = {}
 simploo.hotswap = hotswap
 
 function hotswap:init()
+    self.active = true
+
     -- This is a separate global variable so we can keep the hotswap list during reloads.
     -- Using a weak table so that we don't prevent instances from being garbage collected.
     simploo_hotswap_instances = simploo_hotswap_instances or setmetatable({}, {__mode = "v"})
@@ -15,6 +17,26 @@ function hotswap:init()
     simploo.hook:add("afterNew", function(instance)
         table.insert(simploo_hotswap_instances, instance)
     end)
+end
+
+function hotswap:reuseBaseInstance(class)
+    if not self.active then
+        return nil
+    end
+
+    local existingBase = simploo.config["baseInstanceTable"][class.name]
+    if not existingBase or existingBase._base ~= existingBase or existingBase._type ~= class.type then
+        return nil
+    end
+
+    -- Hot reload should preserve logical class identity. Old callbacks, instances,
+    -- and user-held class references may still point at this table.
+    setmetatable(existingBase, nil)
+    for key in pairs(existingBase) do
+        existingBase[key] = nil
+    end
+
+    return existingBase
 end
 
 function hotswap:swap(newBase)

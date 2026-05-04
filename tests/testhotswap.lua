@@ -87,6 +87,26 @@ function Test:testHotswapMethodsReplaced()
     assertEquals(instance:getValue(), "new")
 end
 
+-- Tests that hotswapping preserves the class table itself.
+-- Old callbacks and user code can hold class references across reloads.
+function Test:testHotswapPreservesBaseIdentity()
+    simploo.hotswap:init()
+
+    class "HotIdentity" {
+        value = "old";
+    }
+
+    local oldBase = HotIdentity
+
+    class "HotIdentity" {
+        value = "new";
+        added = true;
+    }
+
+    assertTrue(HotIdentity == oldBase)
+    assertEquals(HotIdentity._members.added.value, true)
+end
+
 -- Tests that child class hotswapping preserves parent member access.
 -- After redefining a child class, existing instances should still be able
 -- to access and modify parent members through inheritance.

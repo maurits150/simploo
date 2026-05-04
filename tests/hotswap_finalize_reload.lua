@@ -245,3 +245,34 @@ function Test:testBindPrivateAfterFullReload()
 
     assertEquals(callbackResult, "the_secret")
 end
+
+-- Tests that full reload preserves the class table itself for hotswapped classes.
+function Test:testClassIdentityPreservedAfterFullReload()
+    simploo.hotswap:init()
+
+    class "ReloadIdentityTest" {
+        value = "old";
+    }
+
+    local oldBase = ReloadIdentityTest
+
+    local preservedConfig = simploo.config
+    local preservedHotswapInstances = simploo_hotswap_instances
+
+    simploo = {config = preservedConfig}
+
+    for name in io.open("src/sourcefiles.txt"):read("*a"):gmatch("[^\r\n]+") do
+        dofile("src/" .. name)
+    end
+
+    simploo_hotswap_instances = preservedHotswapInstances
+    simploo.hotswap:init()
+
+    class "ReloadIdentityTest" {
+        value = "new";
+        added = true;
+    }
+
+    assertTrue(ReloadIdentityTest == oldBase)
+    assertEquals(ReloadIdentityTest._members.added.value, true)
+end
