@@ -75,6 +75,59 @@ function Test:testFinalizePrivateAfterFullReload()
     assertEquals(capturedSecret, "original_secret")
 end
 
+-- Tests that class objects do not run __finalize when old definitions are GC'd.
+function Test:testClassObjectFinalizeNotCalledAfterFullReload()
+    if _VERSION == "Lua 5.1" then
+        return
+    end
+
+    simploo.hotswap:init()
+
+    local instanceFinalizeCount = 0
+    local classFinalizeCount = 0
+
+    class "ReloadClassFinalizeTest" {
+        __finalize = function(self)
+            if self._base == self then
+                classFinalizeCount = classFinalizeCount + 1
+            else
+                instanceFinalizeCount = instanceFinalizeCount + 1
+            end
+        end;
+    }
+
+    local instance = ReloadClassFinalizeTest.new()
+
+    local preservedConfig = simploo.config
+    local preservedHotswapInstances = simploo_hotswap_instances
+
+    simploo = {config = preservedConfig}
+
+    for name in io.open("src/sourcefiles.txt"):read("*a"):gmatch("[^\r\n]+") do
+        dofile("src/" .. name)
+    end
+
+    simploo_hotswap_instances = preservedHotswapInstances
+    simploo.hotswap:init()
+
+    class "ReloadClassFinalizeTest" {
+        __finalize = function(self)
+            if self._base == self then
+                classFinalizeCount = classFinalizeCount + 1
+            else
+                instanceFinalizeCount = instanceFinalizeCount + 1
+            end
+        end;
+    }
+
+    instance = nil
+    collectgarbage("collect")
+    collectgarbage("collect")
+
+    assertEquals(instanceFinalizeCount, 1)
+    assertEquals(classFinalizeCount, 0)
+end
+
 -- Tests private method access in __finalize after reload
 function Test:testFinalizePrivateMethodAfterFullReload()
     -- Skip in production mode - access checks are disabled anyway

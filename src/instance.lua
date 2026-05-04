@@ -375,6 +375,12 @@ instancemt.metafunctions = {"__index", "__newindex", "__tostring", "__call", "__
 -- Access __finalize via _members directly to bypass __index scope checks
 -- (GC runs with no scope context, so private __finalize would fail scope check).
 instancemt.__gc = function(self)
+    -- Class/base objects share this metatable on Lua 5.2+, but __finalize is
+    -- an instance destructor and must not run when old classes are GC'd.
+    if self._base == self then
+        return
+    end
+
     local finalizeMember = self._members and self._members["__finalize"]
     if finalizeMember then
         local success, err = nil, nil
@@ -613,4 +619,3 @@ for _, metaName in pairs(instancemt.metafunctions) do
         end
     end
 end
-
