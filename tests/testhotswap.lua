@@ -87,11 +87,9 @@ function Test:testHotswapMethodsReplaced()
     assertEquals(instance:getValue(), "new")
 end
 
--- Tests that hotswapping preserves the class table itself.
+-- Tests that class re-registration preserves the class table itself.
 -- Old callbacks and user code can hold class references across reloads.
-function Test:testHotswapPreservesBaseIdentity()
-    simploo.hotswap:init()
-
+function Test:testClassReregisterPreservesBaseIdentity()
     class "HotIdentity" {
         value = "old";
     }

@@ -73,8 +73,17 @@ function instancer:initClass(class)
     -- Call the beforeRegister hook
     class = hook:fire("beforeRegister", class) or class
 
-    -- Create the base instance (this becomes the "class" object users interact with)
-    local baseInstance = simploo.hotswap and simploo.hotswap:reuseBaseInstance(class) or {}
+    -- Create or reuse the base instance (this becomes the "class" object users interact with).
+    -- Reusing keeps private/protected scope identity stable across class re-registration.
+    local baseInstance = config["baseInstanceTable"][class.name]
+    if baseInstance and baseInstance._base == baseInstance and baseInstance._type == class.type then
+        setmetatable(baseInstance, nil)
+        for key in pairs(baseInstance) do
+            baseInstance[key] = nil
+        end
+    else
+        baseInstance = {}
+    end
 
     -- _base points to self for base instances, or to the class for regular instances
     baseInstance._base = baseInstance
