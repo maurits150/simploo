@@ -387,10 +387,7 @@ instancemt.__gc = function(self)
         if config.production then
             success, err = pcall(finalizeMember.value, self)
         else
-            local prevScope = simploo.util.getScope()
-            simploo.util.setScope(self._base)
-            success, err = pcall(finalizeMember.value, self)
-            simploo.util.setScope(prevScope)
+            success, err = simploo.util.pcallWithScope(self._base, finalizeMember.value, self)
         end
         if not success then
             print(string.format("ERROR: %s: error in __finalize: %s", tostring(self), tostring(err)))

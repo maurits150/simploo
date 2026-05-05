@@ -228,3 +228,68 @@ function Test:testDefaultInterfaceFinalizeCanAccessPrivateMembers()
 
     assertEquals(capturedSecret, "interface_secret")
 end
+
+function Test:testFinalizeRestoresPreviousScopeAfterSuccess()
+    if simploo.config["production"] then
+        return
+    end
+
+    class "FinalizeSuccessPreviousScope" {}
+
+    local capturedSecret = nil
+
+    class "FinalizeSuccessScope" {
+        private { secret = "success_secret" };
+
+        __finalize = function(self)
+            capturedSecret = self.secret
+        end;
+    }
+
+    local previousScope = FinalizeSuccessPreviousScope
+    simploo.util.setScope(previousScope)
+
+    local instance = FinalizeSuccessScope.new()
+    instance = nil
+
+    collectgarbage("collect")
+    collectgarbage("collect")
+
+    local restoredScope = simploo.util.getScope()
+    simploo.util.setScope(nil)
+
+    assertEquals(capturedSecret, "success_secret")
+    assertTrue(restoredScope == previousScope)
+end
+
+function Test:testFinalizeRestoresPreviousScopeAfterError()
+    if simploo.config["production"] then
+        return
+    end
+
+    class "FinalizeErrorPreviousScope" {}
+
+    local finalizeCalled = false
+
+    class "FinalizeErrorScope" {
+        __finalize = function(self)
+            finalizeCalled = true
+            error("finalize boom")
+        end;
+    }
+
+    local previousScope = FinalizeErrorPreviousScope
+    simploo.util.setScope(previousScope)
+
+    local instance = FinalizeErrorScope.new()
+    instance = nil
+
+    collectgarbage("collect")
+    collectgarbage("collect")
+
+    local restoredScope = simploo.util.getScope()
+    simploo.util.setScope(nil)
+
+    assertTrue(finalizeCalled)
+    assertTrue(restoredScope == previousScope)
+end

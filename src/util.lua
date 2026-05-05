@@ -19,6 +19,27 @@ function util.restoreScope(prevScope, ...)
     return ...
 end
 
+function util.callWithScope(scope, fn, ...)
+    local prevScope = util.getScope()
+    util.setScope(scope)
+    local results = {pcall(fn, ...)}
+    util.setScope(prevScope)
+
+    if not results[1] then
+        error(results[2], 0)
+    end
+
+    return (unpack or table.unpack)(results, 2)
+end
+
+function util.pcallWithScope(scope, fn, ...)
+    local prevScope = util.getScope()
+    util.setScope(scope)
+    local results = {pcall(fn, ...)}
+    util.setScope(prevScope)
+    return (unpack or table.unpack)(results)
+end
+
 -- Deep copy a table value (for non-static member values that are tables)
 function util.deepCopyValue(value, lookup)
     if type(value) ~= "table" then
