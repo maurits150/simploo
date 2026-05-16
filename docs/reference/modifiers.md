@@ -39,6 +39,32 @@ Modifiers can be combined by nesting:
     example:register()
     ```
 
+## Repeating Modifier Blocks
+
+Block syntax can repeat the same modifier block more than once:
+
+```lua
+class "Example" {
+    private {
+        token = "";
+    };
+
+    public {
+        getToken = function(self)
+            return self.token
+        end;
+    };
+
+    private {
+        clearToken = function(self)
+            self.token = ""
+        end;
+    };
+}
+```
+
+This is valid Simploo syntax. Repeated `private { ... }`, `public { ... }`, and other modifier blocks are repeated modifier declarations in the class body, not duplicate Lua table keys. You may merge repeated blocks for readability, but merging is not required for correctness.
+
 ## Modifier Compatibility
 
 | Combination | Valid | Notes |

@@ -90,6 +90,17 @@ c.private.static.secret = "x"
 c.public.static.const.VERSION = "1.0"
 ```
 
+Repeated modifier blocks are valid in block syntax:
+```lua
+class "Ex" {
+    private { secret = "x"; };
+    public { reveal = function(self) return self.secret end; };
+    private { reset = function(self) self.secret = "" end; };
+}
+```
+
+Do not treat repeated `private { ... }`, `public { ... }`, etc. as duplicate Lua table keys. Modifier blocks are parsed as repeated modifier declarations in the class body. Merging repeated blocks is optional style cleanup, not a correctness fix.
+
 ## Constructors/Finalizers
 
 ```lua
