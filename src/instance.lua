@@ -174,11 +174,9 @@ if config.production then
     end
 else
     function instancemethods:bind(fn)
-        local capturedScope = simploo.util.getScope()
+        local capturedScope = self._base
         return function(...)
-            local prevScope = simploo.util.getScope()
-            simploo.util.setScope(capturedScope)
-            return simploo.util.restoreScope(prevScope, fn(...))
+            return util.callWithScope(capturedScope, fn, ...)
         end
     end
 end
@@ -387,7 +385,7 @@ instancemt.__gc = function(self)
         if config.production then
             success, err = pcall(finalizeMember.value, self)
         else
-            success, err = simploo.util.pcallWithScope(self._base, finalizeMember.value, self)
+            success, err = util.pcallWithScope(self._base, finalizeMember.value, self)
         end
         if not success then
             print(string.format("ERROR: %s: error in __finalize: %s", tostring(self), tostring(err)))

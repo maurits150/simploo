@@ -29,6 +29,7 @@ local instancemt = simploo.instancemt
 local instancemethods = simploo.instancemethods
 local config = simploo.config
 local hook = simploo.hook
+local util = simploo.util
 
 local instancer = {}
 simploo.instancer = instancer
@@ -170,9 +171,9 @@ function instancer:initClass(class)
                 -- If called via parent instance, self._child points to the real child
                 -- Child instances have _child = false, parent instances have _child = childInstance
                 local realSelf = self._child or self
-                local prevScope = simploo.util.getScope()
-                simploo.util.setScope(declaringClass)
-                return simploo.util.restoreScope(prevScope, fn(realSelf, ...))
+                local prevScope = util.getScope()
+                util.setScope(declaringClass)
+                return util.restoreScope(prevScope, fn(realSelf, ...))
             end
         end
 

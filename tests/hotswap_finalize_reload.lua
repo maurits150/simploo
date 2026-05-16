@@ -188,8 +188,8 @@ function Test:testFinalizePrivateMethodAfterFullReload()
     assertTrue(cleanupCalled, "private cleanup method was not called")
 end
 
--- Tests that bind() callbacks can access private members after full simploo reload
--- This tests the fix for: bind() closures capturing local util instead of simploo.util
+-- Tests that bind() callbacks can access private members after full simploo reload.
+-- Bound callbacks must keep using the same util scope table as their metatable.
 function Test:testBindPrivateAfterFullReload()
     -- Skip in production mode - access checks are disabled anyway
     if simploo.config["production"] then
@@ -240,10 +240,48 @@ function Test:testBindPrivateAfterFullReload()
     }
 
     -- Call the OLD callback created before reload
-    -- This should work because bind() now uses simploo.util (runtime lookup)
+    -- This should work because bind() captured the old util table used by old instances.
     storedCallback()
 
     assertEquals(callbackResult, "the_secret")
+end
+
+-- Tests that old instances can still run old methods after a full reload without hotswap.
+function Test:testOldMethodPrivateAccessAfterFullReloadWithoutHotswap()
+    if simploo.config["production"] then
+        return
+    end
+
+    class "ReloadOldMethodScopeTest" {
+        private { objectOrder = {"old"} };
+
+        forEachObject = function(self)
+            return self.objectOrder[1]
+        end;
+    }
+
+    local instance = ReloadOldMethodScopeTest.new()
+
+    local preservedConfig = simploo.config
+    local preservedHotswapInstances = simploo_hotswap_instances
+
+    simploo = {config = preservedConfig}
+
+    for name in io.open("src/sourcefiles.txt"):read("*a"):gmatch("[^\r\n]+") do
+        dofile("src/" .. name)
+    end
+
+    simploo_hotswap_instances = preservedHotswapInstances
+
+    class "ReloadOldMethodScopeTest" {
+        private { objectOrder = {"new"} };
+
+        forEachObject = function(self)
+            return self.objectOrder[1]
+        end;
+    }
+
+    assertEquals(instance:forEachObject(), "old")
 end
 
 -- Tests that full reload preserves the class table itself for hotswapped classes.

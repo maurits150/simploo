@@ -495,6 +495,41 @@ function Test:testCallbackWithBindCanAccessPrivate()
     person:setupCallback()  -- Should not error
 end
 
+-- Tests that bind() captures the instance class, not ambient call scope.
+-- Engine callbacks can be registered outside Simploo method dispatch.
+function Test:testBindOutsideMethodCanAccessPrivate()
+    class "OutsideBindClass" {
+        private { secret = "outside" };
+    }
+
+    local instance = OutsideBindClass.new()
+    local callback = instance:bind(function()
+        return instance.secret
+    end)
+
+    assertEquals(callback(), "outside")
+end
+
+-- Tests that bound callbacks restore the previous scope when they error.
+function Test:testBindRestoresPreviousScopeAfterError()
+    class "PreviousBindScope" {}
+    class "ErrorBindScope" {}
+
+    local previousScope = PreviousBindScope
+    local instance = ErrorBindScope.new()
+    local callback = instance:bind(function()
+        error("bound callback boom")
+    end)
+
+    simploo.util.setScope(previousScope)
+    local success = pcall(callback)
+    local restoredScope = simploo.util.getScope()
+    simploo.util.setScope(nil)
+
+    assertFalse(success)
+    assertTrue(restoredScope == previousScope)
+end
+
 -- Tests that bind() preserves scope for accessing protected members in callbacks.
 -- Similar to private access, protected members require the correct scope.
 -- A child class using self:bind(fn) ensures the callback can access
