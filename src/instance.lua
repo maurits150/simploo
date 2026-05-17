@@ -437,8 +437,8 @@ else
         
         -- For private/protected members in parent classes, look up from scope's perspective.
         -- This ensures parent methods access parent's privates, not child's shadowing privates.
-        -- Only redirect when scope is different from self's class (inheritance case).
-        if scope and scope._members and not rawequal(scope, base) then
+        -- Only redirect when the receiver is a subclass of the current scope.
+        if scope and scope._members and not rawequal(scope, base) and base._ancestors[scope] then
             local scopeMember = scope._members[key]
             if scopeMember then
                 local scopeBaseMember = scope._members[key]
@@ -515,8 +515,8 @@ else
         local scope = util.getScope()
         
         -- For private/protected members in parent classes, look up from scope's perspective.
-        -- Only redirect when scope is different from self's class (inheritance case).
-        if scope and scope._members and not rawequal(scope, base) then
+        -- Only redirect when the receiver is a subclass of the current scope.
+        if scope and scope._members and not rawequal(scope, base) and base._ancestors[scope] then
             local scopeMember = scope._members[key]
             if scopeMember then
                 local scopeBaseMember = scope._members[key]

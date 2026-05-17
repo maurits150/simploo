@@ -743,6 +743,66 @@ function Test:testCrossInstanceAttack()
     assertFalse(success)
 end
 
+-- Tests that scoped private method lookup only redirects for inheritance.
+-- When a method on class A calls other:foo(), and A has a private foo, an
+-- unrelated B receiver must still resolve B.foo, not A.foo.
+function Test:testScopedPrivateMethodDoesNotHijackUnrelatedReceiver()
+    class "HijackMethodA" {
+        private {
+            foo = function(self)
+                return "A private"
+            end
+        };
+        public {
+            callOtherFoo = function(self, other)
+                return other:foo()
+            end
+        }
+    }
+
+    class "HijackMethodB" {
+        public {
+            foo = function(self)
+                return "B public"
+            end
+        }
+    }
+
+    local a = HijackMethodA.new()
+    local b = HijackMethodB.new()
+
+    assertEquals(a:callOtherFoo(b), "B public")
+end
+
+-- Tests the write side of unrelated receiver lookup. A private field on the
+-- current scope must not redirect writes intended for an unrelated object that
+-- happens to use the same member name.
+function Test:testScopedPrivateWriteDoesNotHijackUnrelatedReceiver()
+    class "HijackWriteA" {
+        private { value = "A private" };
+        public {
+            setOtherValue = function(self, other, value)
+                other.value = value
+            end;
+            getValue = function(self)
+                return self.value
+            end
+        }
+    }
+
+    class "HijackWriteB" {
+        public { value = "B initial" }
+    }
+
+    local a = HijackWriteA.new()
+    local b = HijackWriteB.new()
+
+    a:setOtherValue(b, "B updated")
+
+    assertEquals(b.value, "B updated")
+    assertEquals(a:getValue(), "A private")
+end
+
 -- Tests that one instance of a class CAN access another instance's private members.
 -- Access control is class-based, not instance-based. This matches Java, C++, C#, etc.
 -- A method in class Wallet can access private members of ANY Wallet instance.
