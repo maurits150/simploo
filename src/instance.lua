@@ -41,6 +41,7 @@
 local config = simploo.config
 local util = simploo.util
 local hook = simploo.hook
+local rawequal = rawequal
 
 -------------------------------------------------------------------------------
 -- Tables (defined early so functions can reference them)
@@ -437,7 +438,7 @@ else
         -- For private/protected members in parent classes, look up from scope's perspective.
         -- This ensures parent methods access parent's privates, not child's shadowing privates.
         -- Only redirect when scope is different from self's class (inheritance case).
-        if scope and scope._members and scope ~= base then
+        if scope and scope._members and not rawequal(scope, base) then
             local scopeMember = scope._members[key]
             if scopeMember then
                 local scopeBaseMember = scope._members[key]
@@ -515,7 +516,7 @@ else
         
         -- For private/protected members in parent classes, look up from scope's perspective.
         -- Only redirect when scope is different from self's class (inheritance case).
-        if scope and scope._members and scope ~= base then
+        if scope and scope._members and not rawequal(scope, base) then
             local scopeMember = scope._members[key]
             if scopeMember then
                 local scopeBaseMember = scope._members[key]

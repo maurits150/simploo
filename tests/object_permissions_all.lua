@@ -802,6 +802,161 @@ function Test:testNestedMethodCalls()
     assertEquals(instance:outer(), 99)
 end
 
+-- Regression test: scoped private lookup must not invoke equality dispatch even
+-- when the class does not define its own __eq. Simploo's instance metatable has
+-- a generic __eq dispatcher, so a normal scope ~= base comparison still enters
+-- metamethod dispatch. Internal class identity checks must stay raw.
+function Test:testScopedPrivateReadDoesNotDispatchEqWithoutCustomEq()
+    local oldEq = simploo.instancemt.__eq
+    local eqCalls = 0
+    simploo.instancemt.__eq = function(self, other)
+        eqCalls = eqCalls + 1
+        return oldEq(self, other)
+    end
+
+    class "NoEqScopeReadParent" {
+        private { secret = "parent secret" };
+        public {
+            getSecret = function(self)
+                return self.secret
+            end
+        }
+    }
+
+    class "NoEqScopeReadChild" extends "NoEqScopeReadParent" {
+        public {
+            readParentSecret = function(self)
+                return self:getSecret()
+            end
+        }
+    }
+
+    local instance = NoEqScopeReadChild.new()
+    local secret = instance:readParentSecret()
+    local calls = eqCalls
+    simploo.instancemt.__eq = oldEq
+
+    assertEquals(secret, "parent secret")
+    assertEquals(calls, 0)
+end
+
+-- Regression test: scoped private reads must use raw class identity checks.
+-- If dev-mode internals compare scope/base with ~=, a user __eq metamethod
+-- can be invoked while __index is already resolving scoped access, recursing
+-- until stack overflow.
+function Test:testScopedPrivateReadDoesNotRecurseThroughCustomEq()
+    class "EqScopeReadParent" {
+        private {
+            secret = "parent secret";
+            sameSecret = function(self, other)
+                return self.secret == other.secret
+            end
+        };
+        public {
+            getSecret = function(self)
+                return self.secret
+            end;
+            meta {
+                __eq = function(self, other)
+                    return self:sameSecret(other)
+                end
+            }
+        }
+    }
+
+    class "EqScopeReadChild" extends "EqScopeReadParent" {
+        public {
+            readParentSecret = function(self)
+                return self:getSecret()
+            end
+        }
+    }
+
+    local instance = EqScopeReadChild.new()
+    assertEquals(instance:readParentSecret(), "parent secret")
+end
+
+-- Regression test for the write side of the same bug. Parent methods writing
+-- private fields on child instances must not invoke user-defined __eq while
+-- __newindex is resolving scoped access.
+function Test:testScopedPrivateWriteDoesNotRecurseThroughCustomEq()
+    class "EqScopeWriteParent" {
+        private {
+            secret = "unset";
+            sameSecret = function(self, other)
+                return self.secret == other.secret
+            end
+        };
+        public {
+            setSecret = function(self, value)
+                self.secret = value
+            end;
+            getSecret = function(self)
+                return self.secret
+            end;
+            meta {
+                __eq = function(self, other)
+                    return self:sameSecret(other)
+                end
+            }
+        }
+    }
+
+    class "EqScopeWriteChild" extends "EqScopeWriteParent" {
+        public {
+            updateParentSecret = function(self, value)
+                self:setSecret(value)
+            end
+        }
+    }
+
+    local instance = EqScopeWriteChild.new()
+    instance:updateParentSecret("updated")
+    assertEquals(instance:getSecret(), "updated")
+end
+
+-- Regression test for construction: parent/private methods called during a
+-- child construction path must be able to call other private methods and touch
+-- private fields even when the class defines __eq.
+function Test:testScopedPrivateConstructionDoesNotRecurseThroughCustomEq()
+    class "EqScopeCtorParent" {
+        private {
+            secret = "unset";
+            sameSecret = function(self, other)
+                return self.secret == other.secret
+            end;
+            initSecret = function(self, value)
+                self.secret = value
+            end
+        };
+        public {
+            __construct = function(self, value)
+                self:initSecret(value)
+                self.secret = self.secret .. " field"
+            end;
+            getSecret = function(self)
+                return self.secret
+            end;
+            meta {
+                __eq = function(self, other)
+                    return self:sameSecret(other)
+                end
+            }
+        }
+    }
+
+    class "EqScopeCtorChild" extends "EqScopeCtorParent" {
+        public {
+            __construct = function(self, value)
+                self.EqScopeCtorParent:__construct(value)
+            end
+        }
+    }
+
+    local instance = EqScopeCtorChild.new("constructed")
+    assertEquals(instance:getSecret(), "constructed field")
+end
+
 ---------------------------------------------------------------------
 -- Private method access
 ---------------------------------------------------------------------
