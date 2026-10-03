@@ -269,6 +269,27 @@ function Test:testCustomEq()
     assertFalse(a == b)
 end
 
+-- Inherited variables keep shared parent storage when the parent defines custom equality.
+function Test:testInheritedMemberStorageIgnoresCustomEq()
+    class "EqOwnerParent" {
+        value = 0;
+        meta {
+            __eq = function(self, other)
+                return true
+            end;
+        };
+    }
+
+    class "EqOwnerChild" extends "EqOwnerParent" {}
+
+    local child = EqOwnerChild.new()
+    child.value = 42
+
+    assertEquals(child.EqOwnerParent.value, 42)
+    assertEquals(EqOwnerParent.value, 0)
+    assertEquals(EqOwnerChild.new().value, 0)
+end
+
 -- Tests that the __lt metamethod enables the < (less than) comparison operator.
 -- When a < b is evaluated, __lt receives both instances to compare.
 -- This also enables > via Lua's automatic reversal (a > b becomes b < a).

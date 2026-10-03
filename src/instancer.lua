@@ -30,6 +30,7 @@ local instancemethods = simploo.instancemethods
 local config = simploo.config
 local hook = simploo.hook
 local util = simploo.util
+local rawequal = rawequal
 
 local instancer = {}
 simploo.instancer = instancer
@@ -263,7 +264,7 @@ function instancer:initClass(class)
             if parentBase and not parentMembers[parentBase] then
                 parentMembers[parentBase] = memberName
             end
-        elseif member.owner == baseInstance then
+        elseif rawequal(member.owner, baseInstance) then
             if mods.static or type(member.value) == "function" then
                 -- Static members and functions: reference base's table directly (not copied)
                 sharedMembers[#sharedMembers + 1] = memberName

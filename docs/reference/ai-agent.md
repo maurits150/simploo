@@ -243,6 +243,8 @@ Note: First call `Class(args)` invokes `__construct`. Subsequent `instance(args)
 
 Metamethods are inherited from parent classes.
 
+Inherited member ownership uses class identity, not custom equality.
+
 ## Static Members
 
 ```lua

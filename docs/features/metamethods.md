@@ -267,6 +267,8 @@ print(v2 == v3)  -- true
 print(v2 <= v3)  -- true
 ```
 
+Custom equality does not determine which class owns an inherited member.
+
 ## __index and __newindex
 
 Handle access to undefined members:
